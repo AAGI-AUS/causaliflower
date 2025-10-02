@@ -2,18 +2,18 @@
 % Please edit documentation in R/ggdagitty.R
 \name{getLabels}
 \alias{getLabels}
-\title{Add labels to a dagitty object
-Extract node intials to use as labels, essentially a wrapper function for ggdag::dag_label().}
+\title{Label DAG nodes
+Extract node initials to use as labels in ggdagitty, or dag plots using ggdag and ggplot2. This is essentially a wrapper function for ggdag::dag_label().}
 \usage{
-getLabels(dag, type = "initials")
+getLabels(dag)
 }
 \arguments{
-\item{dag}{dagittyy object}
+\item{dag}{A dagittyy object.}
 }
 \value{
 Labelled vector of node names from the dagitty object
 }
 \description{
-Add labels to a dagitty object
-Extract node intials to use as labels, essentially a wrapper function for ggdag::dag_label().
+Label DAG nodes
+Extract node initials to use as labels in ggdagitty, or dag plots using ggdag and ggplot2. This is essentially a wrapper function for ggdag::dag_label().
 }

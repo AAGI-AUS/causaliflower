@@ -8,15 +8,20 @@ ggdagitty(
   dag,
   coords_spec = c(lambda = 0, lambda_max = NA, iterations = NA),
   labels = NULL,
-  label_type = "label"
+  label_type = "name",
+  label_placement = "label_repel"
 )
 }
 \arguments{
-\item{dag}{dagitty object}
+\item{dag}{A dagitty object}
 
 \item{coords_spec}{Set of parameters for generating coordinates. Adjust node placement with lambda, a higher value increases volatility and results in more extreme DAG structures. Setting 'lambda_max' generates a DAG at each lambda value between lambda and lambda_max (only used if iterations is supplied). Iterations controls number of repeats for each lambda value (returns the first lambda value if NULL).}
 
-\item{labels}{vector of labels for nodes in dagitty object}
+\item{labels}{A vector of labels for nodes in dagitty object}
+
+\item{label_type}{Defaults to using the node names of the inputted dag, or 'initials' if specified. Labels are only assigned by ggdagitty() if nodes are not already labelled, using a 'ggdag::dag_label()' wrapper..}
+
+\item{label_placement}{Labels are placed in a text box adjacent each node by default, or can be placed inside each node using 'label_node'. It is recommended to also specify label_type = 'initials' where label_placement = 'label_node' is used.}
 }
 \value{
 ggdag plot

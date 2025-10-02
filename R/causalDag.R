@@ -4,15 +4,17 @@
 #'
 #'
 #' @importFrom magrittr %>%
+#' @importFrom dplyr mutate case_when filter
+#' @importFrom dagitty dagitty
 #' @param type The type of graph generated. Defaults to 'full', producing a fully connected graph with confounders connected in both directions (bi-directional), and to mediators in one direction (uni-directional). If type ='saturated', a similar saturated graph is produced except confounders are not connected to mediators, featuring bi-directional arrows between each of the confounders (follows the ESC-DAGs Mapping Stage in Ferguson et al. (2020)). When type = 'ordered', the order of supplied confounders and mediators determines the order that each node occurs, therefore directed arrows are to be connected in one direction from confounders and mediators to other confounders and mediators, respectively. This builds a saturated DAG with temporal, uni-directional arrows, based on Tennnant et al. (2021).
-#' @param variables Vector of variables to be assigned nodes in a graph.  A named vector can be supplied, containing any of the other input variable types
-#' @param treatment Treatment variable, e.g. "X". Must be specified, unless included in the named vector 'variables'.
-#' @param outcome Outcome variable, e.g. "Y". Must be specified, unless included in the named vector 'variables'.
-#' @param confounders Vector of confounder variables, e.g. c("Z1", "Z2", "Z3").
-#' @param mediators Vector of mediator variables, e.g. c("M1", "M2", "M3").
-#' @param latent_variables Vector of already supplied variable names to be labelled latent (unobserved), e.g. c("L1", "L2", "M1").
-#' @param instrumental_variables Vector of instrumental variables, e.g. "IV"
-#' @param mediator_outcome_confounders Vector of already supplied confounder names, that instead of being common causes of treatment and outcome (X <- Z -> Y) are a common cause of mediators and outcome (M <- Z -> Y). A list of vectors can instead be supplied with separate vectors for each confounder name, and their connected mediator(s).
+#' @param variables Vector of variables to be assigned nodes in a graph.  A named vector can be supplied, containing any of the other input variable roles. A list can also be supplied.
+#' @param treatment Treatment variable name, e.g. "X". Must be specified, unless included in the named vector 'variables'.
+#' @param outcome Outcome variable name, e.g. "Y". Must be specified, unless included in the named vector 'variables'.
+#' @param confounders Character or vector of confounder variable names, e.g. "Z" or c("Z1", "Z2", "Z3"). A list can also be supplied.
+#' @param mediators Character or vector of mediator variable names, e.g. "M" or c("M1", "M2", "M3").
+#' @param latent_variables Character or vector of additional or already supplied latent (unobserved) variable names, e.g. "U" or c("U1", "U2", "M1").
+#' @param instrumental_variables Vector of instrumental variable names, e.g. "IV"
+#' @param mediator_outcome_confounders Vector of mediator-outcome confounder names, that instead of being common causes of treatment and outcome (X <- Z -> Y) are a common cause of mediators and outcome (M <- Z -> Y). A list can also be supplied.
 #' @param coords_spec Set of parameters for generating coordinates. Adjust node placement with lambda, a higher value increases volatility and results in more extreme DAG structures. Setting 'lambda_max' generates a DAG at each lambda value between lambda and lambda_max (only used if iterations is supplied). Iterations controls number of repeats for each lambda value (returns the first lambda value if NULL).
 #' @returns A dagitty object, fully connected (saturated) graph.
 #' @examples
@@ -60,9 +62,8 @@
 #'
 #' ggdagitty(dag, labels)
 #'
-#' # Option 3: The 'variables' input can be used to connect all variables to each other, with treatment, outcome and other nodes inputted separately.
-#' #           Inputted variables are treated as confounders, while the actual 'confounders' input can be left blank.
-#' #           We decided to keep this option, rather than remove it, to provide easier access to users who may not have much 'exposure' to causal graphs and terminology.
+#' # Option 3: The 'variables' input can be used to connect all variables to each other, treating them as confounders, besides treatment and outcome and any other separate inputs.
+#' #           With this configuration, the actual 'confounders' input can be left blank. I decided to keep this as an option for users who may not have much 'exposure' to causal graphs.
 #' {
 #'   variables <- c("Z1", "Z2", "Z3")
 #'   treatment <- "X"
@@ -99,9 +100,27 @@ buildGraph <- function(type = c("full", "saturated", "ordered"),
   # Option 1: named vector of variables inputted (can either include treatment and outcome or as separate inputs)
   if(is.null(confounders) & !is.null(variables) & !is.null(names(unlist(variables)))){
 
-    variables_df <- data.frame(variables = as.vector(unlist(variables)),
-                               name = names(unlist(variables)),
-                               stringsAsFactors = FALSE)
+
+
+    if( length(unlist(variables, recursive = FALSE)) < length(unlist(variables)) ){
+
+      nested_vars_list <- TRUE
+
+      variables_df <- dplyr::bind_rows(unlist(variables, recursive = FALSE), .id = "role")
+
+      variables_df <- tidyr::pivot_longer(data = variables_df,
+                          cols = colnames(variables_df))
+
+      variables_df <- variables_df %>% dplyr::group_by(value) %>% unique() %>% dplyr::ungroup() %>% dplyr::rename(variables = value) %>% as.data.frame()
+
+    }else{
+
+      variables_df <- data.frame(variables = as.vector(unlist(variables)),
+                                 name = names(unlist(variables)),
+                                 #order = order(names(variables_vec)),
+                                 stringsAsFactors = FALSE)
+    }
+
 
     variables_df <- variables_df %>%
       dplyr::mutate(role = dplyr::case_when(
@@ -115,19 +134,18 @@ buildGraph <- function(type = c("full", "saturated", "ordered"),
         grepl("collider", name) ~ "collider",
         grepl("latent", name) ~ "latent",
         grepl("mediator", name) ~ "mediator",
-      )) %>%
-      dplyr::mutate(name = dplyr::case_when(
-        role == "outcome" ~ gsub("[^0-9.-]", "", name),
-        role == "outcomes" ~ gsub("[^0-9.-]", "", name),
-        grepl("treatment", role) ~ gsub("[^0-9.-]", "", name),
-        role == "confounder" ~ gsub("[^0-9.-]", "", name),
-        role == "confounders" ~ gsub("[^0-9.-]", "", name),
-        grepl("instrumental", role) ~ gsub("[^0-9.-]", "", name),
-        grepl("collider", role) ~ gsub("[^0-9.-]", "", name),
-        grepl("latent", role) ~ gsub("[^0-9.-]", "", name),
-        role == "mediator" ~ gsub("[^0-9.-]", "", name),
-        role == "mediators" ~ gsub("[^0-9.-]", "", name),
-        grepl("mediator-outcome", role) ~ gsub("[^0-9.-]", "", name),
+      )) %>% dplyr::mutate(name = dplyr::case_when(
+        role == "outcome" ~ as.integer(gsub("[^0-9]", "", name)),
+        role == "outcomes" ~ as.integer(gsub("[^0-9]", "", name)),
+        grepl("treatment", role) ~ as.integer(gsub("[^0-9]", "", name)),
+        role == "confounder" ~ as.integer(gsub("[^0-9]", "", name)),
+        role == "confounders" ~ as.integer(gsub("[^0-9]", "", name)),
+        grepl("instrumental", role) ~ as.integer(gsub("[^0-9]", "", name)),
+        grepl("collider", role) ~ as.integer(gsub("[^0-9]", "", name)),
+        grepl("latent", role) ~ as.integer(gsub("[^0-9]", "", name)),
+        role == "mediator" ~ as.integer(gsub("[^0-9]", "", name)),
+        role == "mediators" ~ as.integer(gsub("[^0-9]", "", name)),
+        grepl("mediator-outcome", role) ~ as.integer(gsub("[^0-9]", "", name)),
       )) %>% dplyr::rename("order" = name)
 
     confounder_df <- variables_df %>% dplyr::filter(role == "confounder")
@@ -177,21 +195,55 @@ buildGraph <- function(type = c("full", "saturated", "ordered"),
     #           Separate inputs for treatment, outcome and other nodes while blank confounders input
     if(is.null(confounders) & !is.null(variables)){
 
-      variables_vec <- as.vector(unlist(variables))
-      confounder_vec <- variables_vec[!variables_vec %in% mediator_vec & !variables_vec %in% instrumental_vec & !variables_vec %in% m_o_confounder_vec]
+      if( length(unlist(variables)) > length(variables) ){
 
-      confounder_df <- data.frame(variables = confounder_vec,
-                                  role = "confounder",
-                                  stringsAsFactors = FALSE)
+        variables_temp <- variables
+
+        for(i in 1:length(variables_temp)){
+          names(variables_temp[[i]]) <- rep("confounder", length(variables_temp[[i]]))
+          i <- i + 1
+        }
+
+        variables_df <- suppressMessages(dplyr::bind_rows(unlist(variables_temp), .id = "role"))
+
+        variables_df <- tidyr::pivot_longer(data = variables_df,
+                                            cols = colnames(variables_df))
+
+        variables_df <- variables_df %>% dplyr::group_by(value) %>% unique() %>% dplyr::ungroup() %>% dplyr::rename(variables = value) %>% filter(name != "role") %>% as.data.frame()
+
+        confounder_df <- variables_df %>%
+          dplyr::mutate(role = dplyr::case_when(
+            grepl("confounder", name) ~ "confounder",
+
+          )) %>%
+          dplyr::mutate(name = dplyr::case_when(
+            grepl("confounder", role) ~ as.integer(gsub("[^0-9]", "", name)),
+          )) %>% dplyr::rename("order" = name)
+
+
+      }else{
+
+        variables_vec <- as.vector(unlist(variables))
+        confounder_vec <- as.vector(variables_vec[!variables_vec %in% mediator_vec & !variables_vec %in% instrumental_vec & !variables_vec %in% m_o_confounder_vec])
+        names(confounder_vec) <- as.vector(rep("confounder", length(confounder_vec)))
+
+        confounder_df <- data.frame(variables = confounder_vec,
+                                    role = "confounder",
+                                    order = order(names(confounder_vec)),
+                                    stringsAsFactors = FALSE)
+      }
+
 
     }else if(!is.null(confounders)){
 
       # Option 3: confounders inputted, variables input is ignored.
       #           Separate inputs for treatment, outcome, and other nodes.
       confounder_vec <- as.vector(unlist(confounders))
+      names(confounder_vec) <- as.vector(rep("confounder", length(confounder_vec)))
 
       confounder_df <- data.frame(variables = confounder_vec,
                                   role = "confounder",
+                                  order = order(names(confounder_vec)),
                                   stringsAsFactors = FALSE)
     }
 
@@ -732,29 +784,135 @@ trimGraph <- function(dag, edges_to_keep = NA){
 
 }
 
+#' Convert dagitty object to list
+#'
+#' @param dag dagitty object
+#' @return Nested list of nodes and node relationships
+#' @export
+getFeatureMap <- function(dag){
+  .datatable.aware <- TRUE
+
+  edges <- getEdges(dag, wide = TRUE)
+  edges_compact <- getEdges(dag)
+
+  vars_order <-  c("treatment",
+                   "outcome",
+                   "confounder",
+                   "moc",
+                   "mediator",
+                   "instrumental")
+
+  variables <- unique(edges_compact[,w])
+  names(variables) <- unique(edges_compact[,role_w])
+  #names(variables) <- unique(edges_compact[, role_v][is.na(names(variables)) & grepl(edges_compact[, w], edges_compact[, v])])
+  new_order <- order(match(names(variables), vars_order))
+  variables <- variables[new_order]
+
+  edges_v <- cbind(edges[,4:9],  v = edges$v)
+  edges_w <- cbind(edges[,11:16],  w = edges$w)
+
+  feature_map_list <- lapply( seq_along(edges_v[,1:(length(edges_v)-1)]), function(role){
+
+    feature_map_list <- c()
+    feature_map_list[role] <- list(unique( (edges_v[, v][!is.na(edges_v[, ..role])] )))
+
+    if(all(is.na(feature_map_list[[role]]))){
+
+      missing_role <- vars_order[role]
+
+      feature_map_list[role] <- as.character(variables[role])
+
+    }
+
+    feature_map_list <- lapply(feature_map_list[role], function(x) if(identical(x, character(0))) NA_character_ else x)
+    feature_map_list <- unlist(feature_map_list, recursive = FALSE)
+  })
+
+  names(feature_map_list) <-  c("treatment",
+                                "outcome",
+                                "confounder",
+                                "moc",
+                                "mediator",
+                                "instrumental")
+
+  nestedFeatureMap <- function(feature_map_list){
+
+    num_roles <- length(names(feature_map_list))
+
+    role <- 1
+
+    for(role in 1:num_roles){
+
+      num_features_in_role <- length(unlist(feature_map_list[role]))
+      feature <- 1
+
+      for(feature in 1:num_features_in_role){
+
+        if(any(!is.na(feature_map_list[[role]]))){
+
+          feature_map_new <- list( features = list( parent = feature_map_list[[role]][[feature]],
+                                                    children = edges_w[, w][edges_v[, v] ==   feature_map_list[[role]][[feature]] & !is.na(edges_v[, ..role])] ) )
+
+          feature_map_list[[role]][[feature]] <- feature_map_new
+
+        }
+
+        feature <- feature + 1
+
+      }
+
+      role <- role + 1
+
+    }
+
+    return(feature_map_list)
+
+  }
+
+  feature_map_list <- nestedFeatureMap(feature_map_list)
+
+  return(feature_map_list)
+
+}
 
 #' Gets edges between nodes and their roles
 #'
 #' getEdges() filters a dagitty object and returns a data frame with edges for specified node roles.
 #'
 #' @importFrom magrittr %>%
+#' @importFrom data.table as.data.table
 #' @param dag A dagitty object.
-#' @param selected_nodes Nodes to return edges. Defaults to NULL, or can be a character or vector combination of any of the following: "treatment", "outcome", "confounder", "mediator", "latent", "mediator-outcome-confounder", or "instrumental".
+#' @param selected_nodes Nodes to return edges. Defaults to NULL, or can be a character or vector combination of any of the following: c("treatment", "outcome", "confounder", "mediator", "latent", "moc", "instrumental")
 #' @returns A dataframe containing the specified node edges.
 #' @export
-getEdges <- function(dag, selected_nodes = NULL){
+getEdges <- function(dag, selected_nodes = NULL, variables = NULL, wide = FALSE){
+  .datatable.aware <- TRUE
 
-  edges <- (dagitty::edges(dag))[1:3]
+  edges <- data.table::as.data.table(dagitty::edges(dag))[,1:3]
   edges <- edges %>% dplyr::relocate(e, .before = w)
 
-  edges$role_v <- NA
-  edges$role_w <- NA
+  selected_remove <- NULL
 
-  edges$latent_v <- FALSE
-  edges$latent_w <- FALSE
+  if(any(grepl("!", selected_nodes))){
+    # if any input includes "!", removes edges with matching roles in selected_nodes (for both parent and children nodes)
+    all_nodes <- c("treatment", "outcome", "confounder", "mediator", "latent", "moc", "instrumental")
+    cleaned_nodes <- gsub("!", "", selected_nodes)
+
+    selected_remove <- cleaned_nodes
+    selected_nodes <- all_nodes[!all_nodes %in% cleaned_nodes]
+
+  }else if(any(grepl(">", selected_nodes))){
+    # if any input includes ">", the function removes all edges without roles that match the selected_nodes input
+    all_nodes <- c("treatment", "outcome", "confounder", "mediator", "latent", "moc", "instrumental")
+    cleaned_nodes <- gsub(">", "", selected_nodes)
+
+    selected_remove <- all_nodes[!all_nodes %in% cleaned_nodes]
+    selected_nodes <- cleaned_nodes
+
+  }
 
   # treatment
-  exposure <- dagitty::exposures(dag)
+  treatments <- dagitty::exposures(dag)
 
   # outcome
   outcomes <- dagitty::outcomes(dag)
@@ -763,131 +921,153 @@ getEdges <- function(dag, selected_nodes = NULL){
   latent_vars <- dagitty::latents(dag)
 
   # confounders
-  treatment_parents <- dagitty::parents(dag, exposure)
+  treatment_parents <- dagitty::parents(dag, treatments)
   confounders <- treatment_parents[treatment_parents %in% dagitty::parents(dag, outcomes)]
 
   # instrumental variables
   instrumental_vars <- as.vector(unlist(dagitty::instrumentalVariables(dag)))
 
-  # labelling instrumental variable nodes in edges
-  if(length(instrumental_vars) > 0){
-
-    instrumental <- 1
-
-    for(instrumental in 1:length(instrumental_vars)){
-
-      iv_edges <- edges %>% dplyr::filter(v == instrumental_vars[instrumental])
-
-      edges <- edges %>%
-        mutate(role_v = case_when(v == iv_edges$v ~ "instrumental")
-        )
-
-      instrumental <- instrumental + 1
-    }
-
-  }
-
-
   # mediators - first parse (includes mediator-outcome confounders)
   outcome_parents <- dagitty::parents(dag, outcomes)
-  mediators <- outcome_parents[outcome_parents %in% dagitty::children(dag, exposure)]
+  mediators <- outcome_parents[outcome_parents %in% dagitty::children(dag, treatments)]
 
   # mediator-outcome confounders
   mediators_parents <- dagitty::parents(dag, mediators) # filter to include only parents of mediator variables
-  mediator_outcome_confounders <- mediators_parents[mediators_parents %in% outcome_parents] # include only nodes connected to both mediators and outcome (M <- MOC -> Y)
-  mediator_outcome_confounders <- mediators_parents[!mediators_parents %in% c(exposure, confounders)] # remove treatment and confounder nodes
-  mediator_outcome_confounders <- mediator_outcome_confounders[!mediator_outcome_confounders %in% treatment_parents] # double check by removing parents of treatment
+  moc <- mediators_parents[mediators_parents %in% outcome_parents] # include only nodes connected to both mediators and outcome (M <- MOC -> Y)
+  moc <- mediators_parents[!mediators_parents %in% c(treatments, confounders)] # remove treatment and confounder nodes
+  moc <- moc[!moc %in% treatment_parents] # double check by removing parents of treatment
 
-  # mediators - second parse (removing mediator-outcome confounders)
-  mediators <- mediators[!mediators %in% mediator_outcome_confounders]
+  if(wide == TRUE){
+
+    # assign roles for all v in edges
+    edges$treatments_v <- NA
+    edges$treatments_v[edges[, v] %in% treatments]  <- "treatment"
+
+    edges$outcomes_v <- NA
+    edges$outcomes_v[edges[, v] %in% outcomes]  <- "outcome"
+
+    edges$confounders_v <- NA
+    edges$confounders_v[edges[, v] %in% confounders]  <- "confounder"
+
+    edges$moc_v <- NA
+    edges$moc_v[edges[, v] %in% moc]  <- "moc"
+
+    edges$mediators_v <- NA
+    edges$mediators_v[edges[, v] %in% mediators]  <- "mediator"
+
+    edges$iv_v <- NA
+    edges$iv_v[edges[, v] %in% instrumental_vars] <- "instrumental"
+
+    edges$latent_v[edges$v %in% latent_vars] <- TRUE
+
+    # assign roles for all v in edges
+    edges$treatments_w <- NA
+    edges$treatments_w[edges[, w] %in% treatments]  <- "treatment"
+
+    edges$outcomes_w <- NA
+    edges$outcomes_w[edges[, w] %in% outcomes]  <- "outcome"
+
+    edges$confounders_w <- NA
+    edges$confounders_w[edges[, w] %in% confounders]  <- "confounder"
+
+    edges$moc_w <- NA
+    edges$moc_w[edges[, w] %in% moc]  <- "moc"
+
+    edges$mediators_w <- NA
+    edges$mediators_w[edges[, w] %in% mediators]  <- "mediator"
+
+    edges$iv_w <- NA
+    edges$iv_w[edges[, w] %in% instrumental_vars] <- "instrumental"
+
+    edges$latent_w[edges$w %in% latent_vars] <- TRUE
+
+    return(edges)
 
 
-  # labelling each node in edges
-  edges$role_v[is.na(edges$role_v) & edges$v %in% exposure] <- "treatment"
-  edges$role_w[is.na(edges$role_w) & edges$w %in% exposure] <- "treatment"
+  }else{
 
-  edges$role_v[is.na(edges$role_v) & edges$v %in% outcomes] <- "outcome"
-  edges$role_w[is.na(edges$role_w) & edges$w %in% outcomes] <- "outcome"
+    edges$role_v <- NA
+    edges$role_w <- NA
 
-  edges$role_v[is.na(edges$role_v) & edges$v %in% mediator_outcome_confounders] <- "mediator-outcome-confounder"
-  edges$role_w[is.na(edges$role_w) & edges$w %in% mediator_outcome_confounders] <- "mediator-outcome-confounder"
+    edges$latent_v <- FALSE
+    edges$latent_w <- FALSE
 
-  edges$role_v[is.na(edges$role_v) & edges$v %in% mediators] <- "mediator"
-  edges$role_w[is.na(edges$role_w) & edges$w %in% mediators] <- "mediator"
+    # mediators - second parse (removing mediator-outcome confounders)
+    mediators <- mediators[!mediators %in% moc]
 
-  edges$role_v[is.na(edges$role_v) & edges$v %in% confounders] <- "confounder"
-  edges$role_w[is.na(edges$role_w) & edges$w %in% confounders] <- "confounder"
+    # labelling each node in edges
+    edges$role_v[is.na(edges$role_v) & edges$v %in% treatments] <- "treatment"
+    edges$role_w[is.na(edges$role_w) & edges$w %in% treatments] <- "treatment"
 
-  edges$latent_v[edges$v %in% latent_vars] <- TRUE
-  edges$latent_w[edges$w %in% latent_vars] <- TRUE
+    edges$role_v[is.na(edges$role_v) & edges$v %in% outcomes] <- "outcome"
+    edges$role_w[is.na(edges$role_w) & edges$w %in% outcomes] <- "outcome"
+
+    edges$role_v[is.na(edges$role_v) & edges$v %in% moc] <- "moc"
+    edges$role_w[is.na(edges$role_w) & edges$w %in% moc] <- "moc"
+
+    edges$role_v[is.na(edges$role_v) & edges$v %in% mediators] <- "mediator"
+    edges$role_w[is.na(edges$role_w) & edges$w %in% mediators] <- "mediator"
+
+    edges$role_v[is.na(edges$role_v) & edges$v %in% confounders] <- "confounder"
+    edges$role_w[is.na(edges$role_w) & edges$w %in% confounders] <- "confounder"
+
+    # labelling instrumental variable nodes in edges
+    edges$role_v[is.na(edges$role_v) & edges$v %in% instrumental_vars] <- "instrumental"
+    edges$role_w[is.na(edges$role_w) & edges$w %in% instrumental_vars] <- "instrumental"
+
+    edges$latent_v[edges$v %in% latent_vars] <- TRUE
+    edges$latent_w[edges$w %in% latent_vars] <- TRUE
+
+    selected <- 1
+
+    if(!is.null(selected_remove)){
+      # if selected_nodes input does not contain "!" or ">", then for each selected_nodes input the edges containing a matching parent or children node are kept.
+      for(selected in 1:length(selected_remove)){
+
+        edges <- edges %>% dplyr::filter(role_v != selected_remove[selected] & role_w != selected_remove[selected])
+
+        selected <- selected + 1
+
+      }
 
 
-  selected_remove <- NULL
 
-  if(any(grepl("!", selected_nodes))){
-    # if any input includes "!", removes edges with matching roles in selected_nodes (for both parent and children nodes)
-    all_nodes <- c("treatment", "outcome", "confounder", "mediator", "latent", "mediator-outcome-confounder", "instrumental")
-    cleaned_nodes <- gsub("!", "", selected_nodes)
+    }else if(all(!is.null(selected_nodes))){
+      # if selected_nodes is not inputted, the function returns all edges with node labels in the 'role_v' and 'role_w' columns.
+      edges_out <- data.frame(v = character(),
+                              e = character(),
+                              w = character(),
+                              role_v = character(),
+                              role_w = character(),
+                              stringsAsFactors = FALSE)
 
-    selected_remove <- cleaned_nodes
-    selected_nodes <- all_nodes[!all_nodes %in% cleaned_nodes]
+      for(selected in 1:length(selected_nodes)){
 
-  }else if(any(grepl(">", selected_nodes))){
-    # if any input includes ">", the function removes all edges without roles that match the selected_nodes input
-    all_nodes <- c("treatment", "outcome", "confounder", "mediator", "latent", "mediator-outcome-confounder", "instrumental")
-    cleaned_nodes <- gsub(">", "", selected_nodes)
+        selected_edges <- edges %>% dplyr::filter(role_v == selected_nodes[selected] | role_w == selected_nodes[selected])
 
-    selected_remove <- all_nodes[!all_nodes %in% cleaned_nodes]
-    selected_nodes <- cleaned_nodes
+        selected_edges <- suppressMessages(dplyr::anti_join(selected_edges, edges_out))
 
-  }
+        edges_out <- rbind(edges_out, selected_edges)
 
-  selected <- 1
+        selected <- selected + 1
 
-  if(!is.null(selected_remove)){
-    # if selected_nodes input does not contain "!" or ">", then for each selected_nodes input the edges containing a matching parent or children node are kept.
-    for(selected in 1:length(selected_remove)){
+      }
 
-      edges <- edges %>% dplyr::filter(role_v != selected_remove[selected] & role_w != selected_remove[selected])
-
-      selected <- selected + 1
+      edges <- edges_out
 
     }
 
 
 
-  }else if(all(!is.null(selected_nodes))){
-    # if selected_nodes is not inputted, the function returns all edges with node labels in the 'role_v' and 'role_w' columns.
-    edges_out <- data.frame(v = character(),
-                            e = character(),
-                            w = character(),
-                            role_v = character(),
-                            role_w = character(),
-                            stringsAsFactors = FALSE)
+    edges <- edges %>% dplyr::relocate(role_v, .before = role_w)
 
-    for(selected in 1:length(selected_nodes)){
 
-      selected_edges <- edges %>% dplyr::filter(role_v == selected_nodes[selected] | role_w == selected_nodes[selected])
 
-      selected_edges <- suppressMessages(dplyr::anti_join(selected_edges, edges_out))
-
-      edges_out <- rbind(edges_out, selected_edges)
-
-      selected <- selected + 1
-
-    }
-
-    edges <- edges_out
+    return(edges)
 
   }
 
 
-
-  edges <- edges %>% dplyr::relocate(role_v, .before = role_w)
-
-
-
-  return(edges)
 }
 
 #' Mediator names in a dagitty object
@@ -901,14 +1081,14 @@ getEdges <- function(dag, selected_nodes = NULL){
 mediators <- function(dag, edges = FALSE){
 
   # treatment
-  exposure <- dagitty::exposures(dag)
+  treatments <- dagitty::exposures(dag)
 
   # outcome
   outcomes <- dagitty::outcomes(dag)
 
   # mediators
   outcome_parents <- dagitty::parents(dag, outcomes)
-  mediators <- outcome_parents[outcome_parents %in% dagitty::children(dag, exposure)]
+  mediators <- outcome_parents[outcome_parents %in% dagitty::children(dag, treatments)]
 
   if(edges == TRUE){
     cat(paste("There are", length(mediators), "mediators in the supplied graph: ", sep = " ", collapse = " "))
@@ -934,13 +1114,13 @@ mediators <- function(dag, edges = FALSE){
 confounders <- function(dag, edges = FALSE){
 
   # treatment
-  exposure <- dagitty::exposures(dag)
+  treatments <- dagitty::exposures(dag)
 
   # outcome
   outcomes <- dagitty::outcomes(dag)
 
   # confounders
-  treatment_parents <- dagitty::parents(dag, exposure)
+  treatment_parents <- dagitty::parents(dag, treatments)
   confounders <- treatment_parents[treatment_parents %in% dagitty::parents(dag, outcomes)]
 
   if(edges == TRUE){
@@ -966,18 +1146,18 @@ confounders <- function(dag, edges = FALSE){
 moc <- function(dag, edges = FALSE){
 
   # treatment
-  exposure <- dagitty::exposures(dag)
+  treatments <- dagitty::exposures(dag)
 
   # outcome
   outcomes <- dagitty::outcomes(dag)
 
   # moc
   outcome_parents <- dagitty::parents(dag, outcomes)
-  mediators <- outcome_parents[outcome_parents %in% dagitty::children(dag, exposure)]
+  mediators <- outcome_parents[outcome_parents %in% dagitty::children(dag, treatments)]
 
   # mediator-outcome confounders
   mediators_parents <- dagitty::parents(dag, mediators)
-  moc <- mediators_parents[!mediators_parents %in% c(mediators, exposure)]
+  moc <- mediators_parents[!mediators_parents %in% c(mediators, treatments)]
 
 
   if(edges == TRUE){
@@ -1013,7 +1193,9 @@ variables <- function(dag, all_info = TRUE){
 
   variables <- variables_df$v
 
-  #names(variables) <- variables_df$role_v
+  names(variables) <- gsub("[0-9]", "", variables_df$role_v)
+
+
 
   return(variables)
 }
@@ -1271,63 +1453,5 @@ ESC_DAGs_sequence <- function(edges_vec, treatment_or_outcome_edges_vec, num_edg
     return(edges_vec)
   }
 }
-
-
-
-#' Treatment names from a dagitty object
-#'
-#' treatments() identifies treatment nodes in a directed acyclic graph dagitty object.
-#'
-#' @param dag A dagitty object.
-#' @returns Name of treatment node(s), as a character vector.
-#' @noRd
-treatments <- function(dag){
-
-
-  dag_vec <- as.vector(dag)
-  dag_vec <- unlist(strsplit(dag_vec, "exposure"))
-
-  treatments <- c()
-
-  treatment_count <- 1
-  for(treatment in 1:( length(dag_vec) -1 )){
-
-    treatments[treatment_count] <-  rev(sub(".*[(.*?)\\\b.*", "\\1", rev(dag_vec[treatment_count])))
-
-  }
-
-  treatments <- substr(treatments, 1, nchar(treatments)-1)
-
-  return(treatments)
-}
-
-
-#' Outcome names from a dagitty object
-#'
-#' outcomes() identifies treatment nodes in a directed acyclic graph dagitty object.
-#'
-#' @param dag A dagitty object.
-#' @returns Name of outcomes node(s), as a character vector.
-#' @noRd
-outcomes <- function(dag){
-
-
-  dag_vec <- as.vector(dag)
-  dag_vec <- unlist(strsplit(dag_vec, "outcome"))
-
-  outcomes <- c()
-
-  outcome_count <- 1
-  for(outcome in 1:( length(dag_vec) -1 )){
-
-    outcomes[outcome_count] <-  rev(sub(".*[(.*?)\\\b.*", "\\1", rev(dag_vec[outcome_count])))
-
-  }
-
-  outcomes <- substr(outcomes, 1, nchar(outcomes)-1)
-
-  return(outcomes)
-}
-
 
 

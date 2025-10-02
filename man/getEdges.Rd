@@ -4,12 +4,12 @@
 \alias{getEdges}
 \title{Gets edges between nodes and their roles}
 \usage{
-getEdges(dag, selected_nodes = NULL)
+getEdges(dag, selected_nodes = NULL, variables = NULL, wide = FALSE)
 }
 \arguments{
 \item{dag}{A dagitty object.}
 
-\item{selected_nodes}{Nodes to return edges. Defaults to NULL, or can be a character or vector combination of any of the following: "treatment", "outcome", "confounder", "mediator", "latent", "mediator-outcome-confounder", or "instrumental".}
+\item{selected_nodes}{Nodes to return edges. Defaults to NULL, or can be a character or vector combination of any of the following: c("treatment", "outcome", "confounder", "mediator", "latent", "moc", "instrumental")}
 }
 \value{
 A dataframe containing the specified node edges.

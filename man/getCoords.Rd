@@ -18,7 +18,7 @@ getCoords(
 \item{confounders}{Vector of confounders in order of occurrence. If left blank, the order is inferred with dagitty::topologicalOrdering().}
 }
 \value{
-dagitty objecty with coordinates.
+dagitty object with coordinates.
 }
 \description{
 Add coordinates to a dagitty object

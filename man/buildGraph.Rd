@@ -20,21 +20,21 @@ buildGraph(
 \arguments{
 \item{type}{The type of graph generated. Defaults to 'full', producing a fully connected graph with confounders connected in both directions (bi-directional), and to mediators in one direction (uni-directional). If type ='saturated', a similar saturated graph is produced except confounders are not connected to mediators, featuring bi-directional arrows between each of the confounders (follows the ESC-DAGs Mapping Stage in Ferguson et al. (2020)). When type = 'ordered', the order of supplied confounders and mediators determines the order that each node occurs, therefore directed arrows are to be connected in one direction from confounders and mediators to other confounders and mediators, respectively. This builds a saturated DAG with temporal, uni-directional arrows, based on Tennnant et al. (2021).}
 
-\item{variables}{Vector of variables to be assigned nodes in a graph.  A named vector can be supplied, containing any of the other input variable types}
+\item{variables}{Vector of variables to be assigned nodes in a graph.  A named vector can be supplied, containing any of the other input variable roles. A list can also be supplied.}
 
-\item{treatment}{Treatment variable, e.g. "X". Must be specified, unless included in the named vector 'variables'.}
+\item{treatment}{Treatment variable name, e.g. "X". Must be specified, unless included in the named vector 'variables'.}
 
-\item{outcome}{Outcome variable, e.g. "Y". Must be specified, unless included in the named vector 'variables'.}
+\item{outcome}{Outcome variable name, e.g. "Y". Must be specified, unless included in the named vector 'variables'.}
 
-\item{confounders}{Vector of confounder variables, e.g. c("Z1", "Z2", "Z3").}
+\item{confounders}{Character or vector of confounder variable names, e.g. "Z" or c("Z1", "Z2", "Z3"). A list can also be supplied.}
 
-\item{mediators}{Vector of mediator variables, e.g. c("M1", "M2", "M3").}
+\item{mediators}{Character or vector of mediator variable names, e.g. "M" or c("M1", "M2", "M3").}
 
-\item{latent_variables}{Vector of already supplied variable names to be labelled latent (unobserved), e.g. c("L1", "L2", "M1").}
+\item{latent_variables}{Character or vector of additional or already supplied latent (unobserved) variable names, e.g. "U" or c("U1", "U2", "M1").}
 
-\item{instrumental_variables}{Vector of instrumental variables, e.g. "IV"}
+\item{instrumental_variables}{Vector of instrumental variable names, e.g. "IV"}
 
-\item{mediator_outcome_confounders}{Vector of already supplied confounder names, that instead of being common causes of treatment and outcome (X <- Z -> Y) are a common cause of mediators and outcome (M <- Z -> Y). A list of vectors can instead be supplied with separate vectors for each confounder name, and their connected mediator(s).}
+\item{mediator_outcome_confounders}{Vector of mediator-outcome confounder names, that instead of being common causes of treatment and outcome (X <- Z -> Y) are a common cause of mediators and outcome (M <- Z -> Y). A list can also be supplied.}
 
 \item{coords_spec}{Set of parameters for generating coordinates. Adjust node placement with lambda, a higher value increases volatility and results in more extreme DAG structures. Setting 'lambda_max' generates a DAG at each lambda value between lambda and lambda_max (only used if iterations is supplied). Iterations controls number of repeats for each lambda value (returns the first lambda value if NULL).}
 }
@@ -89,9 +89,8 @@ dag <- buildGraph(type = type,
 
 ggdagitty(dag, labels)
 
-# Option 3: The 'variables' input can be used to connect all variables to each other, with treatment, outcome and other nodes inputted separately.
-#           Inputted variables are treated as confounders, while the actual 'confounders' input can be left blank.
-#           We decided to keep this option, rather than remove it, to provide easier access to users who may not have much 'exposure' to causal graphs and terminology.
+# Option 3: The 'variables' input can be used to connect all variables to each other, treating them as confounders, besides treatment and outcome and any other separate inputs.
+#           With this configuration, the actual 'confounders' input can be left blank. I decided to keep this as an option for users who may not have much 'exposure' to causal graphs.
 {
   variables <- c("Z1", "Z2", "Z3")
   treatment <- "X"
