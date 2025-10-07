@@ -42,7 +42,7 @@ ggdagitty <- function(dag,
            "treatment"="darkolivegreen3",
            "confounder"="coral2",
            "mediator"="cornflowerblue",
-           "moc"="darkorange",
+           "mediator-outcome confounder"="darkorange",
            "instrumental"="magenta",
           # "collider"="darkred",
            "latent"="grey")
@@ -51,13 +51,13 @@ ggdagitty <- function(dag,
              "treatment"=19,
              "confounder"=19,
              "mediator"=19,
-             "moc"=19,
+             "mediator-outcome confounder"=19,
              "instrumental"=19,
             # "collider"=19,
              "latent"=1)
 
   # variable for legend order
-  order_col <- c("outcome", "treatment", "confounder", "mediator", "moc", "instrumental", #"collider",
+  order_col <- c("outcome", "treatment", "confounder", "mediator", "mediator-outcome confounder", "instrumental", #"collider",
                  "latent")
 
   if(label_type == "name"){
@@ -174,18 +174,26 @@ getCoords <- function(dag,
                       coords_spec = c(lambda = 0, lambda_max = NA, iterations = NA),
                       confounders = NULL){
 
-  node_labels <- as.data.frame(getEdges(dag))
-  node_labels <- unique(node_labels[c("v", "role_v")])
+  dag_df <- dagittyData(dag)
+
+  #dag_na <- dag_df %>% dplyr::filter(is.na(direction))
+
+  edges <- getEdges(dag)
+
+  node_labels <- unique(edges[c("ancestor", "role_ancestor")])
+
+  #node_labels <- rbind(node_labels, dag_na)
+
 
   if(is.null(confounders)){
 
-    confounders <-  as.vector(unlist(lapply(as.vector(node_labels %>% dplyr::filter(role_v == "confounder") %>% dplyr::select(v)), function(x) if(identical(x, character(0))) NA_character_ else x)))
+    confounders <-  as.vector(unlist(lapply(as.vector( ( node_labels %>% dplyr::filter(role_ancestor == "confounder") )[,1]), function(x) if(identical(x, character(0))) NA_character_ else x)))
   }
 
-  mediators <-  as.vector(unlist(lapply(as.vector(node_labels %>% dplyr::filter(role_v == "mediator") %>% dplyr::select(v)), function(x) if(identical(x, character(0))) NA_character_ else x)))
-  instrumental_vars <- as.vector(unlist(lapply(as.vector(node_labels %>% dplyr::filter(role_v == "instrumental") %>% dplyr::select(v)), function(x) if(identical(x, character(0))) NA_character_ else x)))
-  latent_vars <- as.vector(unlist(lapply(as.vector(node_labels %>% dplyr::filter(role_v == "latent") %>% dplyr::select(v)) , function(x) if(identical(x, character(0))) NA_character_ else x)))
-  mediator_outcome_confounders <- as.vector(unlist(lapply(as.vector(node_labels %>% dplyr::filter(role_v == "moc") %>% dplyr::select(v)), function(x) if(identical(x, character(0))) NA_character_ else x)))
+  mediators <-  as.vector(unlist(lapply(as.vector( ( node_labels %>% dplyr::filter(role_ancestor == "mediator") )[,1]), function(x) if(identical(x, character(0))) NA_character_ else x)))
+  instrumental_vars <- as.vector(unlist(lapply(as.vector( ( node_labels %>% dplyr::filter(role_ancestor == "instrumental") )[,1]), function(x) if(identical(x, character(0))) NA_character_ else x)))
+  latent_vars <- as.vector(unlist(lapply(as.vector( ( node_labels %>% dplyr::filter(role_ancestor == "latent")  )[,1]), function(x) if(identical(x, character(0))) NA_character_ else x)))
+  mediator_outcome_confounders <- as.vector(unlist(lapply(as.vector( ( node_labels %>% dplyr::filter(role_ancestor == "mediator-outcome-confounder")  )[,1]), function(x) if(identical(x, character(0))) NA_character_ else x)))
 
 
   if(length(na.omit(coords_spec)) == 3){
@@ -450,7 +458,7 @@ addCoords <- function(dag, confounders, mediators, instrumental_vars, mediator_o
   outcome <- dagitty::outcomes(dag)
   latent_vars <- dagitty::latents(dag)
 
-  if(!all(is.na(confounders))){
+  if(!all(is.null(confounders))){
 
     c <- length(confounders)
 
@@ -460,21 +468,21 @@ addCoords <- function(dag, confounders, mediators, instrumental_vars, mediator_o
     c <- 0
     unlisted_c <- 0
   }
-  if(!all(is.na(mediators))){
+  if(!all(is.null(mediators))){
 
     m <- length(mediators)
 
   }else{
     m <- 0
   }
-  if(!all(is.na(instrumental_vars))){
+  if(!all(is.null(instrumental_vars))){
 
     i <- length(instrumental_vars)
 
   }else{
     i <- 0
   }
-  if(!all(is.na(mediator_outcome_confounders))){
+  if(!all(is.null(mediator_outcome_confounders))){
 
     moc <- length(mediator_outcome_confounders)
 
@@ -489,17 +497,17 @@ addCoords <- function(dag, confounders, mediators, instrumental_vars, mediator_o
     vars <- confounders
 
     length <- c
-    if(any(!is.na(mediator_outcome_confounders))){
+    if(any(!is.null(mediator_outcome_confounders))){
       mediator_outcome_confounders <- na.omit(mediator_outcome_confounders)
       vars[[length + 1]] <- mediator_outcome_confounders
       length <- length + 1
     }
-    if(any(!is.na(mediators))){
+    if(any(!is.null(mediators))){
       mediators <- na.omit(mediators)
       vars[[length + 1]] <- mediators
       length <- length + 1
     }
-    if(any(!is.na(instrumental_vars))){
+    if(any(!is.null(instrumental_vars))){
       instrumental_vars <- na.omit(instrumental_vars)
       vars[[length + 1]] <- instrumental_vars
       length <- length + 1
@@ -508,15 +516,15 @@ addCoords <- function(dag, confounders, mediators, instrumental_vars, mediator_o
     vars[[length + 2]] <- outcome
   }else{
     vars <- confounders
-    if(any(!is.na(mediator_outcome_confounders))){
+    if(any(!is.null(mediator_outcome_confounders))){
       mediator_outcome_confounders <- na.omit(mediator_outcome_confounders)
       vars <- c(vars, mediator_outcome_confounders)
     }
-    if(any(!is.na(mediators))){
+    if(any(!is.null(mediators))){
       mediators <- na.omit(mediators)
       vars <- c(vars, mediators)
     }
-    if(any(!is.na(instrumental_vars))){
+    if(any(!is.null(instrumental_vars))){
       instrumental_vars <- na.omit(instrumental_vars)
       vars <- c(vars, instrumental_vars)
     }
@@ -557,7 +565,7 @@ addCoords <- function(dag, confounders, mediators, instrumental_vars, mediator_o
   coords[1:num_confounders,]$y <- coords[1:num_confounders,]$y + rand_conf_y[1:num_confounders]
 
   # mediator-outcome-confounders
-  if(all(!is.na(mediator_outcome_confounders))){
+  if(all(!is.null(mediator_outcome_confounders))){
 
     a <- 1 + as.integer(!is.na((lambda/lambda)))
     b <- 1 + as.integer(is.na((lambda/lambda)))
@@ -576,7 +584,7 @@ addCoords <- function(dag, confounders, mediators, instrumental_vars, mediator_o
   }
 
   # mediators
-  if(all(!is.na(mediators))){
+  if(all(!is.null(mediators))){
 
     a <- 1 + as.integer(!is.na((lambda/lambda)))
     b <- 1 + as.integer(is.na((lambda/lambda)))
@@ -607,7 +615,7 @@ addCoords <- function(dag, confounders, mediators, instrumental_vars, mediator_o
   coords[nrow(coords),]$y <- coords[nrow(coords),]$y - outcome_y_min
 
   # instrumental variables
-  if(!is.na(instrumental_vars)){
+  if(!is.null(instrumental_vars)){
 
     instr_y <- seq( ( trt_y_max - i ) , (trt_y_max + i*(c/n) ), length.out = i)
 
@@ -691,17 +699,21 @@ addLabels <- function(dag, dag_df, labels){
 
   node_labels <- getEdges(dag)
 
+  dag_df <- dag_df[order(dag_df$name),]
+
+
   dag_df <- dag_df %>%
     dplyr::mutate(role = dplyr::case_when(
-      name %in% node_labels$v ~ node_labels$role_v,
+      name == node_labels$ancestor ~ node_labels$role_ancestor,
     ))
 
   dag_na <- dag_na %>%
     dplyr::mutate(role = dplyr::case_when(
       name %in% dagitty::outcomes(dag) ~ "outcome",
-      name %in% dagitty::latents(dag) ~ "latent",
       #name %in% name ~ "collider",
     ))
+
+
 
   dag_df <- rbind(dag_df, dag_na)
 
