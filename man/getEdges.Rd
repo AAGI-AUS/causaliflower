@@ -7,7 +7,8 @@
 getEdges(
   dag,
   selected_nodes = c("outcome", "treatment", "confounder", "mediator",
-    "mediator-outcome-confounder", "instrumental"),
+    "mediator_outcome_confounder", "instrumental", "proxy", "competing_exposure",
+    "collider", "latent"),
   variables = NULL,
   output_format = "default",
   output_structure = "data.table"

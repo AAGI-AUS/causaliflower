@@ -6,27 +6,29 @@
 \usage{
 buildGraph(
   type = c("full", "saturated", "ordered"),
-  variables = NULL,
-  treatment = NULL,
-  outcome = NULL,
-  confounders = NULL,
-  mediators = NULL,
-  latent_variables = NULL,
-  instrumental_variables = NULL,
+  variables = NA,
+  treatment = NA,
+  outcome = NA,
+  confounders = NA,
+  mediators = NA,
+  latent_variables = NA,
+  instrumental_variables = NA,
   mediator_outcome_confounders = NA,
+  competing_exposure = NA,
+  colliders = NA,
   coords_spec = c(lambda = 0, lambda_max = NA, iterations = NA)
 )
 }
 \arguments{
 \item{type}{The type of graph generated. Defaults to 'full', producing a fully connected graph with confounders connected in both directions (bi-directional), and to mediators in one direction (uni-directional). If type ='saturated', a similar saturated graph is produced except confounders are not connected to mediators, featuring bi-directional arrows between each of the confounders (follows the ESC-DAGs Mapping Stage in Ferguson et al. (2020)). When type = 'ordered', the order of supplied confounders and mediators determines the order that each node occurs, therefore directed arrows are to be connected in one direction from confounders and mediators to other confounders and mediators, respectively. This builds a saturated DAG with temporal, uni-directional arrows, based on Tennnant et al. (2021).}
 
-\item{variables}{Vector of variables to be assigned nodes in a graph.  A named vector can be supplied, containing any of the other input variable roles. A list can also be supplied.}
+\item{variables}{Vector or list of variables to be assigned nodes in a graph. Order of variables determines the assigned coordinates. A named vector can be supplied, containing any of the other input variable roles. A list can also be supplied.}
 
 \item{treatment}{Treatment variable name, e.g. "X". Must be specified, unless included in the named vector 'variables'.}
 
 \item{outcome}{Outcome variable name, e.g. "Y". Must be specified, unless included in the named vector 'variables'.}
 
-\item{confounders}{Character or vector of confounder variable names, e.g. "Z" or c("Z1", "Z2", "Z3"). A list can also be supplied.}
+\item{confounders}{Character or vector of confounder variable names, e.g. "Z" or c("Z1", "Z2", "Z3"). Order of variables determines the assigned coordinates. A list can also be supplied. If type = "ordered", confounders in the same list will be assigned similar coordinates.}
 
 \item{mediators}{Character or vector of mediator variable names, e.g. "M" or c("M1", "M2", "M3").}
 

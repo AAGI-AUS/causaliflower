@@ -7,10 +7,10 @@
 #' @importFrom dplyr mutate case_when filter
 #' @importFrom dagitty dagitty
 #' @param type The type of graph generated. Defaults to 'full', producing a fully connected graph with confounders connected in both directions (bi-directional), and to mediators in one direction (uni-directional). If type ='saturated', a similar saturated graph is produced except confounders are not connected to mediators, featuring bi-directional arrows between each of the confounders (follows the ESC-DAGs Mapping Stage in Ferguson et al. (2020)). When type = 'ordered', the order of supplied confounders and mediators determines the order that each node occurs, therefore directed arrows are to be connected in one direction from confounders and mediators to other confounders and mediators, respectively. This builds a saturated DAG with temporal, uni-directional arrows, based on Tennnant et al. (2021).
-#' @param variables Vector of variables to be assigned nodes in a graph.  A named vector can be supplied, containing any of the other input variable roles. A list can also be supplied.
+#' @param variables Vector or list of variables to be assigned nodes in a graph. Order of variables determines the assigned coordinates. A named vector can be supplied, containing any of the other input variable roles. A list can also be supplied.
 #' @param treatment Treatment variable name, e.g. "X". Must be specified, unless included in the named vector 'variables'.
 #' @param outcome Outcome variable name, e.g. "Y". Must be specified, unless included in the named vector 'variables'.
-#' @param confounders Character or vector of confounder variable names, e.g. "Z" or c("Z1", "Z2", "Z3"). A list can also be supplied.
+#' @param confounders Character or vector of confounder variable names, e.g. "Z" or c("Z1", "Z2", "Z3"). Order of variables determines the assigned coordinates. A list can also be supplied. If type = "ordered", confounders in the same list will be assigned similar coordinates.
 #' @param mediators Character or vector of mediator variable names, e.g. "M" or c("M1", "M2", "M3").
 #' @param latent_variables Character or vector of additional or already supplied latent (unobserved) variable names, e.g. "U" or c("U1", "U2", "M1").
 #' @param instrumental_variables Vector of instrumental variable names, e.g. "IV"
@@ -86,456 +86,399 @@
 #'
 #' @export
 buildGraph <- function(type = c("full", "saturated", "ordered"),
-                       variables = NULL,
-                       treatment = NULL,
-                       outcome = NULL,
-                       confounders = NULL,
-                       mediators = NULL,
-                       latent_variables = NULL,
-                       instrumental_variables = NULL,
+                       variables = NA,
+                       treatment = NA,
+                       outcome = NA,
+                       confounders = NA,
+                       mediators = NA,
+                       latent_variables = NA,
+                       instrumental_variables = NA,
                        mediator_outcome_confounders = NA,
+                       competing_exposure = NA,
+                       colliders = NA,
                        coords_spec = c(lambda = 0, lambda_max = NA, iterations = NA)){
 
+  # Option 1: Named list of variables inputted, corresponding to role input options
+  #           (treatment and outcome can be included in the named list, or supplied in their own inputs)
 
-  # Option 1: named vector of variables inputted (can either include treatment and outcome or as separate inputs)
-  if(is.null(confounders) & !is.null(variables) & !is.null(names(unlist(variables)))){
+  if( all( is.na(confounders) ) & !all( is.na(variables) ) & !all( is.na(names(unlist(variables)))) ){
 
+    variables_df <- extract_roles(variables)
 
-
-    if( length(unlist(variables, recursive = FALSE)) < length(unlist(variables)) ){
-
-      nested_vars_list <- TRUE
-
-      variables_df <- dplyr::bind_rows(unlist(variables, recursive = FALSE), .id = "role")
-
-      variables_df <- tidyr::pivot_longer(data = variables_df,
-                          cols = colnames(variables_df))
-
-      variables_df <- variables_df %>% dplyr::group_by(value) %>% unique() %>% dplyr::ungroup() %>% dplyr::rename(variables = value) %>% as.data.frame()
-
-    }else{
-
-      variables_df <- data.frame(variables = as.vector(unlist(variables)),
-                                 name = names(unlist(variables)),
-                                 #order = order(names(variables_vec)),
-                                 stringsAsFactors = FALSE)
-    }
-
-
-    variables_df <- variables_df %>%
-      dplyr::mutate(role = dplyr::case_when(
-        grepl("mediator-outcome", name) ~ "mediator-outcome-confounder",
-        grepl("mediator_outcome", name) ~ "mediator-outcome-confounder",
-        grepl("mediator outcome", name) ~ "mediator-outcome-confounder",
-        grepl("moc", name) ~ "mediator-outcome-confounder",
-        grepl("outcome", name) ~ "outcome",
-        grepl("treatment", name) ~ "treatment",
-        grepl("confounder", name) ~ "confounder",
-        grepl("instrumental", name) ~ "instrumental",
-        grepl("collider", name) ~ "collider",
-        grepl("latent", name) ~ "latent",
-        grepl("mediator", name) ~ "mediator",
-      )) %>% dplyr::mutate(name = dplyr::case_when(
-        role == "outcome" ~ as.integer(gsub("[^0-9]", "", name)),
-        role == "outcomes" ~ as.integer(gsub("[^0-9]", "", name)),
-        grepl("treatment", role) ~ as.integer(gsub("[^0-9]", "", name)),
-        role == "confounder" ~ as.integer(gsub("[^0-9]", "", name)),
-        role == "confounders" ~ as.integer(gsub("[^0-9]", "", name)),
-        grepl("instrumental", role) ~ as.integer(gsub("[^0-9]", "", name)),
-        grepl("collider", role) ~ as.integer(gsub("[^0-9]", "", name)),
-        grepl("latent", role) ~ as.integer(gsub("[^0-9]", "", name)),
-        role == "mediator" ~ as.integer(gsub("[^0-9]", "", name)),
-        role == "mediators" ~ as.integer(gsub("[^0-9]", "", name)),
-        grepl("mediator-outcome", role) ~ as.integer(gsub("[^0-9]", "", name)),
-      )) %>% dplyr::rename("order" = name)
 
     confounder_df <- variables_df %>% dplyr::filter(role == "confounder")
-    confounder_vec <-  confounder_df$variables
+    confounder_vec <- confounder_df$variables
+
+    if( length(unlist(confounder_vec)) > length(confounder_vec) ){
+      confounders_list <- list()
+      confounders_list <- lapply( 1:length(confounder_vec), function(x){
+
+        confounders_list[[x]] <- list( as.data.frame( confounder_vec[[x]]), rep(x, times = length(confounder_vec[[x]]) ) )
+        confounders_list <- dplyr::bind_cols(confounders_list[[x]][1], confounders_list[[x]][2])
+
+      } )
+
+      confounders_df <- dplyr::bind_rows( confounders_list )
+
+      confounder_occurrance <- as.vector( unlist(confounders_df[2]) )
+
+    }else{
+
+      confounder_occurrance <- as.numeric(order(match(confounder_vec, confounder_vec)))
+
+    }
 
     outcome_df <- variables_df %>% dplyr::filter(role == "outcome")
-    outcome <- as.vector(outcome_df["variables"])
+    outcome <- as.vector(unlist(outcome_df["variables"]))
 
     treatment_df <- variables_df %>% dplyr::filter(role == "treatment")
-    treatment <- as.vector(treatment_df["variables"])
+    treatment <- as.vector(unlist(treatment_df["variables"]))
 
-    mediator_df <- variables_df %>% dplyr::filter(role == "mediator")
-    latent_df <- variables_df %>% dplyr::filter(role == "latent")
-    instrumental_df <- variables_df %>% dplyr::filter(role == "instrumental")
-    m_o_confounder_df <- variables_df %>% dplyr::filter(role == "mediator-outcome-confounder")
-
-    if(nrow(mediator_df) == 0){
-      mediator_vec <- NULL
-    }else{
-      mediator_vec <- as.vector(mediator_df$variables)
-    }
-
-    if(nrow(latent_df) == 0){
-      latent_vec <- NULL
-    }else{
-      latent_vec <- as.vector(latent_df$variables)
-    }
-
-    if(nrow(instrumental_df) == 0){
-      instrumental_vec <- NULL
-    }else{
-      instrumental_vec <- as.vector(instrumental_df$variables)
-    }
-
-    if(nrow(m_o_confounder_df) == 0){
-      m_o_confounder_vec <- as.vector(NA)
-    }else{
-      m_o_confounder_vec <- as.vector(m_o_confounder_df$variables)
-    }
-  }else{
-    mediator_vec <- as.vector(mediators)
-    latent_vec <- as.vector(latent_variables)
-    instrumental_vec <- as.vector(instrumental_variables)
-    m_o_confounder_vec <- as.vector(mediator_outcome_confounders)
-
-    # Option 2: variables inputted (assumed common causes of treatment and outcome),
-    #           Separate inputs for treatment, outcome and other nodes while blank confounders input
-    if(is.null(confounders) & !is.null(variables)){
-
-      if( length(unlist(variables)) > length(variables) ){
-
-        variables_temp <- variables
-
-        for(i in 1:length(variables_temp)){
-          names(variables_temp[[i]]) <- rep("confounder", length(variables_temp[[i]]))
-          i <- i + 1
-        }
-
-        variables_df <- suppressMessages(dplyr::bind_rows(unlist(variables_temp), .id = "role"))
-
-        variables_df <- tidyr::pivot_longer(data = variables_df,
-                                            cols = colnames(variables_df))
-
-        variables_df <- variables_df %>% dplyr::group_by(value) %>% unique() %>% dplyr::ungroup() %>% dplyr::rename(variables = value) %>% filter(name != "role") %>% as.data.frame()
-
-        confounder_df <- variables_df %>%
-          dplyr::mutate(role = dplyr::case_when(
-            grepl("confounder", name) ~ "confounder",
-
-          )) %>%
-          dplyr::mutate(name = dplyr::case_when(
-            grepl("confounder", role) ~ as.integer(gsub("[^0-9]", "", name)),
-          )) %>% dplyr::rename("order" = name)
-
-
-      }else{
-
-        variables_vec <- as.vector(unlist(variables))
-        confounder_vec <- as.vector(variables_vec[!variables_vec %in% mediator_vec & !variables_vec %in% instrumental_vec & !variables_vec %in% m_o_confounder_vec])
-        names(confounder_vec) <- as.vector(rep("confounder", length(confounder_vec)))
-
-        confounder_df <- data.frame(variables = confounder_vec,
-                                    role = "confounder",
-                                    order = order(names(confounder_vec)),
-                                    stringsAsFactors = FALSE)
-      }
-
-
-    }else if(!is.null(confounders)){
-
-      # Option 3: confounders inputted, variables input is ignored.
-      #           Separate inputs for treatment, outcome, and other nodes.
-      confounder_vec <- as.vector(unlist(confounders))
-      names(confounder_vec) <- as.vector(rep("confounder", length(confounder_vec)))
-
-      confounder_df <- data.frame(variables = confounder_vec,
-                                  role = "confounder",
-                                  order = order(names(confounder_vec)),
-                                  stringsAsFactors = FALSE)
-    }
-
-
-    # mediator variables data frame
-    mediator_df <- data.frame(variables = mediator_vec,
-                              stringsAsFactors = FALSE)
+    mediators <- variables_df %>% dplyr::filter(role == "mediator") %>% select(variables)
+    latent_variables <- variables_df %>% dplyr::filter(role == "latent") %>% select(variables)
+    instrumental_variables <- variables_df %>% dplyr::filter(role == "instrumental") %>% select(variables)
+    mediator_outcome_confounders <- variables_df %>% dplyr::filter(role == "mediator_outcome_confounder") %>% select(variables)
+    competing_exposure <- variables_df %>% dplyr::filter(role == "competing_exposure") %>% select(variables)
+    colliders <- variables_df %>% dplyr::filter(role == "collider") %>% select(variables)
 
   }
 
+  mediator_vec <- as.vector( unlist( lapply( mediators, function(x) if( identical( x, character(0) ) ) NA_character_ else x ) ) )
+  latent_vec <-as.vector( unlist( lapply( latent_variables, function(x) if( identical( x, character(0) ) ) NA_character_ else x ) ) )
+  instrumental_vec <- as.vector( unlist( lapply( instrumental_variables, function(x) if( identical( x, character(0) ) ) NA_character_ else x ) ) )
+  m_o_confounder_vec <- as.vector( unlist( lapply( mediator_outcome_confounders, function(x) if( identical( x, character(0) ) ) NA_character_ else x ) ) )
+  competing_exposure_vec <- as.vector( unlist( lapply( competing_exposure, function(x) if( identical( x, character(0) ) ) NA_character_ else x ) ) )
+  collider_vec <- as.vector( unlist( lapply( colliders, function(x) if( identical( x, character(0) ) ) NA_character_ else x ) ) )
 
+  # Option 2: Vector of variables or confounders are inputted (treated as confounder nodes / assumed common causes of treatment and outcome),
+  #           Separate inputs for treatment, outcome, and other nodes.(e.g. treatment, outcome, mediators) while confounders input is left blank/unused.
 
-  if( ( is.null(treatment) | is.null(outcome) ) & is.null(names(unlist(variables)))){
+  if( any( is.na(confounders) ) & !any( is.na(variables) ) & any( is.na(names(unlist(variables))) ) ){
+    # variables input is used while confounders input is not
+
+    confounders <- variables
+
+    variables <- NULL
+
+  }
+
+  if( !any( is.na(confounders) ) ){
+
+    if( length(unlist(confounders)) > length(confounders) ){
+      confounders_list <- list()
+      confounders_list <- lapply( 1:length(confounders), function(x){
+
+        confounders_list[[x]] <- list( as.data.frame( confounders[[x]]), rep(x, times = length(confounders[[x]]) ) )
+        confounders_list <- dplyr::bind_cols(confounders_list[[x]][1], confounders_list[[x]][2])
+
+      } )
+
+      confounders_df <- dplyr::bind_rows( confounders_list )
+      confounders_vec <- as.vector( unlist(confounders_df[1]) )
+      confounder_occurrance <- as.vector( unlist(confounders_df[2]) )
+
+    }else{
+
+      variables_vec <- as.vector(unlist(confounders))
+      confounder_vec <- as.vector(variables_vec[!variables_vec %in% mediator_vec & !variables_vec %in% instrumental_vec & !variables_vec %in% m_o_confounder_vec])
+      confounder_occurrance <- as.numeric(order(match(confounder_vec, confounder_vec)))
+
+    }
+
+  }
+
+  if( ( any( is.na(treatment) ) | any(is.na(outcome) ) & any( is.na(names(unlist(variables))) ) ) ){
 
     stop("Missing treatment and/or outcome inputs, or the supplied variables are not labelled. Both treatment and outcome must be given as inputs or supplied in a named vector for graphs using buildGraph().")
 
   }
 
-  saturated_vec <- c()
-  treatment_vec <- c()
-  outcome_vec <- c()
+  # if all mediator-outcome confounders are not confounders, execution is stopped
+  if( all( confounder_vec %in% m_o_confounder_vec ) != FALSE ){
 
-  confounder_df$moc <- FALSE
-
-  m_o_confounder <- 1
-  confounder <- 1
-  arrow_count <- 1
-  treatment_count <- 1
-  outcome_count <- 1
-
-  for(m_o_confounder in 1:length(m_o_confounder_vec)){
-
-    if(all(!is.na(m_o_confounder_vec))){
-
-      # if all mediator-outcome confounders are not confounders, edges are added to the vector
-      if( length(confounder_vec[!confounder_vec %in% m_o_confounder_vec[m_o_confounder]]) == length(confounder_vec) ){
-
-        outcome_vec[outcome_count] <- paste(m_o_confounder_vec[m_o_confounder], "->", outcome)
-        outcome_count <- outcome_count + 1
-
-        if(type == "full"){
-          treatment_vec[treatment_count] <- paste(treatment, "->", m_o_confounder_vec[m_o_confounder])
-          treatment_count <- treatment_count + 1
-
-
-        }
-
-
-        if(all(!is.null(mediator_vec))){
-
-          mediator_count <- 1
-
-          for(mediator_count in 1:length(mediator_vec)){
-
-            if(!identical(m_o_confounder_vec[m_o_confounder], mediator_vec[mediator_count])){
-
-              saturated_vec[arrow_count] <- paste(m_o_confounder_vec[m_o_confounder], "->", mediator_vec[mediator_count])
-              arrow_count <- arrow_count + 1
-              mediator_count <- mediator_count + 1
-
-            }
-          }
-        }
-
-      }
-
-    }
-
-
-    confounder <- 1
-
-    for(confounder in 1:length(confounder_vec)){
-
-      # if mediator-outcome confounders are supplied, each confounder is checked and assigned
-      if(all(!is.na(m_o_confounder_vec))){
-        if(confounder_vec[confounder] ==  m_o_confounder_vec[m_o_confounder]){
-          confounder_df[confounder,"moc"] <- TRUE
-        }else{
-          treatment_vec[treatment_count] <- paste(confounder_vec[confounder], "->", treatment)
-          outcome_vec[outcome_count] <- paste(confounder_vec[confounder], "->", outcome)
-
-          treatment_count <- treatment_count + 1
-          outcome_count <- outcome_count + 1
-        }
-      }else{
-        treatment_vec[treatment_count] <- paste(confounder_vec[confounder], "->", treatment)
-        outcome_vec[outcome_count] <- paste(confounder_vec[confounder], "->", outcome)
-
-        treatment_count <- treatment_count + 1
-        outcome_count <- outcome_count + 1
-      }
-
-      saturated <- 1
-
-
-      if(confounder_df[confounder,"moc"] == FALSE){
-        if(all(!is.null(mediator_vec))){
-
-          mediator_count <- 1
-
-          for(mediator_count in 1:length(mediator_vec)){
-
-            outcome_vec[outcome_count] <- paste(mediator_vec[mediator_count], "->", outcome)
-
-            saturated_vec[arrow_count] <- paste(treatment, "->", mediator_vec[mediator_count])
-
-            outcome_count <- outcome_count + 1
-            arrow_count <- arrow_count + 1
-            saturated <- 1
-            sat_mediator <- 1
-
-            for(saturated in 1:length(confounder_vec)){
-
-              if(!is.na(confounder_vec[saturated])){
-
-                if(type == "full" | type == "saturated"){
-
-                  if(confounder_df[saturated,"variables"] != confounder_df[confounder,"variables"]){
-
-                    saturated_vec[arrow_count] <- paste(confounder_df[confounder,"variables"], "->", confounder_df[saturated,1])
-
-                    arrow_count <- arrow_count + 1
-                  }
-
-                  if(type == "full"){
-
-                    saturated_vec[arrow_count] <- paste(confounder_vec[saturated], "->", mediator_vec[mediator_count])
-
-                    arrow_count <- arrow_count + 1
-                  }
-
-                  saturated <- saturated + 1
-
-                }else if(type == "ordered"){
-
-                  order_occurrance <- as.numeric(order(match(confounder_df$variables, confounder_df$variables)))
-
-                  if(confounder_vec[saturated] != confounder_vec[confounder] & order_occurrance[saturated] > order_occurrance[confounder]){
-
-                    saturated_vec[arrow_count] <- paste(confounder_vec[confounder], "->", confounder_vec[saturated])
-
-                    saturated <- saturated + 1
-                    arrow_count <- arrow_count + 1
-                  }
-                }
-              }
-
-            }
-
-            mediator_count <- mediator_count + 1
-          }
-
-        }else if(all(is.null(mediator_vec))){
-
-          for(saturated in 1:nrow(confounder_df)){
-
-            if(type == "full" | type == "saturated"){
-
-              if(confounder_df[saturated,"variables"] != confounder_df[confounder,"variables"]){
-
-                saturated_vec[arrow_count] <- paste(confounder_df[confounder,"variables"], "->", confounder_df[saturated,"variables"])
-
-                saturated <- saturated + 1
-                arrow_count <- arrow_count + 1
-              }
-            }else if(type == "ordered"){
-
-              order_occurrance <- as.numeric(order(match(confounder_df$variables, confounder_df$variables)))
-
-              if(confounder_vec[saturated] != confounder_vec[confounder] & order_occurrance[saturated] > order_occurrance[confounder]){
-
-                saturated_vec[arrow_count] <- paste(confounder_vec[confounder], "->", confounder_vec[saturated])
-
-                saturated <- saturated + 1
-                arrow_count <- arrow_count + 1
-              }
-            }
-          }
-        }
-
-      }else if(confounder_df[confounder,"moc"] == TRUE){
-        if(all(!is.null(mediator_vec))){
-
-          mediator_count <- 1
-
-          for(mediator_count in 1:length(mediator_vec)){
-
-            outcome_vec[outcome_count] <- paste(mediator_vec[mediator_count], "->", outcome)
-            saturated_vec[arrow_count] <- paste(treatment, "->", mediator_vec[mediator_count])
-
-            outcome_count <- outcome_count + 1
-            arrow_count <- arrow_count + 1
-            saturated <- 1
-
-            if(type == "full"){
-              for(saturated in 1:length(confounder_vec)){
-
-                saturated_vec[arrow_count] <- paste(confounder_vec[saturated], "->", mediator_vec[mediator_count])
-
-                saturated <- saturated + 1
-                arrow_count <- arrow_count + 1
-              }
-            }
-
-            mediator_count <- mediator_count + 1
-          }
-        }
-      }
-
-      confounder <- confounder + 1
-    }
-
-    m_o_confounder <- m_o_confounder +1
-  }
-
-  instrumental_treatment_vec <- c()
-
-  if(all(!is.null(instrumental_vec))){
-
-    instrumental <- 1
-
-    for(instrumental in 1:length(instrumental_vec)){
-      instrumental_treatment_vec[instrumental] <- paste(instrumental_vec[instrumental], "->", treatment)
-
-      instrumental <- instrumental + 1
-    }
+    stop("Confounders detected in 'mediator_outcome_confounder' input. These roles should be mutually exclusive. Please adjust supplied parameters and try again.")
 
   }
 
 
+  ## outcome edges ##
+  outcome_list <- c()
+  # connect colliders
+  outcome_list <- lapply(1:length(outcome), function(x){
 
-  if(all(!is.null(latent_vec))){
+    outcome_list[x] <- lapply(1:length(collider_vec), function(y){
 
-    latents <- 1
+      list( c( ancestor = outcome[x], edge = "->", descendant = collider_vec[y]) )
 
-    for(latents in 1:length(latent_vec)){
-      if(length(latent_vec[latent_vec[latents] %in% mediator_vec]) > 0){
+    })
 
-        mediator_count <- 1
+  })
 
-        for(mediator_count in 1:length(mediator_vec)){
-          if(latent_vec[latents] == mediator_vec[mediator_count]){
-            mediator_vec[mediator_count] <- NA
-          }
-          mediator_count <- mediator_count + 1
-        }
+  outcome_list <- Filter( Negate(anyNA), unlist(unlist(outcome_list, recursive = FALSE), recursive = FALSE) )
+  outcome_df <- dplyr::bind_rows(outcome_list)
 
-        mediator_vec <- na.omit(mediator_vec)
 
-      }
-      if(length(latent_vec[latent_vec[latents] %in% confounder_vec]) > 0){
+  ## treatment edges ##
+  treatment_list <- c()
+  # connect outcome
+  treatment_list <- lapply(1:length(treatment), function(x){
 
-        confounder <- 1
+    treatment_list[x] <- list( c( ancestor = treatment[x], edge = "->", descendant = outcome) )
 
-        for(confounder in 1:length(confounder_vec)){
-          if(latent_vec[latents] == confounder_vec[confounder]){
-            confounder_vec[confounders] <- NA
-          }
-          confounder <- confounder + 1
-        }
+  })
 
-        confounder_vec <- na.omit(confounder_vec)
-      }
+  treatment_list <- Filter(Negate(anyNA), unlist(treatment_list, recursive = FALSE))
+  treatment_df <- dplyr::bind_rows(treatment_list)
 
-      latent_vec[latents] <- paste(latent_vec[latents], "[latent]")
-      latents <- latents + 1
+  # connect mediators
+  treatment_list <- suppressWarnings( lapply(1:length(treatment), function(x){
+
+    treatment_list[x] <- lapply(1:length(mediator_vec), function(y){
+
+      list( c( ancestor = treatment[x], edge = "->", descendant = mediator_vec[y]) )
+
+    })
+
+  }) )
+
+  treatment_list <- Filter( Negate(anyNA), unlist(unlist(treatment_list, recursive = FALSE), recursive = FALSE) )
+  treatment_df <- dplyr::bind_rows(treatment_df, treatment_list)
+
+  # connect colliders
+  treatment_list <- suppressWarnings( lapply(1:length(treatment), function(x){
+
+    treatment_list[x] <- lapply(1:length(collider_vec), function(y){
+
+      list( c( ancestor = treatment[x], edge = "->", descendant = collider_vec[y]) )
+
+    })
+
+  }) )
+
+  treatment_list <- Filter( Negate(anyNA), unlist(unlist(treatment_list, recursive = FALSE), recursive = FALSE) )
+  treatment_df <- dplyr::bind_rows(treatment_df, treatment_list)
+
+  ## confounder edges ##
+  confounder_list <- c()
+
+  # connect outcome
+  confounder_list <- lapply(1:length(confounder_vec), function(x){
+
+    confounder_list[x] <- list( c( ancestor = confounder_vec[x], edge = "->", descendant = outcome) )
+
+  })
+
+  confounder_list <- Filter(Negate(anyNA), unlist(confounder_list, recursive = FALSE))
+  confounder_df <- dplyr::bind_rows(confounder_list)
+
+  # connect treatment
+  confounder_list <- lapply(1:length(confounder_vec), function(x){
+
+    confounder_list[x] <- list( c( ancestor = confounder_vec[x], edge = "->", descendant = treatment) )
+
+  })
+
+  confounder_list <- Filter(Negate(anyNA), unlist(confounder_list, recursive = FALSE))
+  confounder_df <- dplyr::bind_rows(confounder_df, confounder_list)
+
+  # connect all confounders
+  if( type == "full" | type == "saturated" ){
+
+    confounder_list <- suppressWarnings( lapply(1:length(confounder_vec), function(x){
+
+      confounder_list[x] <- lapply(1:length(confounder_vec), function(y){
+
+        list( c( ancestor = confounder_vec[x], edge = "->", descendant = confounder_vec[y]) )
+
+      })
+
+    }) )
+
+    confounder_list <- Filter(Negate(anyNA), unlist(unlist(confounder_list, recursive = FALSE), recursive = FALSE))
+    confounder_df <- dplyr::bind_rows(confounder_df, confounder_list)
+
+    # connect mediators if the inputted dag type is "full"
+    if( type == "full" ){
+
+      confounder_list <- suppressWarnings( lapply(1:length(confounder_vec), function(x){
+
+        confounder_list[x] <- lapply(1:length(mediator_vec), function(y){
+
+          list( c( ancestor = confounder_vec[x], edge = "->", descendant = mediator_vec[y]) )
+
+        })
+
+      }) )
+
+      confounder_list <- Filter(Negate(anyNA), unlist(unlist(confounder_list, recursive = FALSE), recursive = FALSE))
+      confounder_df <- dplyr::bind_rows(confounder_df, confounder_list)
+
     }
+
+  }else if( type == "ordered" ){
+
+    confounder_list <- suppressWarnings(lapply(1:length(confounder_vec), function(x){
+
+      confounder_list[x] <- lapply(1:length(confounder_vec), function(y){
+
+        list( c( ancestor = confounder_vec[x], edge = "->", descendant = confounder_vec[y], ancestor_order = confounder_occurrance[x], descendant_order = confounder_occurrance[y] ) )
+
+      })
+
+    }))
+
+    confounder_list <- Filter(Negate(anyNA), unlist(unlist(confounder_list, recursive = FALSE), recursive = FALSE)) # unnested list and remove NA's
+    confounder_order_df <- dplyr::bind_rows(confounder_list) # bind list elements to a single data frame
+    confounder_order_df <- confounder_order_df[,c(1:3)][!confounder_order_df$ancestor_order > confounder_order_df$descendant_order, ] # remove rows where temporal logic is not followed
+    confounder_df <- rbind(confounder_df, confounder_order_df)
+  }
+
+  confounder_df <- unique(confounder_df) # remove duplicate edges
+  confounder_df <- confounder_df[confounder_df$ancestor != confounder_df$descendant, ] # remove edges with identical ancestor and descendant node names
+
+
+  ## mediator edges ##
+  mediator_list <- c()
+
+  # connect outcome
+  mediator_list <- lapply(1:length(mediator_vec), function(x){
+
+    mediator_list[x] <- list( c( ancestor = mediator_vec[x], edge = "->", descendant = outcome) )
+
+  })
+
+  mediator_list <- Filter( Negate(anyNA), unlist(mediator_list, recursive = FALSE) )
+  mediator_df <- dplyr::bind_rows(mediator_list)
+
+  # connect all mediators if the inputted dag type is "full"
+  if(type == "full"){
+
+    mediator_list <- suppressWarnings( lapply(1:length(m_o_confounder_vec), function(x){
+
+      mediator_list[x] <- lapply(1:length(mediator_vec), function(y){
+
+        list( c( ancestor = mediator_vec[x], edge = "->", descendant = mediator_vec[y]) )
+
+      })
+
+    }) )
+
+    mediator_list <- Filter( Negate(anyNA), unlist(unlist(mediator_list, recursive = FALSE), recursive = FALSE) )
+    mediator_df <- dplyr::bind_rows(mediator_df, mediator_list)
+
   }
 
 
-  treatment_to_outcome <- paste(treatment, "->", outcome)
+  ## mediator_outcome_confounder edges ##
+  moc_list <- c()
 
-  treatment <- paste(treatment, "[exposure]")
-  outcome <- paste(outcome, "[outcome]")
+  # connect outcome
+  moc_list <- lapply(1:length(m_o_confounder_vec), function(x){
 
-  outcome_vec <- na.omit(outcome_vec)
+    moc_list[x] <- list( c( ancestor = m_o_confounder_vec[x], edge = "->", descendant = outcome) )
+
+  })
+
+  moc_list <- Filter(Negate(anyNA), unlist(moc_list, recursive = FALSE))
+  moc_df <- dplyr::bind_rows(moc_list)
+
+  # connect treatment if the inputted dag type is "full"
+  if(type == "full"){
+
+    moc_list <- lapply(1:length(m_o_confounder_vec), function(x){
+
+      moc_list[x] <- list( c( ancestor = treatment, edge = "->", descendant = m_o_confounder_vec[x] ) )
+
+    })
+
+    moc_list <- Filter(Negate(anyNA), unlist(moc_list, recursive = FALSE))
+    moc_df <- dplyr::bind_rows(moc_df, moc_list)
+
+  }
+
+  # connect mediators
+  moc_list <- suppressWarnings( lapply(1:length(m_o_confounder_vec), function(x){
+
+    moc_list[x] <- lapply(1:length(mediator_vec), function(y){
+
+      list( c( ancestor = m_o_confounder_vec[x], edge = "->", descendant = mediator_vec[y]) )
+
+    })
+
+  }) )
+
+  moc_list <- Filter(Negate(anyNA), unlist(unlist(moc_list, recursive = FALSE), recursive = FALSE))
+  moc_df <- dplyr::bind_rows(moc_df, moc_list)
 
 
-  treatment_vec <- paste(treatment_vec, collapse=" ")
-  outcome_vec <- paste(outcome_vec, collapse=" ")
-  saturated_vec <- paste(saturated_vec, collapse=" ")
-  confounder_vec <- paste(confounder_vec, collapse=" ")
-  mediator_vec <- paste(mediator_vec, collapse=" ")
-  instrumental_treatment_vec <- paste(instrumental_treatment_vec, collapse=" ")
-  latent_vec <- paste(latent_vec, collapse=" ")
+  ## instrumental variable edges ##
+  instrumental_list <- c()
 
-  dag_code <- paste("dag {", treatment, outcome, latent_vec, confounder_vec, mediator_vec, instrumental_vec, treatment_to_outcome, treatment_vec, instrumental_treatment_vec, outcome_vec, saturated_vec, "}", sep = " ")
+  # connect outcome
+  instrumental_list <- lapply(1:length(instrumental_vec), function(x){
+
+    instrumental_list[x] <- list( c( ancestor = instrumental_vec[x], edge = "->", descendant = treatment) )
+
+  })
+
+  instrumental_list <- Filter(Negate(anyNA), unlist(instrumental_list, recursive = FALSE))
+  instrumental_df <- dplyr::bind_rows(instrumental_list)
+
+
+  ## competing_exposure edges ##
+  competing_exposure_list <- c()
+
+  # connect outcome
+  competing_exposure_list <- lapply(1:length(competing_exposure_vec), function(x){
+
+    competing_exposure_list[x] <- list( c( ancestor = competing_exposure_vec[x], edge = "->", descendant = outcome) )
+
+  })
+
+  competing_exposure_list <- Filter(Negate(anyNA), unlist(competing_exposure_list, recursive = FALSE))
+  competing_exposure_df <- dplyr::bind_rows(competing_exposure_list)
+
+
+  ## row bind all edge data frames ##
+  edges_df <- rbind(treatment_df, outcome_df, confounder_df, moc_df, mediator_df, instrumental_df, competing_exposure_df)
+
+  edges_df <- unique(edges_df) # remove duplicate edges
+  edges_df <- edges_df[edges_df$ancestor != edges_df$descendant, ] # remove edges with identical ancestor and descendant node names
+
+  ## get variable names ##
+  var_names <- as.vector(variables)
+
+  exclude_names <-c(treatment, outcome, latent_vec)
+  var_names <- var_names[!var_names %in% exclude_names]
+
+  node_name_and_coords_vec <- c() # empty vector for variables names / coordinates
+
+  ## add dagitty [treatment]/[outcome]/[latent] identifiers to variable names ##
+  if(!is.na(latent_vec)) {
+    node_name_and_coords_vec <- c(paste(treatment, " [exposure] ", sep=""),
+                                  paste(outcome, " [outcome] ", sep=""),
+                                  paste(latent_vec, " [latent] ", sep=""),
+                                  paste(var_names, collapse=" "))
+  }else{
+    node_name_and_coords_vec <- c(paste(treatment, " [exposure] ", sep=""),
+                                  paste(outcome, " [outcome] ", sep=""),
+                                  paste(var_names, collapse=" "))
+  }
+
+
+    edges_unlist <- lapply(1:nrow(edges_df), function(x){
+
+    edges_unlist <- paste(edges_df[x,], collapse=" ")
+
+  })
+
+  edges_vec <- paste(unlist(edges_unlist), collapse=" ")
+
+  dag_code <- paste("dag {", paste(node_name_and_coords_vec, collapse=""), edges_vec, "}", sep = " ")
 
   dag <- dagitty::dagitty(dag_code)
 
-  dag <- getCoords(dag, confounders = unlist(confounder_df[1]))
+  dag <- getCoords(dag, confounders = as.vector(confounder_vec))
 
   return(dag)
 
@@ -1043,4 +986,97 @@ ESC_DAGs_sequence <- function(edges_vec, treatment_or_outcome_edges_vec, num_edg
   }
 }
 
+#' causalify a dagitty object
+#'
+#' causalify()
+#'
+#' @importFrom data.table data.table fcase
+#' @param dag dagitty object
+#' @return Model object of either
+#' @export
+causalify <- function(dag){
+
+  edges <- getEdges(dag)
+
+  var_names <- unique(edges[c("ancestor", "role_ancestor")])
+
+  treatment <- var_names[,"ancestor"][var_names[, "role_ancestor"] %in% "treatment"]
+  outcome <- dagitty::outcomes(dag)
+  latents <- dagitty::latents(dag)
+
+  proxy_var_name <- edges$ancestor[edges$role_ancestor == "competing_exposure"]
+
+  new_edges <- lapply( 1:length(proxy_var_name), function(x){
+
+    new_edges <- c(ancestor = as.character(paste("U",proxy_var_name[x],sep="_")),
+                                                  edge = as.character("->"),
+                                                  descendant = as.character(proxy_var_name[x]),
+                                                  role_ancestor = as.character("latent"),
+                                                  role_descendant =as.character("proxy_c"))
+
+  })
+
+
+  new_outcome_edges <- lapply( 1:length(proxy_var_name), function(x){
+    new_outcome_edges <- c(ancestor = as.character(paste("U",proxy_var_name[x],sep="_")),
+                           edge = as.character("->"),
+                           descendant = as.character(treatment),
+                           role_ancestor = as.character("latent"),
+                           role_descendant =as.character("treatment"))
+  })
+  edges <- dplyr::bind_rows(edges, new_edges, new_outcome_edges)
+
+
+  edges[,"role_ancestor"][edges[, "ancestor"] %in% proxy_var_name] <- "proxy"
+  edges[,"role_descendant"][edges[, "descendant"] %in% proxy_var_name] <- "proxy"
+
+  node_roles <- c("outcome", "treatment", "confounder", "mediator", "mediator_outcome_confounder", "instrumental", "proxy", "competing_exposure", "latent")
+  edges_list <- lapply( seq_along(1:9),
+                        function(x){
+
+                          edges_list <- edges %>% filter( role_ancestor == node_roles[x] )
+                          edges_list[,c(1:3)]
+
+                        } )
+
+
+  var_names <- unique(edges[c("ancestor", "role_ancestor")])
+  var_names <- var_names[,1]
+
+  exclude_names <-c(treatment, outcome, latents)
+  var_names <- var_names[!var_names %in% exclude_names]
+
+  latents <- c(unlist(latents), as.vector(unique(edges[,"ancestor"][edges[, "role_ancestor"] %in% "latent"])))
+
+  coordinates <- dagitty::coordinates(dag)
+  node_name_and_coords_vec <- c()
+
+  if(length(latents) > 0) {
+    node_name_and_coords_vec <- c(paste(treatment, " [exposure] ", sep=""),
+                                  paste(outcome, " [outcome] ", sep=""),
+                                  paste(latents, " [latent] ", sep=""),
+                                  paste(var_names, collapse=" "))
+  }else{
+    node_name_and_coords_vec <- c(paste(treatment, " [exposure] ", sep=""),
+                                  paste(outcome, " [outcome] ", sep=""),
+                                  paste(var_names, collapse=" "))
+  }
+
+  edges_unlist <- dplyr::bind_rows(edges_list)
+
+  edges_unlist <- lapply(1:nrow(edges_unlist), function(x){
+    edges_unlist <- paste(edges_unlist[x,], collapse=" ")
+  })
+  edges_vec <- paste(unlist(edges_unlist), collapse=" ")
+
+  dag <- paste("dag {", paste(node_name_and_coords_vec, collapse=""), edges_vec, "}", sep = " ")
+
+  dag <- dagitty::dagitty(dag)
+
+  # sets coordinates for latent nodes
+  dag <- add_latent_coordinates(dag, latents = latents, existing_coords = coordinates)
+
+
+  return(dag)
+}
 

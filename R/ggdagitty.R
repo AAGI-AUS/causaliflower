@@ -38,27 +38,30 @@ ggdagitty <- function(dag,
   }
 
   # aesthetics for ggdag legend
-  col <- c("outcome"="cadetblue2",
+  col <- c("outcome"="deepskyblue",
            "treatment"="darkolivegreen3",
            "confounder"="coral2",
-           "mediator"="cornflowerblue",
-           "mediator-outcome confounder"="darkorange",
-           "instrumental"="magenta",
-          # "collider"="darkred",
+           "mediator"="darkorchid1",
+           "mediator_outcome_confounder"="magenta4",
+           "instrumental"="deeppink1",
+           "proxy"="darkorange",
+           "competing_exposure"="darkseagreen4",
+           "collider"="darkred",
            "latent"="grey")
 
   shape <- c("outcome"=19,
              "treatment"=19,
              "confounder"=19,
              "mediator"=19,
-             "mediator-outcome confounder"=19,
+             "mediator_outcome_confounder"=19,
              "instrumental"=19,
-            # "collider"=19,
+             "proxy"=19,
+             "collider"=19,
+             "competing_exposure"=19,
              "latent"=1)
 
   # variable for legend order
-  order_col <- c("outcome", "treatment", "confounder", "mediator", "mediator-outcome confounder", "instrumental", #"collider",
-                 "latent")
+  order_col <- c("outcome", "treatment", "confounder", "mediator", "mediator_outcome_confounder", "instrumental", "proxy", "competing_exposure", "collider", "latent")
 
   if(label_type == "name"){
 
@@ -176,29 +179,26 @@ getCoords <- function(dag,
 
   dag_df <- dagittyData(dag)
 
-  #dag_na <- dag_df %>% dplyr::filter(is.na(direction))
-
   edges <- getEdges(dag)
 
-  node_labels <- unique(edges[c("ancestor", "role_ancestor")])
-
-  #node_labels <- rbind(node_labels, dag_na)
-
+  node_labels <- unique(edges[c("ancestor", "role_ancestor", "descendant", "role_descendant")])
 
   if(is.null(confounders)){
 
-    confounders <-  as.vector(unlist(lapply(as.vector( ( node_labels %>% dplyr::filter(role_ancestor == "confounder") )[,1]), function(x) if(identical(x, character(0))) NA_character_ else x)))
+    confounders <-  as.vector(unlist(lapply(as.vector( unique( ( node_labels %>% dplyr::filter(role_ancestor == "confounder") )[,1] ) ), function(x) if(identical(x, character(0))) NA_character_ else x)))
   }
 
-  mediators <-  as.vector(unlist(lapply(as.vector( ( node_labels %>% dplyr::filter(role_ancestor == "mediator") )[,1]), function(x) if(identical(x, character(0))) NA_character_ else x)))
-  instrumental_vars <- as.vector(unlist(lapply(as.vector( ( node_labels %>% dplyr::filter(role_ancestor == "instrumental") )[,1]), function(x) if(identical(x, character(0))) NA_character_ else x)))
-  latent_vars <- as.vector(unlist(lapply(as.vector( ( node_labels %>% dplyr::filter(role_ancestor == "latent")  )[,1]), function(x) if(identical(x, character(0))) NA_character_ else x)))
-  mediator_outcome_confounders <- as.vector(unlist(lapply(as.vector( ( node_labels %>% dplyr::filter(role_ancestor == "mediator-outcome-confounder")  )[,1]), function(x) if(identical(x, character(0))) NA_character_ else x)))
+  mediators <-  as.vector( unlist( lapply( as.vector( unique( ( node_labels %>% dplyr::filter(role_ancestor == "mediator") )[,1] ) ), function(x) if(identical(x, character(0))) NA_character_ else x)))
+  instrumental_vars <- as.vector( unlist( lapply( as.vector( unique( ( node_labels %>% dplyr::filter(role_ancestor == "instrumental") )[,1] ) ), function(x) if(identical(x, character(0))) NA_character_ else x)))
+  latent_vars <- as.vector( unlist( lapply( as.vector( unique( ( node_labels %>% dplyr::filter(role_ancestor == "latent")  )[,1] ) ), function(x) if(identical(x, character(0))) NA_character_ else x)))
+  mediator_outcome_confounders <- as.vector( unlist( lapply( as.vector( unique( ( node_labels %>% dplyr::filter(role_ancestor == "mediator_outcome_confounder")  )[,1] ) ), function(x) if(identical(x, character(0))) NA_character_ else x)))
+  competing_exposures <- as.vector( unlist( lapply( as.vector( unique( ( node_labels %>% dplyr::filter(role_ancestor == "competing_exposure")  )[,1] ) ), function(x) if( identical( x, character(0) ) ) NA_character_ else x ) ) )
+  colliders <- as.vector( unlist( lapply( as.vector( unique( ( node_labels %>% dplyr::filter(role_descendant == "collider")  )[,3] ) ), function(x) if( identical( x, character(0) ) ) NA_character_ else x ) ) )
 
 
   if(length(na.omit(coords_spec)) == 3){
     message("Generating coordinates for ", coords_spec["iterations"], " DAGs for each lambda value between ", coords_spec["lambda"], " and ", coords_spec["lambda_max"], ".")
-    dag <- addAutoCoords(dag, confounders, mediators, instrumental_vars, mediator_outcome_confounders, coords_spec)
+    dag <- auto_coords(dag, confounders, mediators, instrumental_vars, mediator_outcome_confounders, coords_spec)
 
     return(dag)
 
@@ -207,7 +207,14 @@ getCoords <- function(dag,
     tryCatch(
       { # try
 
-        dag <- addCoords(dag, confounders, mediators, instrumental_vars, mediator_outcome_confounders, na.omit(coords_spec))
+        dag <- add_coordinates(dag,
+                               confounders = confounders,
+                               mediators = mediators,
+                               instrumental_vars = instrumental_vars,
+                               mediator_outcome_confounders = mediator_outcome_confounders,
+                               competing_exposures = competing_exposures,
+                               colliders = colliders,
+                               na.omit(coords_spec))
 
       },
       # error = function(cond) {
@@ -238,7 +245,7 @@ getCoords <- function(dag,
 #' @param coords_spec Vector containing 'iterations' for specifying number of training epochs and 'lambda_range' to control the volatility of random coordinates.
 #' @return dag objecty with coordinates.
 #' @noRd
-addAutoCoords <- function(dag,
+auto_coords <- function(dag,
                           confounders,
                           mediators = NULL,
                           instrumental_vars = NULL,
@@ -273,7 +280,7 @@ addAutoCoords <- function(dag,
     dags <- list()
     temp_list <- list()
     for(epoch in 1:iterations){
-      dag <- addCoords(dag, confounders, mediators, lambda)
+      dag <- add_coordinates(dag, confounders, mediators, lambda)
       dags[[epoch]] <- dag
       ggdagitty <- ggdagitty(dag, labels)
       temp_list[[epoch]] <- ggdagitty
@@ -431,24 +438,27 @@ addAutoCoords <- function(dag,
 #' @param lambda adjusts sensitivity of node placement. Higher lambda introduces more volatility in confounder nodes and treatment along the y-axis.
 #' @return dagitty objecty with coordinates.
 #' @noRd
-addCoords <- function(dag, confounders, mediators, instrumental_vars, mediator_outcome_confounders, lambda){
-
+add_coordinates <- function(dag, confounders, mediators, instrumental_vars, mediator_outcome_confounders, competing_exposures, colliders, lambda){
 
   if(is.null(confounders)){
 
     var_order <- sort(unlist(dagitty::topologicalOrdering(dag)))
 
-  }else{
-    #confounders_order <- ggdag::time_ordered_coords(confounders, direction = c("x"), auto_sort_direction = c("right"))$name
+    var_order <- as.vector(names(var_order))
+    var_order <- var_order[ !var_order %in% competing_exposures ]
 
+    var_order <- c(confounders, var_order[( length(confounders) +1 ):length(var_order) - 1 ], competing_exposures, var_order[length(var_order)] )
+
+  }else{
 
     var_order <- sort(unlist(dagitty::topologicalOrdering(dag)))
-    var_order <- as.vector(names(var_order))
-    var_order <- c(confounders, var_order[( length(confounders) +1 ):length(var_order)])
 
+    var_order <- as.vector(names(var_order))
+    var_order <- var_order[ !var_order %in% competing_exposures ]
+
+    var_order <- c(confounders, var_order[( length(confounders) +1 ):length(var_order) - 1 ], competing_exposures, var_order[length(var_order)] )
 
   }
-
 
   var_names <- names(var_order)
   confounders_order <- var_names[var_names %in% confounders]
@@ -489,6 +499,21 @@ addCoords <- function(dag, confounders, mediators, instrumental_vars, mediator_o
   }else{
     moc <- 0
   }
+  if(!all(is.null(competing_exposures))){
+
+    comp <- length(competing_exposures)
+
+  }else{
+    comp <- 0
+  }
+  if(!all(is.null(colliders))){
+
+    coll <- length(colliders)
+
+  }else{
+    coll <- 0
+  }
+
 
 
   if(unlisted_c > c){
@@ -528,9 +553,16 @@ addCoords <- function(dag, confounders, mediators, instrumental_vars, mediator_o
       instrumental_vars <- na.omit(instrumental_vars)
       vars <- c(vars, instrumental_vars)
     }
+    if(any(!is.null(competing_exposures))){
+      competing_exposures <- na.omit(competing_exposures)
+      vars <- c(vars, competing_exposures)
+    }
+    if(any(!is.null(colliders))){
+      colliders <- na.omit(colliders)
+      vars <- c(vars, colliders)
+    }
     vars <- c(vars, treatment, outcome)
   }
-
 
   num_vars <- n <- length(unlist(vars))
   num_confounders <- length(unlist(confounders))
@@ -576,7 +608,7 @@ addCoords <- function(dag, confounders, mediators, instrumental_vars, mediator_o
                        -( (((m^2)*(x^2))/(n-i)) + (m)*x - (m/2) ),  length.out = moc)
 
     rand_moc_x <- seq( ( c/(moc + m)),
-                       ( x*(m*x + m) + c/m),  length.out = moc)
+                         x*(m*x + m ),  length.out = moc)
 
     coords[(num_confounders+1):(num_confounders+moc),]$y <- coords[(num_confounders+1):(num_confounders+moc),]$y + rand_moc_y
     coords[(num_confounders+1):(num_confounders+moc),]$x <- coords[(num_confounders+1):(num_confounders+moc),]$x + rand_moc_x
@@ -626,6 +658,31 @@ addCoords <- function(dag, confounders, mediators, instrumental_vars, mediator_o
 
   }
 
+  # competing exposures
+  if(!is.null(competing_exposures)){
+
+    comp_y <- seq( ( coords[nrow(coords),]$y - (comp*(3/comp)) ) , (coords[nrow(coords),]$y - (comp*(2/comp))*(c/n) ), length.out = comp)
+
+    comp_x <- seq( ( coords[nrow(coords),]$x ) - comp , ( coords[nrow(coords),]$x ) - (comp*(c/n) )  , length.out = comp)
+
+    coords[(num_confounders+moc+m+i+1):(num_confounders+moc+m+i+comp),]$y <- comp_y
+    coords[(num_confounders+moc+m+i+1):(num_confounders+moc+m+i+comp),]$x <- comp_x
+
+  }
+
+  # colliders
+  if(!is.null(colliders)){
+
+    coll_y <- seq( ( coords[nrow(coords),]$y + (coll*(coll/3)) ) , (coords[nrow(coords),]$y + (coll*(coll/2))*(c/n) ), length.out = coll)
+
+    coll_x <- seq( ( coords[nrow(coords),]$x ) + coll + 0.5 , ( coords[nrow(coords),]$x ) + (coll*(coll/2) )  , length.out = coll)
+
+    coords[(num_confounders+moc+m+i+comp+1):(num_confounders+moc+m+i+comp+coll),]$y <- coll_y
+    coords[(num_confounders+moc+m+i+comp+1):(num_confounders+moc+m+i+comp+coll),]$x <- coll_x
+
+  }
+
+
   coords_x <- coords$x
   coords_y <- coords$y
   names(coords_x) <- coords$name
@@ -640,6 +697,50 @@ addCoords <- function(dag, confounders, mediators, instrumental_vars, mediator_o
 
   return(dag)
 }
+
+
+#' Add coordinates to a dagitty object
+#'
+#' @importFrom dagitty exposures outcomes coordinates latents topologicalOrdering
+#' @importFrom ggdag time_ordered_coords
+#' @param dag dagitty object
+#' @param confounders vector of confounders nodes in the supplied dag.
+#' @param mediators vector of mediator nodes in the supplied dag.
+#' @param instrumental_vars vector of instrumental variable nodes in the supplied dag.
+#' @param lambda adjusts sensitivity of node placement. Higher lambda introduces more volatility in confounder nodes and treatment along the y-axis.
+#' @return dagitty objecty with coordinates.
+#' @noRd
+add_latent_coordinates <- function(dag, latents, existing_coords,  lambda){
+
+  latent_descendants <- lapply(1:length(latents), function(x){
+
+    latent_descendants <- dagitty::children(dag, latents[x])
+
+  })
+
+  latent_coords <- lapply(1:length(latents), function(x){
+
+    latent_descendants_coords_x <- mean(existing_coords$x[ names(existing_coords$x) %in% latent_descendants[[x]] ]) - runif(n=1, min=0.3, max=0.6) * ( 1 / x )
+
+    latent_descendants_coords_y <- mean( existing_coords$y[ names(existing_coords$y) %in% latent_descendants[[x]] ] ) + runif(n=1, min=0.1, max=0.2) * ( x )
+
+    latent_coords <- list(x = unlist(latent_descendants_coords_x), y = unlist(latent_descendants_coords_y))
+
+  })
+
+  latent_coords <- dplyr::bind_rows(latent_coords)
+  names(latent_coords$x) <- latents
+  names(latent_coords$y) <- latents
+
+  coordinates <- list(x = c(existing_coords$x, latent_coords$x), y = c(existing_coords$y, latent_coords$y))
+
+  #dagitty::coordinates(dag) <- NA
+
+  dagitty::coordinates(dag) <- coordinates
+
+  return(dag)
+}
+
 
 
 #' dataframe output from a dagitty object
@@ -699,6 +800,13 @@ addLabels <- function(dag, dag_df, labels){
 
   node_labels <- getEdges(dag)
 
+
+  #node_labels <- node_labels[,c(1:3)]
+  #dag_df_subset <- dag_df[,c(1,4,5)]
+  #rownames(dag_df_subset) <- NULL
+  #rownames(dag_df_subset) <- NULL
+  #node_labels[ !node_labels %in% dag_df_subset]
+
   dag_df <- dag_df[order(dag_df$name),]
 
 
@@ -710,7 +818,7 @@ addLabels <- function(dag, dag_df, labels){
   dag_na <- dag_na %>%
     dplyr::mutate(role = dplyr::case_when(
       name %in% dagitty::outcomes(dag) ~ "outcome",
-      #name %in% name ~ "collider",
+      name %in% colliders(dag) ~ "collider",
     ))
 
 
