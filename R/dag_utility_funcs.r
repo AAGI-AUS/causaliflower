@@ -1,59 +1,5 @@
 
 
-#' Extract roles from data
-#'
-#' @importFrom magrittr %>%
-#' @importFrom dplyr bind_rows group_by ungroup rename mutate case_when filter
-#' @importFrom tidyr pivot_longer
-#' @param variables Vector or list of variables to be assigned nodes in a graph.A named vector can be supplied, containing any of the other input variable roles. A list can also be supplied.
-#' @returns A dagitty object, fully connected (saturated) graph.
-#' @noRd
-extract_roles <- function(variables){
-
-    if( length(unlist(variables, recursive = FALSE)) < length(unlist(variables)) ){
-
-      nested_vars_list <- TRUE
-
-      variables_df <- dplyr::bind_rows(unlist(variables, recursive = FALSE), .id = "role")
-
-      variables_df <- tidyr::pivot_longer(data = variables_df,
-                                          cols = colnames(variables_df))
-
-      variables_df <- variables_df %>% dplyr::group_by(value) %>% unique() %>% dplyr::ungroup() %>% dplyr::rename(variables = value) %>% as.data.frame()
-
-    }else{
-
-      variables_df <- data.frame(variables = as.vector(unlist(variables)),
-                                 name = names(unlist(variables)),
-                                 stringsAsFactors = FALSE)
-    }
-
-
-    variables_df <- variables_df %>%
-      dplyr::mutate(role = dplyr::case_when(
-        grepl("mediator-outcome", name) ~ "mediator_outcome_confounder",
-        grepl("mediator_outcome", name) ~ "mediator_outcome_confounder",
-        grepl("mediator outcome", name) ~ "mediator_outcome_confounder",
-        grepl("moc", name) ~ "mediator_outcome_confounder",
-        grepl("outcome", name) ~ "outcome",
-        grepl("treatment", name) ~ "treatment",
-        grepl("confounder", name) ~ "confounder",
-        grepl("instrumental", name) ~ "instrumental",
-        grepl("collider", name) ~ "collider",
-        grepl("latent", name) ~ "latent",
-        grepl("latent", name) ~ "latent",
-        grepl("mediator", name) ~ "mediator",
-        grepl("competing_exposure", name) ~ "competing_exposure",
-        grepl("competing exposure", name) ~ "competing_exposure",
-        grepl("collider", name) ~ "collider",
-      )) %>% select(-name)
-
-    return(variables_df)
-
-}
-
-
-
 #' Mediator names in a dagitty object
 #'
 #' mediators() is a dagitty wrapper that identifies nodes along paths between treatment and outcome in a directed acyclic graph.
@@ -119,6 +65,7 @@ confounders <- function(dag, edges = FALSE){
   return(confounders)
 }
 
+
 #' Mediator-outcome confounder names in a dagitty object
 #'
 #' moc() is a dagitty wrapper that identifies nodes along paths between treatment and outcome in a directed acyclic graph.
@@ -140,8 +87,8 @@ mediator_outcome_confounders <- function(dag, edges = FALSE){
   mediators <- outcome_parents[outcome_parents %in% dagitty::children(dag, treatments)]
 
   # mediator-outcome confounders
-  mediators_parents <- dagitty::parents(dag, mediators)
-  moc <- mediators_parents[!mediators_parents %in% c(mediators, treatments)]
+  mediator_parents <- dagitty::parents(dag, mediators)
+  moc <- mediator_parents[!mediator_parents %in% c(mediators, treatments)]
 
 
   if(edges == TRUE){
@@ -155,6 +102,7 @@ mediator_outcome_confounders <- function(dag, edges = FALSE){
 
   return(moc)
 }
+
 
 #' Variable names in a dagitty object
 #'
@@ -184,6 +132,7 @@ variables <- function(dag, all_info = TRUE){
   return(variables)
 }
 
+
 #' Competing exposure node names in a dagitty object
 #'
 #' competing_exposure() is a dagitty wrapper that identifies nodes in a directed acyclic graph connected to outcome, other than indicated exposures.
@@ -208,8 +157,8 @@ competing_exposures <- function(dag, edges = FALSE){
   mediators <- outcome_parents[outcome_parents %in% dagitty::children(dag, treatments)]
 
   # mediator-outcome confounders
-  mediators_parents <- dagitty::parents(dag, mediators)
-  moc <- mediators_parents[!mediators_parents %in% c(mediators, treatments)]
+  mediator_parents <- dagitty::parents(dag, mediators)
+  moc <- mediator_parents[!mediator_parents %in% c(mediators, treatments)]
 
 
   # confounder
@@ -277,6 +226,7 @@ proxies <- function(dag, edges = FALSE){
   return(proxy)
 }
 
+
 #' Collider names in a dagitty object
 #'
 #' colliders() is a dagitty wrapper that identifies nodes in a directed acyclic graph connected to outcome, other than indicated exposures.
@@ -308,3 +258,64 @@ colliders <- function(dag, edges = FALSE){
 
   return(colliders)
 }
+
+
+#' Extracts instrumental variable names from a dagitty object
+#'
+#' getInstrumentalVariables() is a dagitty wrapper function capable of identifying  multiple instrumental variables in multi-treatment and multi-outcome settings.
+#'
+#' @importFrom magrittr %>%
+#' @param dag A dagitty object.
+#' @returns Vector of instrumental variable names.
+#' @export
+instrumental_variables <- function(dag){
+
+
+  # treatment
+  treatments <- dagitty::exposures(dag)
+
+  # outcome
+  outcomes <- dagitty::outcomes(dag)
+
+  # latent variables
+  latent_vars <- dagitty::latents(dag)
+
+  # treatment_parents
+  treatment_parents <- dagitty::parents(dag, treatments)
+
+  # outcome_parents
+  outcome_parents <- dagitty::parents(dag, outcomes)
+
+  #treatment_children
+  treatment_children <- dagitty::children(dag, treatments)
+
+  # mediator_parents
+  mediators <- outcome_parents[outcome_parents %in% treatment_children]
+  mediator_parents <- dagitty::parents(dag, mediators) # filter to include only parents of mediator variables
+
+  # latent_children
+  latent_children <- dagitty::children(dag, latent_vars)
+
+  # outcome_children
+  outcome_children <- dagitty::children(dag, outcomes)
+
+  # collider
+  colliders <- outcome_children[outcome_children %in% treatment_children]
+
+  instrumental_vars <- extract_instrumental_variables(dag,
+                                                      treatments,
+                                                      outcomes,
+                                                      latent_vars,
+                                                      colliders,
+                                                      treatment_parents,
+                                                      treatment_children,
+                                                      mediator_parents,
+                                                      latent_children,
+                                                      outcome_children,
+                                                      outcome_parents)
+
+  return(instrumental_vars)
+
+}
+
+
