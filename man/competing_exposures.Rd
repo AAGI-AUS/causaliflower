@@ -4,7 +4,7 @@
 \alias{competing_exposures}
 \title{Competing exposure node names in a dagitty object}
 \usage{
-competing_exposures(dag, edges = FALSE)
+competing_exposures(dag, get_edges = FALSE)
 }
 \arguments{
 \item{dag}{A dagitty object.}

@@ -7,14 +7,14 @@
 buildGraph(
   type = c("full", "saturated", "ordered"),
   variables,
-  treatments = NULL,
-  outcomes = NULL,
-  mediators = NULL,
-  latent_variables = NULL,
-  instrumental_variables = NULL,
-  mediator_outcome_confounders = NULL,
-  competing_exposures = NULL,
-  colliders = NULL,
+  treatments = NA,
+  outcomes = NA,
+  mediators = NA,
+  latent_variables = NA,
+  instrumental_variables = NA,
+  mediator_outcome_confounders = NA,
+  competing_exposures = NA,
+  colliders = NA,
   coords_spec = c(lambda = 0, lambda_max = NA, iterations = NA)
 )
 }
@@ -35,7 +35,7 @@ buildGraph(
 
 \item{mediator_outcome_confounders}{Vector of mediator-outcome confounder names, that instead of being common causes of treatment and outcome (X <- Z -> Y) are a common cause of mediators and outcome (M <- Z -> Y). A list can also be supplied.}
 
-\item{coords_spec}{Set of parameters for generating coordinates. Adjust node placement with lambda, a higher value increases volatility and results in more extreme DAG structures. Setting 'lambda_max' generates a DAG at each lambda value between lambda and lambda_max (only used if iterations is supplied). Iterations controls number of repeats for each lambda value (returns the first lambda value if NULL).}
+\item{coords_spec}{Set of parameters for generating coordinates. Adjust node placement with lambda, a higher value increases volatility and results in more extreme DAG structures. Setting 'lambda_max' generates a DAG at each lambda value between lambda and lambda_max (only used if iterations is supplied). Iterations controls number of repeats for each lambda value (returns the first lambda value if NA).}
 }
 \value{
 A dagitty object, fully connected (saturated) graph.

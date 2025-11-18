@@ -3,11 +3,9 @@
 #'
 #' getEdges() filters a dagitty object and returns a data frame with edges for specified node roles.
 #'
-#' @importFrom magrittr %>%
 #' @importFrom data.table as.data.table
 #' @param dag A dagitty object.
 #' @param selected_nodes Nodes to return edges. Defaults to NULL, or can be a character or vector combination of any of the following: c("treatment", "outcome", "confounder", "mediator", "latent", "mediator-outcome-confounder", "instrumental")
-#' @param output_format Options for outputted data format: "default" returns a data frame with separate columns for ancestor and descendant roles, "wide" returns separate columns for each unique role for both ancestor and descendant nodes ("list" returns the same wide data format except as a list), and "long" assigns separate rows to ancestor and descendant nodes.
 #' @param output_structure Outputted data can be a "data.table", "data.frame", or "list".
 #' @returns A data frame, data table, or list of edges for the roles specified in selected_nodes.
 #' @export
@@ -21,7 +19,6 @@ getEdges <- function(dag,
                                         "competing_exposure", "collider",
                                         "latent", "observed"),
                      output_structure = "data.table"){
-
   .datatable.aware <- TRUE
 
   all_roles <- c("outcome", "treatment", "confounder", "mediator", "mediator_outcome_confounder", "instrumental", "proxy", "competing_exposure", "collider", "latent", "observed")
@@ -108,6 +105,7 @@ getFeatureMap <- function(dag){
 
   edges <- edges_longer(edges)
 
+
   role_names <- c("outcome",
                   "treatment",
                   "confounder",
@@ -120,6 +118,7 @@ getFeatureMap <- function(dag){
                   "latent",
                   "observed")
 
+
   feature_map_new <- list()
 
   feature_map_new <- lapply( seq_along(role_names), function(x){
@@ -128,12 +127,15 @@ getFeatureMap <- function(dag){
 
   } )
 
+
   names(feature_map_new) <- role_names
+
 
   outcomes <- unique( unlist( edges[ role_descendant == "outcome", 3 ] ) )
   colliders <- unique( unlist( edges[ role_descendant == "collider", 3 ] ) )
   observed <- unique( unlist( edges[ role_descendant == "observed", 3 ] ) )
   latent <- unique( unlist( edges[ role_descendant == "latent", 3 ] ) )
+
 
   missing_outcomes <- outcomes[! outcomes %in% feature_map_new ]
   missing_colliders <- colliders[! colliders %in% feature_map_new ]
@@ -143,23 +145,27 @@ getFeatureMap <- function(dag){
 
   if( length( missing_outcomes ) > 0 ){
 
-    feature_map_new$outcome <- c( feature_map_new$outcome, missing_outcomes )
+    feature_map_new$outcome <- unique( c( feature_map_new$outcome, missing_outcomes ) )
   }
 
   if( length( missing_colliders ) > 0 ){
 
-    feature_map_new$colliders <- c( feature_map_new$colliders, missing_colliders )
+    feature_map_new$collider <- unique( c( feature_map_new$collider, missing_colliders ) )
   }
 
   if( length( missing_observed ) > 0 ){
 
-    feature_map_new$observed <- c( feature_map_new$observed, missing_observed )
+    feature_map_new$observed <- unique( c( feature_map_new$observed, missing_observed ) )
   }
 
   if( length( missing_latent ) > 0 ){
 
-    feature_map_new$latent <- c( feature_map_new$latent, missing_latent )
+    feature_map_new$latent <- unique( c( feature_map_new$latent, missing_latent ) )
   }
+
+
+  feature_map_new <- lapply(feature_map_new, function(x) if(identical(x, character(0))) NA else x)
+
 
   return(feature_map_new)
 
@@ -170,7 +176,7 @@ getFeatureMap <- function(dag){
 #'
 #' assessEdges() provides ways to assess connected edges based on causal criteria and/or user inputs.
 #'
-#' @importFrom magrittr %>%
+#' @importFrom data.table as.data.table is.data.table
 #' @importFrom dagitty edges
 #' @param dag A dagitty object. Must include exposure and outcome nodes.
 #' @param edges_to_keep A vector of directed arrows to be kept between (non-treatment and non-outcome) variables, e.g. c("Z1 -> Z2", "Z2 -> Z3"), c("y", "n", "y"), or c(TRUE, FALSE, TRUE).
@@ -178,98 +184,118 @@ getFeatureMap <- function(dag){
 #' @returns A list or vector of edges.
 #' @export
 assessEdges <- function(dag, edges_to_keep = NA, assess_causal_criteria = FALSE){
+  .datatable.aware <- TRUE
+  #edges_to_keep <- initial_dag
+  #dag <- saturated_graph
+  edges_to_assess  <- data.table::as.data.table(dagitty::edges(dag))[, c("v", "e", "w")]
 
 
-  edges_to_assess  <- as.data.frame(dagitty::edges(dag))[, c("v", "e", "w")]
+  if( dagitty::is.dagitty(edges_to_keep) ){
+
+    edges_to_keep <- data.table::as.data.table(dagitty::edges(edges_to_keep))[, c("v", "e", "w")]
+
+    edges_to_assess <-  edges_to_assess[!edges_to_keep, on = c("v", "e", "w")]
+
+  }else if( all( complete.cases( unlist(edges_to_keep) ) ) ){
+
+    if(is.vector( edges_to_keep ) ){
+
+      edges_to_keep <- data.table::as.data.table( do.call( rbind, strsplit(edges_to_keep, " ") ) )
+
+      colnames(edges_to_keep) <- c("v", "e", "w")
+
+      }
+
+    if( is.data.frame(edges_to_keep) | data.table::is.data.table(edges_to_keep) ){
+
+      edges_to_assess <-  edges_to_assess[!edges_to_keep, on = c("v", "e", "w")]
+
+      }else{
+
+      stop("Edges_to_keep must be a data frame, data table, vector, or dagitty object. Please check inputs and try again.")
+
+      }
+
+    }
 
 
-  if( dagitty::is.dagitty(edges_to_keep)){
 
-    edges_to_keep <-  as.data.frame(dagitty::edges(edges_to_keep))[, c("v", "e", "w")]
-
-  }else if( is.vector( edges_to_keep ) ){
-
-    edges_to_keep <- as.data.frame( do.call( rbind, strsplit(edges_to_keep, " ") ) )
-
-  }
-
-
-  if( is.data.frame(edges_to_keep) | data.table::is.data.table(edges_to_keep) ){
-
-    edges_to_assess <- merge(edges_to_assess, edges_to_keep, by = c("v", "e", "w"), all.x = FALSE)
-
-
-  }else{
-
-    stop("Edges_to_keep must be a data frame, data table, vector, or dagitty object. Please check inputs and try again.")
-
-  }
-
-
-
-  if( assess_causal_criteria == TRUE & ( any(is.null(edges_to_keep)) | any(is.na(edges_to_keep)) ) ){
+  if( assess_causal_criteria == TRUE ){
 
     check_skip_sequence <- FALSE
 
-    cat("\nThere are", num_edges, "directed arrows to be assessed:", "\n", "\n", sep=" ")
-    print(edges, quote=FALSE)
-    cat("\nAssess the posited causal relationships? (ESC-DAGs causal criteria and counterfactual thought experiment sequence)", "\n")
+   #cat("\nThere are", nrow(edges_to_assess), "directed arrows to be assessed:", "\n", "\n", sep=" ")
+   #print(edges_to_assess, quote=FALSE)
+   #cat("\nAssess the posited causal relationships? (ESC-DAGs causal criteria and counterfactual thought experiment sequence)", "\n")
 
-    edges_to_keep <- ESC_DAGs_sequence(edges_vec, check_skip_sequence, edges_to_keep)
+    edges_to_keep <- ESC_DAGs_sequence(edges_to_assess, check_skip_sequence, edges_to_keep)
 
     return(edges_to_keep)
 
   }
 
-  if( nrow(edges_to_assess) != 0 ){
+    if( nrow(edges_to_assess) != 0 ){
 
 
-    num_edges <- nrow(edges_to_keep)
+      if( all( complete.cases( unlist(edges_to_keep) ) ) ){
 
-    edges_to_keep <- suppressWarnings( sapply(1:num_edges, function(x){
+        ## collapse edges_to_keep to a vector
+        num_edges <- nrow(edges_to_keep)
 
-      edges_to_keep <- paste( edges_to_keep[x,], collapse=" ")
+        edges_to_keep <- suppressWarnings( sapply(1:num_edges, function(x){
+
+          edges_to_keep <- paste( edges_to_keep[x,], collapse=" ")
+
+        }) )
+
+      }
+
+
+      ## collapse edges_to_assess to a vector and output grouped by nodes
+      unique_ancestors <- unique( edges_to_assess[,"v"] )
+      num_unique_ancestors <- nrow(unique_ancestors)
+
+
+      edges_assess_list <- list()
+
+      # edges_to_assess grouped by each unique node in a list
+      edges_assess_list <- suppressWarnings( lapply(1:num_unique_ancestors, function(x){
+
+        edges_to_assess[ unlist(edges_to_assess[,"v"]) %in% unlist(unique_ancestors[x]), ]
+
+
+      }) )
+
+      # nodes containing edges are collapsed, outputted in the console to allow easy assessing by copy and paste into .r file
+      edges_assess_list <- lapply(1:num_unique_ancestors, function(x){
+
+        edges_assess_list <- noquote(
+          paste0( paste0( "'", sapply(1:nrow(edges_assess_list[[x]]), function(y){
+
+            edges_assess_list[x] <- noquote( paste( edges_assess_list[[x]][y,], collapse=" "  ) )
+
+            }), "'", collapse=", " ), sep = "") )
+
+      })
+
+      cat( paste("c(", paste( unlist(edges_assess_list), collapse=",\n\n" ), ")", sep = "\n", collapse = "") )
+
+    }else{
+
+      stop("There are no edges to assess. Please check the supplied dagitty object and try again.")
+
+
+    }
+
+
+
+  if( !all( complete.cases(edges_to_keep) ) & assess_causal_criteria == FALSE ){
+
+    edges_to_assess <- suppressWarnings( sapply(1:nrow(edges_to_assess), function(x){
+
+      edges_to_assess <- paste( edges_to_assess[x,], collapse=" ")
 
     }) )
-
-
-    unique_ancestors <- unique( edges_to_assess["v"] )
-    num_edges <- nrow(edges_to_assess)
-    num_ancestors <- nrow(unique_ancestors)
-
-
-    edges_assess_list <- list()
-
-    edges_assess_list <- suppressWarnings( lapply(1:num_ancestors, function(x){
-
-      edges_assess_list[x] <- edges_to_assess[ ( edges_to_assess["v"] == unique_ancestors[x,] ), ]
-
-    }) )
-
-    edges_assess_list <- lapply(1:num_ancestors, function(x){
-
-      edges_assess_list <- noquote( paste0( paste0( "'",
-
-                                                    sapply(1:nrow(edges_assess_list[[x]]), function(y){
-
-                                                      edges_assess_list[x] <- noquote( paste( edges_assess_list[[x]][y,], collapse=" "  ) )
-
-                                                    }),
-
-                                                    "'", collapse=", " ), sep = "") )
-
-    })
-
-    cat( paste("c(", paste( unlist(edges_assess_list), collapse=",\n\n" ), ")", sep = "\n", collapse = "") )
-
-
-  }else{
-
-    stop("There are no edges to assess. Please check the supplied dagitty object and try again.")
-  }
-
-
-  if( all( is.na(edges_to_assess) ) & assess_causal_criteria == FALSE ){
 
     message("\nOutputted edges to assess.
             \n\nPrinted edges to assess - copy and paste in a .R file to use as a vector object.")
@@ -295,25 +321,26 @@ assessEdges <- function(dag, edges_to_keep = NA, assess_causal_criteria = FALSE)
 #'
 #' keepEdges() removes edges based on user inputs.
 #'
-#' @importFrom magrittr %>%
+#' @importFrom data.table as.data.table is.data.table
 #' @importFrom dagitty edges exposures outcomes latents coordinates dagitty isAcyclic
 #' @param dag A saturated graph dagitty object. Exposure and outcome must be indicated, and optionally can include assigned coordinates.
 #' @param edges_to_keep A vector of directed arrows to be kept between (non-treatment and non-outcome) variables, e.g. c("Z1 -> Z2", "Z2 -> Z3"), c("y", "n", "y"), or c(TRUE, FALSE, TRUE).
 #' @returns A dagitty object, with directed arrows removed based on edges_to_keep.
 #' @export
 keepEdges <- function(dag, edges_to_keep = NA){
+  .datatable.aware <- TRUE
 
-  edges_all  <- as.data.frame(dagitty::edges(dag))
+  edges_all  <- as.data.table(dagitty::edges(dag))
   edges <- edges_all[, c("v", "e", "w")]
 
 
   if( dagitty::is.dagitty(edges_to_keep)){
 
-    edges_to_keep <- as.data.frame(dagitty::edges(edges_to_keep))[, c("v", "e", "w")]
+    edges_to_keep <- data.table::as.data.table(dagitty::edges(edges_to_keep))[, c("v", "e", "w")]
 
   }else if( is.vector( edges_to_keep ) ){
 
-    edges_to_keep <- as.data.frame( do.call( rbind, strsplit(edges_to_keep, " ") ) )
+    edges_to_keep <- data.table::as.data.table( do.call( rbind, strsplit(edges_to_keep, " ") ) )
 
     colnames(edges_to_keep) <- c("v", "e", "w")
 
@@ -330,7 +357,8 @@ keepEdges <- function(dag, edges_to_keep = NA){
 
     if( ( is.data.frame(edges_to_keep) | data.table::is.data.table(edges_to_keep) ) ){
 
-      edges_to_keep <- merge(edges, edges_to_keep, by = c("v", "e", "w"), all.x = FALSE)
+      edges <-  edges[ edges_to_keep, on = c("v", "e", "w")]
+
 
     }else{
 
@@ -352,21 +380,21 @@ keepEdges <- function(dag, edges_to_keep = NA){
 
 
 #' ESC-DAGs causal criteria for removinng edges
-#' @param edges_vec vector of edges whose relationships are to be assessed
+#' @param edges vector of edges whose relationships are to be assessed
 #' @param num_edges number of edges to be assessed
 #' @param check_skip_sequence TRUE or FALSE depending on prior inputs
 #' @noRd
-ESC_DAGs_sequence <- function(edges_vec, check_skip_sequence, edges_to_keep){
-
-
+ESC_DAGs_sequence <- function(edges, check_skip_sequence, edges_to_keep){
+  #edges <- edges_to_assess # used for debugging assessEdges()
+  #check_skip_sequence <- FALSE # used for debugging assessEdges()
+  #edges_to_keep <- NA # used for debugging assessEdges()
   if(check_skip_sequence == FALSE) {
 
-    num_edges <- length(edges_vec)
+    num_edges <- nrow(edges)
 
-    cat("\nThere are ", num_edges, " remaining directed arrows.", sep="")
-    print(edges_vec, quote=FALSE)
+    cat("\nThere are ", num_edges, " directed arrows to be assessed.","\n", "\n", sep="")
+    print(edges, quote=FALSE)
     cat("\nAssess the posited causal relationships using causal criteria? (ESC-DAGs protocol)", "\n")
-
 
     removed_arrows <- c()
     arrow_count <- 1
@@ -383,7 +411,7 @@ ESC_DAGs_sequence <- function(edges_vec, check_skip_sequence, edges_to_keep){
         #cat("\n", "\n===================================")
         #cat("\nESC-DAGs (Ferguson et al., 2020)")
         #cat("\nDAGs from background knowledge")
-        #cat("\nCode written by AJ Moller (2025)")
+        #cat("\nCode written by Aidan J Moller (2025)")
         #cat("\n===================================", "\n")
 
         check_ans <- TRUE
@@ -392,13 +420,16 @@ ESC_DAGs_sequence <- function(edges_vec, check_skip_sequence, edges_to_keep){
 
         message("\nSkipped sequence.")
 
-        edges_vec <- noquote(paste("c('", paste(edges_vec, collapse="', '"), "')", sep = ""))
+        #edges <- noquote(paste("c('", paste(edges, collapse="', '"), "')", sep = ""))
 
         # edges_to_keep <- noquote(paste("c('", paste(edges_to_keep, collapse="', '"), "')", sep = ""))
 
-        message("\nOutputting vector of edges.")
+        message("\nOutputting causal criteria assessed edges.")
 
-        edges_list <- list(edges_to_keep = edges_to_keep, assess_edges = edges_vec)
+        edges_list <- list(
+          edges_to_keep = edges_to_keep,
+          edges_to_assess = edges
+        )
 
         return(edges_list)
 
@@ -421,7 +452,7 @@ ESC_DAGs_sequence <- function(edges_vec, check_skip_sequence, edges_to_keep){
 
       check_ans <- FALSE
 
-      arrow <- edges_vec[arrow_count]
+      arrow <- noquote( paste(edges[arrow_count], collapse=" ") )
       cat("\n", "\nFor the directed arrow '", arrow, "' consider each of the following:", sep="")
 
       cat("\n", "\n'", arrow, "' (", arrow_count, "/", num_edges, ")",  sep="")
@@ -447,7 +478,7 @@ ESC_DAGs_sequence <- function(edges_vec, check_skip_sequence, edges_to_keep){
 
           check_ans <- TRUE
 
-          cat("\n", "\nCausal relationship '", arrow, "' assessed; edge removed.", "\n", sep="")
+          message("\n", "\nCausal relationship '", arrow, "' assessed; edge removed.", "\n", sep="")
 
         }else if(choice == "?info"){
 
@@ -596,20 +627,24 @@ ESC_DAGs_sequence <- function(edges_vec, check_skip_sequence, edges_to_keep){
       arrow_count <- arrow_count + 1
     }
   }
+
   if(num_arrow_to_remove > 0){
 
-    edges_vec <- edges_vec[-removed_arrows]
+    edges <- edges[-removed_arrows, ]
 
-    edges_vec <- unique(c(edges_to_keep, edges_vec))
+    edges_to_keep <- rbind(edges_to_keep, edges)
 
-    return(edges_vec)
+    return(edges_to_keep)
 
   }else{
 
-    cat("\nNo arrows were removed.", "\n")
+    message("\nNo arrows were removed.", "\n")
 
+    edges_list <- list(
+      edges_to_keep = edges_to_keep,
+      edges_to_assess = edges
+    )
 
-    edges_vec <- unique(c(edges_to_keep, edges_vec))
-    return(edges_vec)
+    return(edges_list)
   }
 }

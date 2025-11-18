@@ -8,9 +8,11 @@ variables(dag, all_info = TRUE)
 }
 \arguments{
 \item{dag}{A dagitty object.}
+
+\item{all_info}{Defaults to TRUE. Set all_info = FALSE to return only variable names.}
 }
 \value{
-A named vector of nodes in a dag.
+A data table of variable names and their roles, or a vector of variable names.
 }
 \description{
 variables() returns a named vector of variables corresponding to nodes in a dag, providing an easy way to extract node roles e.g. "treatment", "outcome", "confounder", "mediator", "latent", "mediator-outcome-confounder", or "instrumental".

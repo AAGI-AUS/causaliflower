@@ -26,7 +26,7 @@ draw_edges <- function(type,
   ## outcome edges ##
   outcome_list <- c()
   # connect colliders
-  if(!any(is.null(collider_vec))){
+  if( all( complete.cases(collider_vec) ) ){
 
     outcome_list <- suppressWarnings( lapply(1:length(outcomes), function(x){
 
@@ -207,7 +207,7 @@ draw_edges <- function(type,
   confounder_df <- unique(confounder_df) # remove duplicate edges
   confounder_df <- confounder_df[confounder_df$ancestor != confounder_df$descendant, ] # remove edges with identical ancestor and descendant node names
 
-  if( all( !is.null(mediator_vec) ) ){
+  if( all( complete.cases(mediator_vec) ) ){
     ## mediator edges ##
     mediator_list <- c()
 
@@ -263,7 +263,7 @@ draw_edges <- function(type,
   }
 
 
-  if( all( !is.null(m_o_confounder_vec) ) ){
+  if( all( complete.cases(m_o_confounder_vec) ) ){
 
     ## mediator_outcome_confounder edges ##
     moc_list <- c()
@@ -335,7 +335,7 @@ draw_edges <- function(type,
   }
 
 
-  if( all( !is.null(competing_exposure_vec) ) ){
+  if( all( complete.cases(competing_exposure_vec) ) ){
 
     ## competing_exposure edges ##
     competing_exposure_list <- c()
@@ -360,7 +360,7 @@ draw_edges <- function(type,
 
   }
 
-  if( all( !is.null(observed) ) ) {
+  if( all( complete.cases(observed) ) ) {
 
     ## connect observed to ancestors and descendants ##
     observed_list <- list()
@@ -439,7 +439,7 @@ draw_edges <- function(type,
 draw_iv_edges <- function(instrumental_variables, treatments){
 
 
-  if(!all(is.null(instrumental_variables))){
+  if( all( complete.cases( unlist(instrumental_variables) ) ) ){
 
     instrumental_list <- c()
 
@@ -507,7 +507,7 @@ draw_iv_edges <- function(instrumental_variables, treatments){
 #' @noRd
 draw_latent_edges <- function(latent_variables){
 
-  if(!all(is.null(latent_variables))){
+  if( all( complete.cases( unlist(latent_variables) ) ) ){
 
     latent_list <- c()
 
@@ -555,7 +555,6 @@ draw_latent_edges <- function(latent_variables){
 #' draw_new_node_edges() is a helper function for addNodes().
 #'
 #' @param dag A dagitty object. Must include exposure and outcome nodes.
-#' @param reference_nodes Vector of existing node names, used as a reference for the new graph nodes, e.g., c("Z1", "Z2", "Z3").
 #' @param new_node_names Inputted vector of node names to be added to the graph.
 #' @param reference_node_names Inputted vector of node names, used as a reference for the new graph nodes.
 #' @param reference_type A suffix added to each of the reference node names, e.g. "pre_treatment", or "t0".
@@ -563,7 +562,7 @@ draw_latent_edges <- function(latent_variables){
 #' @param num_repeats Number of additional copies of nodes, such as time points. Each repeat number is included at the end of new node names (new_new_t1, new_node_t2, etc.).
 #' @returns A data frame of instrumental variable edges.
 #' @noRd
-draw_new_node_edges <- function(dag, reference_nodes, new_node_names, reference_node_names, reference_type, new_node_type, num_repeats){
+draw_new_node_edges <- function(dag, new_node_names, reference_node_names, reference_type, new_node_type, num_repeats){
 
   ## connect reference & new nodes ##
 
@@ -576,30 +575,23 @@ draw_new_node_edges <- function(dag, reference_nodes, new_node_names, reference_
   ## fetch parent and children groups for connecting nodes ##
 
   # get each reference node's descendants/children
-  reference_children <- lapply(1:length(reference_nodes), function(x){
+  reference_children <- lapply(1:length(reference_node_names), function(x){
 
-    reference_children <- dagitty::children(dag, reference_nodes[x])
+    reference_children <- dagitty::children(dag, reference_node_names[x])
 
   })
 
   # get each reference node's ancestors/parents
-  reference_parents <- lapply(1:length(reference_nodes), function(x){
+  reference_parents <- lapply(1:length(reference_node_names), function(x){
 
-    reference_parents <- dagitty::parents(dag, reference_nodes[x])
+    reference_parents <- dagitty::parents(dag, reference_node_names[x])
 
   })
 
   # get parents of new nodes, which also happen to be reference nodes
-  new_node_parents_in_reference_nodes <- lapply(1:length(reference_nodes), function(x){
+  new_node_parents_in_reference_nodes <- lapply(1:length(reference_node_names), function(x){
 
-    new_node_parents_in_reference_nodes <- reference_parents[[x]][ reference_parents[[x]] %in% reference_nodes ]
-
-  })
-
-  # now the parent reference nodes are given new names for each time point
-  new_ref_parent_names <-  lapply(1:length(new_node_parents_in_reference_nodes), function(x){
-
-    new_ref_parent_names <- create_new_node_names(new_node_parents_in_reference_nodes[[x]], new_node_type, num_repeats)
+    new_node_parents_in_reference_nodes <- reference_parents[[x]][ reference_parents[[x]] %in% reference_node_names ]
 
   })
 
@@ -607,7 +599,7 @@ draw_new_node_edges <- function(dag, reference_nodes, new_node_names, reference_
   ## connect parent nodes ##
 
   # a list of edges connecting parent reference nodes to their descendants, at each time point
-  new_nodes_list <- connect_new_nodes_to_parent_new_nodes(new_node_names, new_ref_parent_names, new_node_parents_in_reference_nodes)
+  new_nodes_list <- connect_new_nodes_to_parent_new_nodes(new_node_names, reference_node_names, new_node_parents_in_reference_nodes) # needs checking single new_node_name input
 
   if( !all( is.na(new_nodes_list) ) ){
 
@@ -616,9 +608,9 @@ draw_new_node_edges <- function(dag, reference_nodes, new_node_names, reference_
   }
 
   # we can remove the references nodes from parents (to be connected later in this function)
-  new_node_parents <- lapply(1:length(reference_nodes), function(x){
+  new_node_parents <- lapply(1:length(reference_node_names), function(x){
 
-    new_node_parents <- reference_parents[[x]][ !reference_parents[[x]] %in% reference_nodes ]
+    new_node_parents <- reference_parents[[x]][ !reference_parents[[x]] %in% reference_node_names ]
 
   })
 
@@ -629,16 +621,16 @@ draw_new_node_edges <- function(dag, reference_nodes, new_node_names, reference_
   if( reference_type == "pre_treatment" ){  # if reference type = "pre_treatment", all new nodes are treated as 'post treatment'
 
 
-    new_node_children <- lapply(1:length(reference_nodes), function(x){
+    new_node_children <- lapply(1:length(reference_node_names), function(x){
 
       new_node_children <- reference_children[[x]][ !reference_children[[x]] %in% treatments &
-                                                 !reference_children[[x]] %in% reference_nodes[[x]] &
+                                                 !reference_children[[x]] %in% reference_node_names[[x]] &
                                                  !reference_children[[x]] %in% treatment_parents ]
 
     })
 
 
-      new_nodes_list <- connect_post_treatment_node_parents(new_node_names, new_node_parents)
+      new_nodes_list <- connect_post_treatment_node_parents(new_node_names, reference_node_names, new_node_parents)
 
     if( !all( is.na(na.omit(new_nodes_list) )) ){
 
@@ -646,7 +638,7 @@ draw_new_node_edges <- function(dag, reference_nodes, new_node_names, reference_
 
     }
 
-    new_nodes_list <- connect_post_treatment_node_children(new_node_names, new_node_children)
+    new_nodes_list <- connect_post_treatment_node_children(new_node_names, reference_node_names, new_node_children)
 
 
     if( !all( is.na(new_nodes_list) ) ){
@@ -660,14 +652,14 @@ draw_new_node_edges <- function(dag, reference_nodes, new_node_names, reference_
   }else{ # otherwise, we will just connect all new nodes to treatment and treatment parents (irrespective of whether this creates a dag)
 
 
-    new_node_children <- lapply(1:length(reference_nodes), function(x){
+    new_node_children <- lapply(1:length(reference_node_names), function(x){
 
-      new_node_children <- reference_children[[x]][ !reference_children[[x]] %in% reference_nodes[[x]] ]
+      new_node_children <- reference_children[[x]][ !reference_children[[x]] %in% reference_node_names[[x]] ]
 
     })
 
 
-    new_nodes_list <- connect_post_treatment_node_parents(new_node_names, new_node_parents)
+    new_nodes_list <- connect_post_treatment_node_parents(new_node_names, reference_node_names, new_node_parents)
 
     if( !all( is.na(na.omit(new_nodes_list)) ) ){
 
@@ -675,7 +667,7 @@ draw_new_node_edges <- function(dag, reference_nodes, new_node_names, reference_
 
     }
 
-    new_nodes_list <- connect_post_treatment_node_children(new_node_names, new_node_children)
+    new_nodes_list <- connect_post_treatment_node_children(new_node_names,  reference_node_names, new_node_children)
 
 
     if( !all( is.na(new_nodes_list) ) ){

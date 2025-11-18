@@ -9,7 +9,8 @@ addNodes(
   reference_nodes,
   reference_type = c("pre_treatment"),
   new_node_type = c("post_treatment"),
-  num_repeats = NA
+  num_repeats = NA,
+  coords_spec = c(lambda = 1, lambda_max = NA, iterations = NA)
 )
 }
 \arguments{

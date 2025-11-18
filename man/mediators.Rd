@@ -4,7 +4,7 @@
 \alias{mediators}
 \title{Mediator names in a dagitty object}
 \usage{
-mediators(dag, edges = FALSE)
+mediators(dag, get_edges = FALSE)
 }
 \arguments{
 \item{dag}{A dagitty object.}

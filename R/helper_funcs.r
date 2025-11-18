@@ -470,9 +470,9 @@ connect_new_and_reference_nodes <- function(new_node_names, reference_node_names
 
   num_new_nodes <- length(new_node_names_vec)
 
-  if( num_new_nodes > num_ref_nodes ){
+  if( num_new_nodes > num_ref_nodes & length(new_node_names) > 1 ){
 
-    new_nodes_list <- suppressWarnings( lapply(1:( length(new_node_names) - 1 ), function(x){
+    new_nodes_list <- suppressWarnings( lapply(1:( nrow(new_node_names) - 1 ), function(x){
 
       new_nodes_list <- lapply( 1:nrow(new_node_names), function(y){
 
@@ -489,7 +489,29 @@ connect_new_and_reference_nodes <- function(new_node_names, reference_node_names
 
     new_nodes_df <- rbind(new_nodes_df, new_nodes_list)
 
+  }else{
+
+    new_nodes_list <- suppressWarnings( lapply( 1:( nrow(new_node_names) - 1 ), function(y){
+
+        new_nodes_list <- list( v = new_node_names[y,], e = "->", w = new_node_names[y + 1,] )
+
+        })
+      )
+
+
+    if( !all( is.null(unlist(new_nodes_list)) ) ){
+
+      new_nodes_list <-  as.data.table( do.call( rbind, new_nodes_list) )
+
+      new_nodes_list[] <- lapply(new_nodes_list, as.character)
+    }
+
+    new_nodes_df <- rbind(new_nodes_df, new_nodes_list)
+
   }
+
+
+
 
   return(new_nodes_df)
 
@@ -501,53 +523,88 @@ connect_new_and_reference_nodes <- function(new_node_names, reference_node_names
 #' connect_new_nodes_to_parent_new_nodes() is a helper function for draw_new_node_edges() and addNodes().
 #'
 #' @param new_node_names Inputted vector of node names to be added to the graph.
-#' @param new_node_parents Inputted vector of new node parent names.
+#' @param new_node_parents_in_reference_nodes Inputted vector of new node parent names in the supplied reference nodes.
 #' @returns A list of edges connecting new nodes to their parent nodes, at time point.
 #' @noRd
-connect_new_nodes_to_parent_new_nodes <- function(new_node_names, new_ref_parent_names, new_node_parents_in_reference_nodes){
+connect_new_nodes_to_parent_new_nodes <- function(new_node_names, reference_node_names, new_node_parents_in_reference_nodes){ # needs checking single new_node_name input
 
-  # new nodes parents
-  new_nodes_list <- suppressWarnings(
+  # check if more than one reference node
+  if( length(reference_node_names) > 1 ){
 
-    lapply(1:( length(new_node_names) ), function(t){ # t = each time point
+    # connect new node to parent nodes (also included in reference nodes)
+    new_nodes_list <- suppressWarnings(
 
-      new_nodes_list <- lapply( 1:nrow(new_node_names), function(y){ # y = each reference (new) node e.g. Z1_a, Z2_a, Z3_a
+      lapply(1:( length(new_node_names) ), function(t){ # t = each time point
 
-        if( length( unlist(new_node_parents_in_reference_nodes[[y]]) ) > 0){
+        new_nodes_list <- lapply( 1:nrow(new_node_names), function(y){ # y = each reference (new) node e.g. Z1_a, Z2_a, Z3_a
 
-          new_nodes_list <- lapply( 1:length( unlist(new_node_parents_in_reference_nodes[[y]]) ), function(x){ # x = each parent node
+          if( length( unlist(new_node_parents_in_reference_nodes[[y]]) ) > 0){
 
-            if( length( unlist(new_ref_parent_names[[y]][[x]]) ) > 0 ){
+            new_nodes_list <- lapply( 1:length( unlist(new_node_parents_in_reference_nodes[[y]]) ), function(x){ # x = each parent node
 
-              if( length( unlist(new_ref_parent_names[[y]][[x]]) ) > 1){
+              if( length( unlist(new_node_parents_in_reference_nodes[[y]][[x]]) ) > 0 ){
 
-                new_nodes_list <- list( v =  new_ref_parent_names[[y]][[x,t]], e = "->", w = new_node_names[y, t] )
+                if( length( unlist(new_node_parents_in_reference_nodes[[y]][[x]]) ) > 1){
 
-              }else{
+                  new_nodes_list <- list( v =  new_node_parents_in_reference_nodes[[y]][[x,t]], e = "->", w = new_node_names[y, t] )
 
-                new_nodes_list <- list( v =  new_ref_parent_names[[y]][[t]], e = "->", w = new_node_names[y, t] )
+                }else{
+
+                  new_nodes_list <- list( v =  new_node_parents_in_reference_nodes[[y]][[x]], e = "->", w = new_node_names[y, t] )
+
+                }
+              }
+
+            })
+
+          }
+        })
+
+      })
+    )
+
+
+    new_nodes_list <- do.call( rbind, new_nodes_list )
+
+    if( !all( is.null(unlist(new_nodes_list)) ) ){
+
+      new_nodes_list <-  as.data.table( do.call( rbind, unlist(new_nodes_list, recursive = FALSE) ) )
+    }
+
+    new_nodes_list[] <- lapply(new_nodes_list, as.character)
+
+
+  }else{
+
+    new_nodes_list <- suppressWarnings(
+
+      lapply(1:( nrow(new_node_names) ), function(t){ # t = each time point
+
+        if( length( unlist(new_node_parents_in_reference_nodes) ) > 0 ){
+
+            new_nodes_list <- lapply( 1:length( unlist(new_node_parents_in_reference_nodes[[t]]) ), function(x){ # x = each parent node
+
+              if( length( unlist(new_node_parents_in_reference_nodes[[t]][[x]]) ) > 0 ){
+
+                  new_nodes_list <- list( v =  new_node_parents_in_reference_nodes[[t]][[x]], e = "->", w = new_node_names[t,] )
 
               }
 
-            }
-
-          })
+            } )
 
         }
 
-      })
+      } )
+    )
 
-    }) )
+    if( !all( is.null(unlist(new_nodes_list)) ) ){
 
-  new_nodes_list <- do.call( rbind, new_nodes_list )
+      new_nodes_list <-  as.data.table( do.call( rbind, new_nodes_list) )
 
-  if( !all( is.null(unlist(new_nodes_list)) ) ){
+      new_nodes_list[] <- lapply(new_nodes_list, as.character)
+    }
 
-    new_nodes_list <-  as.data.table( do.call( rbind, unlist(new_nodes_list, recursive = FALSE) ) )
   }
-
-  new_nodes_list[] <- lapply(new_nodes_list, as.character)
-
 
   return(new_nodes_list)
 }
@@ -561,43 +618,106 @@ connect_new_nodes_to_parent_new_nodes <- function(new_node_names, new_ref_parent
 #' @param new_node_parents Inputted vector of new node parent names.
 #' @returns A list of edges connecting new nodes to their parent nodes, at time point.
 #' @noRd
-connect_post_treatment_node_parents <- function(new_node_names, new_node_parents){
+connect_post_treatment_node_parents <- function(new_node_names, reference_node_names, new_node_parents){
 
-  # new nodes parents
-  new_nodes_list <- suppressWarnings(
+  if( length(reference_node_names) > 1 ){
+    # new nodes parents
+    new_nodes_list <- suppressWarnings(
 
-    lapply(1:( length(new_node_names) ), function(t){ # t = each time point
+      lapply(1:( length(new_node_names) ), function(t){ # t = each time point
 
-      new_nodes_list <- lapply( 1:nrow(new_node_names), function(y){ # y = each reference (new) node e.g. Z1_a, Z2_a, Z3_a
+        new_nodes_list <- lapply( 1:nrow(new_node_names), function(y){ # y = each reference (new) node e.g. Z1_a, Z2_a, Z3_a
 
-        if( length( unlist(new_node_parents[[y]]) ) > 0){
+          if( length( unlist(new_node_parents[[y]]) ) > 0){
 
-          new_nodes_list <- lapply( 1:length( unlist(new_node_parents[[y]]) ), function(x){ # x = each parent node
-
-
-            if( length( unlist(new_node_parents[[y]][[x]]) ) > 0 ){
-
-              new_nodes_list <- list( v =  new_node_parents[[y]][[x]], e = "->", w = new_node_names[y, t] )
-
-            }
-
-          })
-
-        }
+            new_nodes_list <- lapply( 1:length( unlist(new_node_parents[[y]]) ), function(x){ # x = each parent node
 
 
-      })
+              if( length( unlist(new_node_parents[[y]][[x]]) ) > 0 ){
 
-    }) )
+                new_nodes_list <- list( v =  new_node_parents[[y]][[x]], e = "->", w = new_node_names[y, t] )
 
-  new_nodes_list <- do.call( rbind, new_nodes_list )
+              }else{
 
-  if( !all( is.null(unlist(new_nodes_list)) ) ){
+                new_nodes_list <- list( v =  new_node_parents[[y]], e = "->", w = new_node_names[y, t] )
 
-    new_nodes_list <-  as.data.table( do.call( rbind, unlist(new_nodes_list, recursive = FALSE) ) )
+
+              }
+
+
+            })
+
+          }
+
+
+        })
+
+      }) )
+
+    new_nodes_list <- do.call( rbind, new_nodes_list )
+
+    if( !all( is.null(unlist(new_nodes_list)) ) ){
+
+      new_nodes_list <-  as.data.table( do.call( rbind, unlist(new_nodes_list, recursive = FALSE) ) )
+    }
+
+    new_nodes_list[] <- lapply(new_nodes_list, as.character)
+
+  }else{
+
+    # new nodes parents
+    new_nodes_list <- suppressWarnings(
+
+      lapply(1:( nrow(new_node_names) ), function(t){ # t = each time point
+
+          if( length( unlist(new_node_parents) ) > 0 ){
+
+            new_nodes_list <- lapply( 1:length( new_node_parents ), function(y){ # x = each parent node
+
+              if( length( unlist(new_node_parents[[y]]) ) > 0 ){
+
+                new_nodes_list <- lapply( 1:length( unlist(new_node_parents[[y]]) ), function(x){ # x = each parent node
+
+                  if( length( unlist(new_node_parents[[y]][[x]]) ) > 0 ){
+
+                    new_nodes_list <- list( v =  new_node_parents[[y]][[x]], e = "->", w = new_node_names[t,] )
+
+                  }else{
+
+                    new_nodes_list <- list( v =  new_node_parents[[y]], e = "->", w = new_node_names[t,] )
+
+
+                  }
+
+                })
+
+
+              }
+
+            })
+
+          }
+
+      }) )
+
+    new_nodes_list <- do.call( rbind, new_nodes_list )
+
+    #if( !all( is.null( unlist(new_nodes_list) ) ) & length( unlist(new_node_parents) ) > 1 ){
+    #  new_nodes_list <-  as.data.table( do.call( rbind, new_nodes_list) )
+    #  new_nodes_list[] <- lapply(new_nodes_list, as.character)
+    #}else
+
+    if( !all( is.null(unlist(new_nodes_list) ) ) ){
+
+      new_nodes_list <-  as.data.table( do.call( rbind, unlist(new_nodes_list, recursive = FALSE) ) )
+
+      new_nodes_list[] <- lapply(new_nodes_list, as.character)
+
+
+    }
+
+
   }
-
-  new_nodes_list[] <- lapply(new_nodes_list, as.character)
 
   return(new_nodes_list)
 }
@@ -611,23 +731,80 @@ connect_post_treatment_node_parents <- function(new_node_names, new_node_parents
 #' @param new_node_children Inputted vector of new nodes' children.
 #' @returns A list of edges connecting new nodes to their child nodes, at time point.
 #' @noRd
-connect_post_treatment_node_children <- function(new_node_names, new_node_children){
-
-  # new nodes children
-  new_nodes_list <- suppressWarnings(
-
-    lapply(1:( length(new_node_names) ), function(t){ # t = each time point
-
-      new_nodes_list <- sapply( 1:nrow(new_node_names), function(y){ # y = each reference (new) node e.g. Z1_a, Z2_a, Z3_a
-
-        if( length( unlist(new_node_children[[y]]) ) > 0){
-
-          new_nodes_list <- lapply( 1:length( unlist(new_node_children[[y]]) ), function(x){ # x = each children node
+connect_post_treatment_node_children <- function(new_node_names, reference_node_names, new_node_children){
 
 
-            if( length( unlist(new_node_children[[y]][[x]]) ) > 0 ){
+  if( length(reference_node_names) > 1 ){
 
-              new_nodes_list <- list( v = new_node_names[y, t], e = "->", w = new_node_children[[y]][[x]] )
+    # new nodes children
+    new_nodes_list <- suppressWarnings(
+
+      lapply(1:( length(new_node_names) ), function(t){ # t = each time point
+
+        new_nodes_list <- lapply( 1:nrow(new_node_names), function(y){ # y = each reference (new) node e.g. Z1_a, Z2_a, Z3_a
+
+          if( length( unlist(new_node_children[[y]]) ) > 0){
+
+            new_nodes_list <- lapply( 1:length( unlist(new_node_children[[y]]) ), function(x){ # x = each children node
+
+
+              if( length( unlist(new_node_children[[y]][[x]]) ) > 0 ){
+
+                new_nodes_list <- list( v = new_node_names[y, t], e = "->", w = new_node_children[[y]][[x]] )
+
+              }else{
+
+                new_nodes_list <- list( v =  new_node_names[y, t], e = "->", w =  new_node_children[[y]])
+
+
+              }
+
+            })
+
+          }
+
+
+        })
+
+      }) )
+
+    new_nodes_list <- do.call( rbind, new_nodes_list )
+
+    if( !all( is.null(unlist(new_nodes_list)) ) ){
+
+      new_nodes_list <-  as.data.table( do.call( rbind, unlist(new_nodes_list, recursive = FALSE) ) )
+    }
+
+    new_nodes_list[] <- lapply(new_nodes_list, as.character)
+
+  }else{
+
+    # new nodes children
+    new_nodes_list <- suppressWarnings(
+
+      lapply(1:( nrow(new_node_names) ), function(t){ # t = each time point
+
+        if( length( unlist(new_node_children) ) > 0 ){
+
+          new_nodes_list <- lapply( 1:length( new_node_children ), function(y){ # y = each child node
+
+            if( length( unlist(new_node_children[[y]]) ) > 0 ){
+
+              new_nodes_list <- lapply( 1:length( unlist(new_node_children[[y]]) ), function(x){ # x = each child node
+
+                if( length( unlist(new_node_children[[y]][[x]]) ) > 0 ){
+
+                  new_nodes_list <- list( v = new_node_names[t,], e = "->", w = new_node_children[[y]][[x]])
+
+                }else{
+
+                  new_nodes_list <- list( v = new_node_names[t,], e = "->", w = new_node_children[[y]])
+
+
+                }
+
+              })
+
 
             }
 
@@ -635,19 +812,25 @@ connect_post_treatment_node_children <- function(new_node_names, new_node_childr
 
         }
 
+      }) )
 
-      })
+    new_nodes_list <- do.call( rbind, new_nodes_list )
 
-    }) )
+    #if( !all( is.null( unlist(new_nodes_list) ) ) & length( unlist(new_node_children) ) > 1 ){
+    #  new_nodes_list <-  as.data.table( unlist( do.call( rbind, new_nodes_list), recursive = FALSE ) )
+    #  new_nodes_list[] <- lapply(new_nodes_list, as.character)
 
-  new_nodes_list <- do.call( rbind, new_nodes_list )
+   #}else
+    if( !all( is.null(unlist(new_nodes_list) ) ) ){
 
-  if( !all( is.null(unlist(new_nodes_list)) ) ){
+      new_nodes_list <-  as.data.table( do.call( rbind, unlist(new_nodes_list, recursive = FALSE) ) )
 
-    new_nodes_list <-  as.data.table( do.call( rbind, unlist(new_nodes_list, recursive = FALSE) ) )
+      new_nodes_list[] <- lapply(new_nodes_list, as.character)
+
+    }
+
+
   }
-
-  new_nodes_list[] <- lapply(new_nodes_list, as.character)
 
   return(new_nodes_list)
 }

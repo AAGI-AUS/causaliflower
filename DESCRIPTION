@@ -1,11 +1,12 @@
 Package: causaliflower
-Title: What the Package Does (One Line, Title Case)
-Version: 0.0.0.9000
+Title: To provide intuitive methods for building causal graphs, assessing edges, and creating useful workflows for causal analysis in R.
+Version: 0.0.0.91
 Authors@R: 
     person("Aidan", "Moller", , "aidan.moller@adelaide.edu.au", role = c("aut", "cre"))
-Description: What the package does (one paragraph).
-License: `use_mit_license()`, `use_gpl3_license()` or friends to pick a
-    license
+Description: The causaliflower package makes use of existing functions for analysing and visualising directed acylic graphs (DAGs). Wrapper functions in causaliflower extend the already impressive functionality of dagitty and ggdag packages. Others assist with causal inference tasks by working directly with the underlying causal structure of causal diagrams in R. This aims to allow researchers, applied statisticians, students, and anyone else interested in causal diagrams to integrate a causal analysis as part of their workflows, or where it is useful in a variety of causal inference tasks.
+
+
+License: `use_mit_license()`
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3

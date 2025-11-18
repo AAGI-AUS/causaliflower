@@ -4,7 +4,7 @@
 \alias{colliders}
 \title{Collider names in a dagitty object}
 \usage{
-colliders(dag, edges = FALSE)
+colliders(dag, get_edges = FALSE)
 }
 \arguments{
 \item{dag}{A dagitty object.}

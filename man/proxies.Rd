@@ -4,7 +4,7 @@
 \alias{proxies}
 \title{Proxy node names in a dagitty object}
 \usage{
-proxies(dag, edges = FALSE)
+proxies(dag, get_edges = FALSE)
 }
 \arguments{
 \item{dag}{A dagitty object.}

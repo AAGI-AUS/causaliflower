@@ -18,8 +18,6 @@ getEdges(
 \item{selected_nodes}{Nodes to return edges. Defaults to NULL, or can be a character or vector combination of any of the following: c("treatment", "outcome", "confounder", "mediator", "latent", "mediator-outcome-confounder", "instrumental")}
 
 \item{output_structure}{Outputted data can be a "data.table", "data.frame", or "list".}
-
-\item{output_format}{Options for outputted data format: "default" returns a data frame with separate columns for ancestor and descendant roles, "wide" returns separate columns for each unique role for both ancestor and descendant nodes ("list" returns the same wide data format except as a list), and "long" assigns separate rows to ancestor and descendant nodes.}
 }
 \value{
 A data frame, data table, or list of edges for the roles specified in selected_nodes.
