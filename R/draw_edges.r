@@ -556,18 +556,19 @@ draw_latent_edges <- function(latent_variables){
 #'
 #' @param dag A dagitty object. Must include exposure and outcome nodes.
 #' @param new_node_names Inputted vector of node names to be added to the graph.
-#' @param reference_node_names Inputted vector of node names, used as a reference for the new graph nodes.
-#' @param reference_type A suffix added to each of the reference node names, e.g. "pre_treatment", or "t0".
+#' @param existing_node_names Inputted vector of node names, used as a reference for the new graph nodes.
+#' @param existing_node_type A suffix added to each of the reference node names, e.g. "pre_treatment", or "t0".
 #' @param new_node_type A suffix added to each of the new node names, e.g. "post_treatment", or "t" (a number is added for each repeat if num_repeats is specified)
+#' @param temporal_reference_node Supplied in the main function, used when an alternative temporal point of reference is desired (default settings use treatment as the temporal point of reference)
 #' @param num_repeats Number of additional copies of nodes, such as time points. Each repeat number is included at the end of new node names (new_new_t1, new_node_t2, etc.).
 #' @returns A data frame of instrumental variable edges.
 #' @noRd
-draw_new_node_edges <- function(dag, new_node_names, reference_node_names, reference_type, new_node_type, num_repeats){
+draw_new_node_edges <- function(dag, new_node_names, existing_node_names, existing_node_type, new_node_type, temporal_reference_node, num_repeats){
 
   ## connect reference & new nodes ##
 
   # connect new nodes to reference nodes & consecutive new nodes (same node, at a different point in time)
-  new_nodes_df <- connect_new_and_reference_nodes(new_node_names, reference_node_names)
+  new_nodes_df <- connect_new_and_existing_nodes(new_node_names, existing_node_names)
 
   treatments <- dagitty::exposures(dag)
 
@@ -575,31 +576,31 @@ draw_new_node_edges <- function(dag, new_node_names, reference_node_names, refer
   ## fetch parent and children groups for connecting nodes ##
 
   # get each reference node's descendants/children
-  reference_children <- lapply(1:length(reference_node_names), function(x){
+  existing_node_children <- lapply(1:length(existing_node_names), function(x){
 
-    reference_children <- dagitty::children(dag, reference_node_names[x])
+    existing_node_children <- dagitty::children(dag, existing_node_names[x])
 
   })
 
   # get each reference node's ancestors/parents
-  reference_parents <- lapply(1:length(reference_node_names), function(x){
+  existing_node_parents <- lapply(1:length(existing_node_names), function(x){
 
-    reference_parents <- dagitty::parents(dag, reference_node_names[x])
+    existing_node_parents <- dagitty::parents(dag, existing_node_names[x])
 
   })
 
-  # get parents of new nodes, which also happen to be reference nodes
-  new_node_parents_in_reference_nodes <- lapply(1:length(reference_node_names), function(x){
+  # get parents of new nodes, which also happen to be the existing reference nodes
+  new_node_parents_in_existing_nodes <- lapply(1:length(existing_node_names), function(x){
 
-    new_node_parents_in_reference_nodes <- reference_parents[[x]][ reference_parents[[x]] %in% reference_node_names ]
+    new_node_parents_in_existing_nodes <- existing_node_parents[[x]][ existing_node_parents[[x]] %in% existing_node_names ]
 
   })
 
 
   ## connect parent nodes ##
 
-  # a list of edges connecting parent reference nodes to their descendants, at each time point
-  new_nodes_list <- connect_new_nodes_to_parent_new_nodes(new_node_names, reference_node_names, new_node_parents_in_reference_nodes) # needs checking single new_node_name input
+  # a list of edges connecting parent existing reference nodes to their descendants, at each time point
+  new_nodes_list <- connect_new_nodes_to_parent_new_nodes(new_node_names, existing_node_names, new_node_parents_in_existing_nodes) # needs checking single new_node_name input
 
   if( !all( is.na(new_nodes_list) ) ){
 
@@ -607,10 +608,10 @@ draw_new_node_edges <- function(dag, new_node_names, reference_node_names, refer
 
   }
 
-  # we can remove the references nodes from parents (to be connected later in this function)
-  new_node_parents <- lapply(1:length(reference_node_names), function(x){
+  # we can remove the existing reference nodes from parents (to be connected later in this function)
+  new_node_parents <- lapply(1:length(existing_node_names), function(x){
 
-    new_node_parents <- reference_parents[[x]][ !reference_parents[[x]] %in% reference_node_names ]
+    new_node_parents <- existing_node_parents[[x]][ !existing_node_parents[[x]] %in% existing_node_names ]
 
   })
 
@@ -618,66 +619,76 @@ draw_new_node_edges <- function(dag, new_node_names, reference_node_names, refer
 
 
   ## connecting children nodes ##
-  if( reference_type == "pre_treatment" ){  # if reference type = "pre_treatment", all new nodes are treated as 'post treatment'
+  if( existing_node_type == "pre_treatment" & !all( complete.cases(temporal_reference_node) ) ){  # if existing type = "pre_treatment", all new nodes are treated as post-treatment nodes
 
 
-    new_node_children <- lapply(1:length(reference_node_names), function(x){
+    new_node_children <- lapply(1:length(existing_node_names), function(x){
 
-      new_node_children <- reference_children[[x]][ !reference_children[[x]] %in% treatments &
-                                                 !reference_children[[x]] %in% reference_node_names[[x]] &
-                                                 !reference_children[[x]] %in% treatment_parents ]
+      new_node_children <- existing_node_children[[x]][ !existing_node_children[[x]] %in% treatments &
+                                                 !existing_node_children[[x]] %in% existing_node_names[[x]] &
+                                                 !existing_node_children[[x]] %in% treatment_parents ]
 
     })
 
 
-      new_nodes_list <- connect_post_treatment_node_parents(new_node_names, reference_node_names, new_node_parents)
 
-    if( !all( is.na(na.omit(new_nodes_list) )) ){
 
-      new_nodes_df <- rbind( new_nodes_df, new_nodes_list )
+  }else if( all( complete.cases(temporal_reference_node) ) ){
+
+    node_names <- names(dag)
+
+    if( length( node_names[ node_names %in% temporal_reference_node ] ) !=0 ){
+
+      temporal_reference_node_parents <- dagitty::parents(dag, temporal_reference_node)
+
+      new_node_children <- lapply(1:length(existing_node_names), function(x){
+
+        new_node_children <- existing_node_children[[x]][ !existing_node_children[[x]] %in% temporal_reference_node &
+                                                            !existing_node_children[[x]] %in% existing_node_names[[x]] &
+                                                            !existing_node_children[[x]] %in% temporal_reference_node_parents ]
+
+      })
+
 
     }
-
-    new_nodes_list <- connect_post_treatment_node_children(new_node_names, reference_node_names, new_node_children)
-
-
-    if( !all( is.na(new_nodes_list) ) ){
-
-      new_nodes_df <- rbind( new_nodes_df, new_nodes_list )
-
-    }
-
 
 
   }else{ # otherwise, we will just connect all new nodes to treatment and treatment parents (irrespective of whether this creates a dag)
 
 
-    new_node_children <- lapply(1:length(reference_node_names), function(x){
+    new_node_children <- lapply(1:length(existing_node_names), function(x){
 
-      new_node_children <- reference_children[[x]][ !reference_children[[x]] %in% reference_node_names[[x]] ]
+      new_node_children <- existing_node_children[[x]][ !existing_node_children[[x]] %in% existing_node_names[[x]] ]
 
-    })
+    } )
 
-
-    new_nodes_list <- connect_post_treatment_node_parents(new_node_names, reference_node_names, new_node_parents)
-
-    if( !all( is.na(na.omit(new_nodes_list)) ) ){
-
-      new_nodes_df <- rbind( new_nodes_df, new_nodes_list )
-
-    }
-
-    new_nodes_list <- connect_post_treatment_node_children(new_node_names,  reference_node_names, new_node_children)
-
-
-    if( !all( is.na(new_nodes_list) ) ){
-
-      new_nodes_df <- rbind( new_nodes_df, new_nodes_list )
-
-    }
 
 
   }
+
+
+
+  new_nodes_list <- connect_post_treatment_node_parents(new_node_names, existing_node_names, new_node_parents)
+
+  if( !all( is.na(na.omit(new_nodes_list) )) ){
+
+    new_nodes_df <- rbind( new_nodes_df, new_nodes_list )
+
+  }
+
+
+  new_nodes_list <- connect_post_treatment_node_children(new_node_names, existing_node_names, new_node_children)
+
+  if( !all( is.na(new_nodes_list) ) ){
+
+    new_nodes_df <- rbind( new_nodes_df, new_nodes_list )
+
+  }
+
+
+
+
+
 
 
   return(new_nodes_df)

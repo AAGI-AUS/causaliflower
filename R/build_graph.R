@@ -257,35 +257,43 @@ buildGraph <- function(type = c("full", "saturated", "ordered"),
 #'
 #' @importFrom magrittr %>%
 #' @param dag A dagitty object. Must include exposure and outcome nodes.
-#' @param reference_nodes Vector of existing node names, used as a reference for the new graph nodes, e.g., c("Z1", "Z2", "Z3").
-#' @param reference_type A suffix added to each of the reference node names, e.g. "pre_treatment", or "t0".
+#' @param existing_nodes Vector of existing node names, used as a reference for the new graph nodes, e.g., c("Z1", "Z2", "Z3").
+#' @param existing_node_type A suffix added to each of the reference node names, e.g. "pre_treatment", or "t0".
 #' @param new_node_type A suffix added to each of the new node names, e.g. "post_treatment", or "t" (a number is added for each repeat if num_repeats is specified)
+#' @param temporal_reference_node Supply an alternative reference, or simply leave blank. Default settings use treatment as the temporal point of reference for adding new (post-treatment) nodes, but if other node types are specified it can be useful to specify the existing node name.
 #' @param num_repeats Number of additional copies of nodes, such as time points. Each repeat number is included at the end of new node names (new_new_t1, new_node_t2, etc.).
 #' @returns A dagitty object.
 #' @export
-addNodes <- function(dag, reference_nodes, reference_type = c("pre_treatment"), new_node_type = c("post_treatment"),  num_repeats = NA,
-                     coords_spec = c(lambda = 1, lambda_max = NA, iterations = NA)){
+addNodes <- function(dag,
+                     existing_nodes,
+                     existing_node_type = "pre_treatment",
+                     new_node_type = "post_treatment",
+                     temporal_reference_node = NA,
+                     num_repeats = NA,
+                     coords_spec = c(lambda = 1,
+                                     lambda_max = NA,
+                                     iterations = NA)){
 
   # get edges from dag
   edges <- as.data.frame( dagitty::edges(dag) )[, c("v", "e", "w")]
   node_names <- names(dag)
 
   # checks that all specified reference nodes are in the dag
-  if( length( node_names[ node_names %in% reference_nodes] ) != length( reference_nodes ) ){
+  if( length( node_names[ node_names %in% existing_nodes] ) != length( existing_nodes ) ){
 
     stop("Please check reference node input and try again.")
 
   }
 
   # create new node names
-  new_node_names <- create_new_node_names(reference_nodes, new_node_type, num_repeats)
+  new_node_names <- create_new_node_names(existing_nodes, new_node_type, num_repeats)
   new_node_names <- as.data.frame(new_node_names) # convert to data frame (called here instead of in the function to keep a consistent output, will possibly move it in later)
 
-  # update reference node names based on inputted reference_type
-  reference_node_names <- paste0(reference_nodes, "_", reference_type)
+  # update reference node names based on inputted existing_node_type
+  existing_node_names <- paste0(existing_nodes, "_", existing_node_type)
 
   # replace reference nodes in the dag with their new names (coordinates too)
-  num_ref_nodes <- length(reference_nodes)
+  num_ref_nodes <- length(existing_nodes)
 
   coordinates <- dagitty::coordinates(dag)
 
@@ -300,35 +308,35 @@ addNodes <- function(dag, reference_nodes, reference_type = c("pre_treatment"), 
   for(i in 1:num_ref_nodes){ # this will be rewritten without a for-loop
 
     latent_vec <- sapply(   latent_vec, function(x)
-      replace( x, x %in% reference_nodes[i], reference_node_names[i] ) )
+      replace( x, x %in% existing_nodes[i], existing_node_names[i] ) )
 
     treatments <- sapply(   treatments, function(x)
-      replace( x, x %in% reference_nodes[i], reference_node_names[i] ) )
+      replace( x, x %in% existing_nodes[i], existing_node_names[i] ) )
 
     outcomes <- sapply(   outcomes, function(x)
-      replace( x, x %in% reference_nodes[i], reference_node_names[i] ) )
+      replace( x, x %in% existing_nodes[i], existing_node_names[i] ) )
 
     node_names <- sapply(   node_names, function(x)
-      replace( x, x %in% reference_nodes[i], reference_node_names[i] ) )
+      replace( x, x %in% existing_nodes[i], existing_node_names[i] ) )
 
     edges["v"] <- sapply(   as.vector(edges["v"]), function(x)
-      replace( x, x %in% reference_nodes[i], reference_node_names[i] ) )
+      replace( x, x %in% existing_nodes[i], existing_node_names[i] ) )
 
     edges["w"] <- sapply( as.vector(edges["w"]), function(x)
-      replace( x, x %in% reference_nodes[i], reference_node_names[i] ) )
+      replace( x, x %in% existing_nodes[i], existing_node_names[i] ) )
 
     names(coordinates[["x"]]) <- sapply(   names(coordinates[["x"]]), function(x)
-      replace( x, x %in% reference_nodes[i], reference_node_names[i] ) )
+      replace( x, x %in% existing_nodes[i], existing_node_names[i] ) )
 
     names(coordinates[["y"]]) <- sapply(   names(coordinates[["y"]]), function(x)
-      replace( x, x %in% reference_nodes[i], reference_node_names[i] ) )
+      replace( x, x %in% existing_nodes[i], existing_node_names[i] ) )
 
   }
 
   dag <- construct_dag(edges, node_names, treatments, outcomes, latent_vec)
 
   # draw edges for all new nodes (includes connecting parent and children nodes, reference nodes to new nodes, and consecutive new nodes)
-  new_node_df <- draw_new_node_edges(dag, new_node_names, reference_node_names, reference_type, new_node_type, num_repeats)
+  new_node_df <- draw_new_node_edges(dag, new_node_names, existing_node_names, existing_node_type, new_node_type, temporal_reference_node, num_repeats)
 
 
   edges <- rbind(edges, new_node_df)
@@ -338,13 +346,22 @@ addNodes <- function(dag, reference_nodes, reference_type = c("pre_treatment"), 
 
 
   if(all(!is.na(unlist(coordinates)))){
+
     dagitty::coordinates(dag) <- coordinates
+
   }
 
 
   new_node_names <- as.vector(unlist(new_node_names))
 
-  coordinates <- new_node_coordinates(dag, reference_node_names, new_node_names, reference_type, num_repeats, num_ref_nodes, coordinates,
+  coordinates <- new_node_coordinates(dag,
+                                      existing_node_names,
+                                      new_node_names,
+                                      existing_node_type,
+                                      num_repeats,
+                                      num_ref_nodes,
+                                      temporal_reference_node,
+                                      coordinates,
                                       coords_spec = coords_spec[ complete.cases(coords_spec) ] )
 
 
@@ -407,11 +424,15 @@ construct_dag <- function(edges, node_names, treatments, outcomes, latent_vec){
 
   node_name_and_coords_vec <- c()
 
-  if(all(complete.cases(latent_vec))) {
-    node_name_and_coords_vec <- c(paste(treatments, " [exposure] ", sep=""),
-                                  paste(outcomes, " [outcome] ", sep=""),
-                                  paste(latent_vec, " [latent] ", sep=""),
-                                  paste(node_names, collapse=" "))
+  if( length(latent_vec) > 0 ){
+
+    if( all(complete.cases(latent_vec)) ) {
+      node_name_and_coords_vec <- c(paste(treatments, " [exposure] ", sep=""),
+                                    paste(outcomes, " [outcome] ", sep=""),
+                                    paste(latent_vec, " [latent] ", sep=""),
+                                    paste(node_names, collapse=" "))
+    }
+
   }else{
     node_name_and_coords_vec <- c(paste(treatments, " [exposure] ", sep=""),
                                   paste(outcomes, " [outcome] ", sep=""),

@@ -148,19 +148,23 @@ extract_node_roles <- function(dag){
   outcome_parents <- dagitty::parents(dag, outcomes)
   treatment_children <- dagitty::children(dag, treatments)
 
-  mediators <- outcome_parents[outcome_parents %in% treatment_children &
-                                 !outcome_parents %in% treatments &
-                                 !outcome_parents %in% confounders &
-                                 !outcome_parents %in% latent_vars]
+  nodes_trt_to_y <- nodes_between_treatment_and_outcome(dag, treatments, outcomes)
+
+  mediators <- outcome_parents[ ( outcome_parents %in% treatment_children | outcome_parents %in% nodes_trt_to_y ) &
+                                !outcome_parents %in% treatments &
+                                !outcome_parents %in% outcomes &
+                                !outcome_parents %in% confounders &
+                                !outcome_parents %in% latent_vars ]
 
   # mediator-outcome confounders
   mediator_parents <- dagitty::parents(dag, mediators) # filter to include only parents of mediator variables
   moc <- mediator_parents[mediator_parents %in% outcome_parents] # include only nodes connected to both mediators and outcome (M <- MOC -> Y)
   moc <- moc[ !moc %in% c(treatments, confounders) & # remove treatment and confounder nodes
                 !moc %in% treatment_parents & # double check by removing parents of treatment
-                !moc %in% latent_vars ]
+                !moc %in% latent_vars &
+                !moc %in% mediators ]
 
-  nodes_trt_to_y <- nodes_between_treatment_and_outcome(dag, treatments, outcomes)
+
 
   # competing exposure
   competing_exposure <- outcome_parents[ !outcome_parents %in% mediators &
@@ -168,18 +172,20 @@ extract_node_roles <- function(dag){
                                            !outcome_parents %in% confounders &
                                            !outcome_parents %in% latent_vars &
                                            !outcome_parents %in% moc &
-                                           !outcome_parents %in% nodes_trt_to_y ]
+                                           #!outcome_parents %in% nodes_trt_to_y  &
+                                           !outcome_parents %in% outcomes ]
 
   # proxy
 
   latent_children <- dagitty::children(dag, latent_vars)
-  proxy_b <- treatment_parents[ treatment_parents %in% latent_children &
+  proxy_b <- suppressWarnings( treatment_parents[ treatment_parents %in% latent_children &
                                   !treatment_parents %in% latent_vars &
-                                  !treatment_parents %in% treatments] # proxy_b
+                                  !treatment_parents %in% treatments ] )# proxy_b
   proxy_c <- outcome_parents[ outcome_parents %in% latent_children & # proxy_c
                                 !outcome_parents %in% treatments &
                                 !outcome_parents %in% mediators &
-                                !outcome_parents %in% latent_vars ]
+                                !outcome_parents %in% latent_vars &
+                                !outcome_parents %in% outcomes ]
   proxy <- c(proxy_b, proxy_c)
 
   # collider
@@ -308,7 +314,7 @@ edges_longer <- function(edges){
   edges_descendants <- edges_descendants[order(edges_descendants$id), 1:4]
 
 
-  if(nrow(edges_ancestors) != nrow(edges_descendants)){ # finds missing latent edges
+  if( nrow(edges_ancestors) != nrow(edges_descendants) ){ # finds missing latent edges
 
     edges_descendants <- find_missing_edges(edges_ancestors, edges_descendants)
 
@@ -343,22 +349,26 @@ find_missing_edges <- function(edges_ancestors, edges_descendants){
   common_ancestors <- dplyr::semi_join(edges_descendants, edges_ancestors, by = c("v" = "v"))
 
   combined_ancestors <- rbind(edges_ancestors[,1:3], common_ancestors[,1:3])
-  combined_ancestors[! duplicated(combined_ancestors, fromLast=TRUE) &
-                       seq(nrow(combined_ancestors)) <= nrow(edges_ancestors), ]
+  #combined_ancestors[! duplicated(combined_ancestors, fromLast=TRUE) &
+  #                     seq(nrow(combined_ancestors)) <= nrow(edges_ancestors), ]
 
-  common_ancestors[,1:3][ common_ancestors[,1:3] %in% edges_ancestors[,1:3] ]
+  #common_ancestors[,1:3][ common_ancestors[,1:3] %in% edges_ancestors[,1:3] ]
   missing_latent_edges <- dplyr::anti_join(edges_ancestors, common_ancestors, by = c("v", "e", "w"))
 
   dplyr::anti_join(edges_ancestors, edges_descendants, by = c("w" = "w"))
 
   missing_latent_rows <- NULL
 
-  missing_latent_rows <- lapply( 1:nrow(missing_ancestors), function(x){
-    missing_row <- missing_ancestors[x, ]
-    missing_row[,"value"][missing_row[, 1] %in% latent_vars] <- "latent"
-    missing_row <- as.data.frame(missing_row)
+  if( nrow(missing_ancestors) > 0 ){
 
-  })
+    missing_latent_rows <- lapply( 1:nrow(missing_ancestors), function(x){
+      missing_row <- missing_ancestors[x, ]
+      missing_row[,"value"][missing_row[, 1] %in% latent_vars] <- "latent"
+      missing_row <- as.data.frame(missing_row)
+
+    })
+
+  }
 
   edges_ancestors <- na.omit( dplyr::bind_rows(edges_ancestors, missing_latent_rows) )
 
@@ -377,28 +387,34 @@ find_missing_edges <- function(edges_ancestors, edges_descendants){
 #' @noRd
 nodes_between_treatment_and_outcome <- function(dag, treatments, outcomes){
 
-  paths_trt_to_y <- lapply(1:length(treatments), function(x){
+  nodes <- c()
 
-    paths_trt_to_y <- lapply(1:length(outcomes), function(y){
+  if( length(treatments) > 0 & length(outcomes) > 0 ){
 
-      paths_trt_to_y <- na.omit(ggdag::dag_paths(dag,
-                                                 from = treatments[x],
-                                                 to = outcomes[y],
-                                                 directed = TRUE,
-                                                 paths_only = TRUE)[["data"]])
+    paths_trt_to_y <- lapply(1:length(treatments), function(x){
 
-      #paths_trt_to_y <- paths_trt_to_y[!grepl(treatments[x], paths_trt_to_y$to),]
+      paths_trt_to_y <- lapply(1:length(outcomes), function(y){
+
+        paths_trt_to_y <- na.omit(ggdag::dag_paths(dag,
+                                                   from = treatments[x],
+                                                   to = outcomes[y],
+                                                   directed = TRUE,
+                                                   paths_only = TRUE)[["data"]])
+
+        #paths_trt_to_y <- paths_trt_to_y[!grepl(treatments[x], paths_trt_to_y$to),]
+      })
+
     })
 
-  })
+    paths_trt_to_y <- dplyr::bind_rows(paths_trt_to_y)
 
-  paths_trt_to_y <- dplyr::bind_rows(paths_trt_to_y)
+    nodes <- as.vector(unique(paths_trt_to_y$name))
 
-  nodes <- as.vector(unique(paths_trt_to_y$name))
+    nodes <- unique( c(nodes, as.vector(na.omit(unique(paths_trt_to_y$to)))) )
 
-  nodes <- unique( c(nodes, as.vector(na.omit(unique(paths_trt_to_y$to)))) )
+    nodes <- nodes[ !nodes %in% treatments]
 
-  nodes <- nodes[ !nodes %in% treatments]
+  }
 
   return(nodes)
 
@@ -410,29 +426,29 @@ nodes_between_treatment_and_outcome <- function(dag, treatments, outcomes){
 #' create_new_node_names() is a helper function for addNodes(). It uses existing nodes to create new node names for specified repeats/time points.
 #'
 #' @importFrom magrittr %>%
-#' @param reference_nodes Vector of existing node names, used as a reference for the new graph nodes, e.g., c("Z1", "Z2", "Z3").
+#' @param existing_nodes Vector of existing node names, used as a reference for the new graph nodes, e.g., c("Z1", "Z2", "Z3").
 #' @param new_node_type A suffix added to each of the new node names, e.g. "post_treatment", or "t" (a number is added for each repeat if num_repeats is specified)
 #' @param num_repeats Number of additional copies of nodes, such as time points. Each repeat number is included at the end of new node names (new_new_t1, new_node_t2, etc.).
 #' @returns A vector of new node names.
 #' @export
-create_new_node_names <- function(reference_nodes, new_node_type, num_repeats){
+create_new_node_names <- function(existing_nodes, new_node_type, num_repeats){
 
   seq_repeats <- seq(num_repeats)
 
   new_node_names <- NULL
 
-  if( length( reference_nodes ) > 0 ){
+  if( length( existing_nodes ) > 0 ){
 
     if( length( seq_repeats ) == 1 ){
 
-      new_node_names <- paste0(reference_nodes, "_", new_node_type)
+      new_node_names <- paste0(existing_nodes, "_", new_node_type)
 
 
     }else{
 
       new_node_names <- sapply(1:length(seq_repeats), function(x){
 
-        new_node_names <- paste0(reference_nodes, "_", new_node_type, seq_repeats[x])
+        new_node_names <- paste0(existing_nodes, "_", new_node_type, seq_repeats[x])
 
       })
 
@@ -448,21 +464,21 @@ create_new_node_names <- function(reference_nodes, new_node_type, num_repeats){
 
 #' Connect new nodes to their reference nodes
 #'
-#' connect_new_and_reference_nodes() is a helper function for draw_new_node_edges() and addNodes().
+#' connect_new_and_existing_nodes() is a helper function for draw_new_node_edges() and addNodes().
 #'
 #' @param new_node_names Inputted vector of node names to be added to the graph.
-#' @param reference_node_names Inputted vector of node names, used as a reference for the new graph nodes.
+#' @param existing_node_names Inputted vector of node names, used as a reference for the new graph nodes.
 #' @returns A data frame of edges connecting new nodes to their reference nodes, and each subsequent time point to the next.
 #' @noRd
-connect_new_and_reference_nodes <- function(new_node_names, reference_node_names){
+connect_new_and_existing_nodes <- function(new_node_names, existing_node_names){
 
   new_node_names_vec <- as.character(unlist(new_node_names, use.names = FALSE))
 
-  num_ref_nodes <- length(reference_node_names)
+  num_ref_nodes <- length(existing_node_names)
 
   new_nodes_list <- suppressWarnings( lapply(1:num_ref_nodes, function(x){
 
-    new_nodes_list <- list( v = reference_node_names[x], e = "->", w = new_node_names_vec[x] )
+    new_nodes_list <- list( v = existing_node_names[x], e = "->", w = new_node_names_vec[x] )
 
   }) )
 
@@ -489,15 +505,14 @@ connect_new_and_reference_nodes <- function(new_node_names, reference_node_names
 
     new_nodes_df <- rbind(new_nodes_df, new_nodes_list)
 
-  }else{
+  }else if( length(new_node_names) > 1 ){
 
     new_nodes_list <- suppressWarnings( lapply( 1:( nrow(new_node_names) - 1 ), function(y){
 
-        new_nodes_list <- list( v = new_node_names[y,], e = "->", w = new_node_names[y + 1,] )
+      new_nodes_list <- list( v = new_node_names[y,], e = "->", w = new_node_names[y + 1,] )
 
-        })
-      )
-
+      })
+    )
 
     if( !all( is.null(unlist(new_nodes_list)) ) ){
 
@@ -510,9 +525,6 @@ connect_new_and_reference_nodes <- function(new_node_names, reference_node_names
 
   }
 
-
-
-
   return(new_nodes_df)
 
 }
@@ -523,13 +535,13 @@ connect_new_and_reference_nodes <- function(new_node_names, reference_node_names
 #' connect_new_nodes_to_parent_new_nodes() is a helper function for draw_new_node_edges() and addNodes().
 #'
 #' @param new_node_names Inputted vector of node names to be added to the graph.
-#' @param new_node_parents_in_reference_nodes Inputted vector of new node parent names in the supplied reference nodes.
+#' @param new_node_parents_in_existing_nodes Inputted vector of new node parent names in the supplied reference nodes.
 #' @returns A list of edges connecting new nodes to their parent nodes, at time point.
 #' @noRd
-connect_new_nodes_to_parent_new_nodes <- function(new_node_names, reference_node_names, new_node_parents_in_reference_nodes){ # needs checking single new_node_name input
+connect_new_nodes_to_parent_new_nodes <- function(new_node_names, existing_node_names, new_node_parents_in_existing_nodes){ # needs checking single new_node_name input
 
   # check if more than one reference node
-  if( length(reference_node_names) > 1 ){
+  if( length(existing_node_names) > 1 ){
 
     # connect new node to parent nodes (also included in reference nodes)
     new_nodes_list <- suppressWarnings(
@@ -538,19 +550,19 @@ connect_new_nodes_to_parent_new_nodes <- function(new_node_names, reference_node
 
         new_nodes_list <- lapply( 1:nrow(new_node_names), function(y){ # y = each reference (new) node e.g. Z1_a, Z2_a, Z3_a
 
-          if( length( unlist(new_node_parents_in_reference_nodes[[y]]) ) > 0){
+          if( length( unlist(new_node_parents_in_existing_nodes[[y]]) ) > 0){
 
-            new_nodes_list <- lapply( 1:length( unlist(new_node_parents_in_reference_nodes[[y]]) ), function(x){ # x = each parent node
+            new_nodes_list <- lapply( 1:length( unlist(new_node_parents_in_existing_nodes[[y]]) ), function(x){ # x = each parent node
 
-              if( length( unlist(new_node_parents_in_reference_nodes[[y]][[x]]) ) > 0 ){
+              if( length( unlist(new_node_parents_in_existing_nodes[[y]][[x]]) ) > 0 ){
 
-                if( length( unlist(new_node_parents_in_reference_nodes[[y]][[x]]) ) > 1){
+                if( length( unlist(new_node_parents_in_existing_nodes[[y]][[x]]) ) > 1){
 
-                  new_nodes_list <- list( v =  new_node_parents_in_reference_nodes[[y]][[x,t]], e = "->", w = new_node_names[y, t] )
+                  new_nodes_list <- list( v =  new_node_parents_in_existing_nodes[[y]][[x,t]], e = "->", w = new_node_names[y, t] )
 
                 }else{
 
-                  new_nodes_list <- list( v =  new_node_parents_in_reference_nodes[[y]][[x]], e = "->", w = new_node_names[y, t] )
+                  new_nodes_list <- list( v =  new_node_parents_in_existing_nodes[[y]][[x]], e = "->", w = new_node_names[y, t] )
 
                 }
               }
@@ -580,13 +592,13 @@ connect_new_nodes_to_parent_new_nodes <- function(new_node_names, reference_node
 
       lapply(1:( nrow(new_node_names) ), function(t){ # t = each time point
 
-        if( length( unlist(new_node_parents_in_reference_nodes) ) > 0 ){
+        if( length( unlist(new_node_parents_in_existing_nodes) ) > 0 ){
 
-            new_nodes_list <- lapply( 1:length( unlist(new_node_parents_in_reference_nodes[[t]]) ), function(x){ # x = each parent node
+            new_nodes_list <- lapply( 1:length( unlist(new_node_parents_in_existing_nodes[[t]]) ), function(x){ # x = each parent node
 
-              if( length( unlist(new_node_parents_in_reference_nodes[[t]][[x]]) ) > 0 ){
+              if( length( unlist(new_node_parents_in_existing_nodes[[t]][[x]]) ) > 0 ){
 
-                  new_nodes_list <- list( v =  new_node_parents_in_reference_nodes[[t]][[x]], e = "->", w = new_node_names[t,] )
+                  new_nodes_list <- list( v =  new_node_parents_in_existing_nodes[[t]][[x]], e = "->", w = new_node_names[t,] )
 
               }
 
@@ -618,9 +630,9 @@ connect_new_nodes_to_parent_new_nodes <- function(new_node_names, reference_node
 #' @param new_node_parents Inputted vector of new node parent names.
 #' @returns A list of edges connecting new nodes to their parent nodes, at time point.
 #' @noRd
-connect_post_treatment_node_parents <- function(new_node_names, reference_node_names, new_node_parents){
+connect_post_treatment_node_parents <- function(new_node_names, existing_node_names, new_node_parents){
 
-  if( length(reference_node_names) > 1 ){
+  if( length(existing_node_names) > 1 ){
     # new nodes parents
     new_nodes_list <- suppressWarnings(
 
@@ -731,10 +743,10 @@ connect_post_treatment_node_parents <- function(new_node_names, reference_node_n
 #' @param new_node_children Inputted vector of new nodes' children.
 #' @returns A list of edges connecting new nodes to their child nodes, at time point.
 #' @noRd
-connect_post_treatment_node_children <- function(new_node_names, reference_node_names, new_node_children){
+connect_post_treatment_node_children <- function(new_node_names, existing_node_names, new_node_children){
 
 
-  if( length(reference_node_names) > 1 ){
+  if( length(existing_node_names) > 1 ){
 
     # new nodes children
     new_nodes_list <- suppressWarnings(

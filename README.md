@@ -24,7 +24,7 @@ The code below gives some idea of what this looks like, however an introductory 
 buildGraph(type = 'ordered', variables, treatments, outcomes)
 ```
 
-- saturate (fully connect) a graph before using causal criteria to assess each implied relationship and decide which edges to keep (or remove)
+- saturate (fully connect) a graph before causal criteria is used to assess each implied relationship, deciding which edges to keep (or remove)
 
 ```R
 buildGraph(type = c('full', 'saturated'), variables, treatments, outcomes)
@@ -67,7 +67,7 @@ proxies(dag)
 ```
 
 
-In the near future causaliflower will be made public so that anyone interested in causal analysis can use the package.
+In the near future, causaliflower will be made public so that anyone interested in causal analysis in R can use the code in this package.
 
 If you have any questions or suggestions, please get in touch and/or contribute to the development of causaliflower.
 

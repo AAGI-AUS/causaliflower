@@ -6,9 +6,10 @@
 \usage{
 addNodes(
   dag,
-  reference_nodes,
-  reference_type = c("pre_treatment"),
-  new_node_type = c("post_treatment"),
+  existing_nodes,
+  existing_node_type = "pre_treatment",
+  new_node_type = "post_treatment",
+  temporal_reference_node = NA,
   num_repeats = NA,
   coords_spec = c(lambda = 1, lambda_max = NA, iterations = NA)
 )
@@ -16,11 +17,13 @@ addNodes(
 \arguments{
 \item{dag}{A dagitty object. Must include exposure and outcome nodes.}
 
-\item{reference_nodes}{Vector of existing node names, used as a reference for the new graph nodes, e.g., c("Z1", "Z2", "Z3").}
+\item{existing_nodes}{Vector of existing node names, used as a reference for the new graph nodes, e.g., c("Z1", "Z2", "Z3").}
 
-\item{reference_type}{A suffix added to each of the reference node names, e.g. "pre_treatment", or "t0".}
+\item{existing_node_type}{A suffix added to each of the reference node names, e.g. "pre_treatment", or "t0".}
 
 \item{new_node_type}{A suffix added to each of the new node names, e.g. "post_treatment", or "t" (a number is added for each repeat if num_repeats is specified)}
+
+\item{temporal_reference_node}{Supply an alternative reference, or simply leave blank. Default settings use treatment as the temporal point of reference for adding new (post-treatment) nodes, but if other node types are specified it can be useful to specify the existing node name.}
 
 \item{num_repeats}{Number of additional copies of nodes, such as time points. Each repeat number is included at the end of new node names (new_new_t1, new_node_t2, etc.).}
 }

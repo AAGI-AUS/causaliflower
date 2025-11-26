@@ -4,10 +4,10 @@
 \alias{create_new_node_names}
 \title{Add nodes to a dagitty object}
 \usage{
-create_new_node_names(reference_nodes, new_node_type, num_repeats)
+create_new_node_names(existing_nodes, new_node_type, num_repeats)
 }
 \arguments{
-\item{reference_nodes}{Vector of existing node names, used as a reference for the new graph nodes, e.g., c("Z1", "Z2", "Z3").}
+\item{existing_nodes}{Vector of existing node names, used as a reference for the new graph nodes, e.g., c("Z1", "Z2", "Z3").}
 
 \item{new_node_type}{A suffix added to each of the new node names, e.g. "post_treatment", or "t" (a number is added for each repeat if num_repeats is specified)}
 

@@ -123,7 +123,7 @@ getFeatureMap <- function(dag){
 
   feature_map_new <- lapply( seq_along(role_names), function(x){
 
-    feature_map_new <- unique( unlist(edges[role_ancestor == role_names[x], 1] ))
+    feature_map_new <- unique( unlist(edges[role_ancestor == role_names[x], 1] ) )
 
   } )
 
