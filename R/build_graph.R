@@ -1,6 +1,6 @@
 #' Build a dagitty object
 #'
-#' buildGraph() produces a saturated graph by default from the supplied treatments, outcome, confounder, and  mediators (optional) based on the type of graph specified. Optional latent confounder or medfiator variables can be specified.
+#' build_graph() produces a saturated graph by default from the supplied treatments, outcome, confounder, and  mediators (optional) based on the type of graph specified. Optional latent confounder or medfiator variables can be specified.
 #'
 #'
 #' @importFrom magrittr %>%
@@ -19,7 +19,7 @@
 #' @examples
 #'
 #'
-#' # There are three main ways to supply variables to buildGraph().
+#' # There are three main ways to supply variables to build_graph().
 #'
 #' # Option 1: Inputting a named vector of variables inputted (can either include treatment and outcome or as separate inputs)
 #' {
@@ -33,7 +33,7 @@
 #' # Three graph types can also be generated. First, we build an 'ordered' graph where the supplied vector order is used to determine the temporal order of confounder nodes.
 #'   type <- "ordered"
 #'
-#'   dag <- buildGraph(type = type,
+#'   dag <- build_graph(type = type,
 #'                     variables = variables)
 #'
 #' # Plotting the graph using ggdagitty() assigns coordinates based on the variable roles (confounder, treatments, outcomes, mediator, etc.).
@@ -52,7 +52,7 @@
 #' A "saturated" graph type bidirectionally connects each of the confounders, in addition to directed arrows to the outcomes and treatments nodes.
 #' type <- "saturated"
 #'
-#' dag <- buildGraph(type = type,
+#' dag <- build_graph(type = type,
 #'                   treatments = treatments,
 #'                   outcomes = outcomes,
 #'                   confounders = confounders,
@@ -74,7 +74,7 @@
 #' # Using type = "full" generates a fully connected graph: all confounders are connected to each other, in both directions, and also to mediators, treatments and outcomes.
 #' type <- "full"
 #'
-#' dag <- buildGraph(type = type,
+#' dag <- build_graph(type = type,
 #'                   variables = variables,
 #'                   treatments = treatments,
 #'                   outcomes = outcomes,
@@ -84,7 +84,7 @@
 #' ggdagitty(dag)
 #'
 #' @export
-buildGraph <- function(type = c("full", "saturated", "ordered"),
+build_graph <- function(type = c("full", "saturated", "ordered"),
                        variables,
                        treatments = NA,
                        outcomes = NA,
@@ -94,14 +94,15 @@ buildGraph <- function(type = c("full", "saturated", "ordered"),
                        mediator_outcome_confounders = NA,
                        competing_exposures = NA,
                        colliders = NA,
-                       coords_spec = c(lambda = 0, lambda_max = NA, iterations = NA)){
+                       coords_spec = c(lambda = 0, lambda_max = NA, iterations = NA)
+                       ){
 
   # check for an existing dag (inputted as confounders)
   if( dagitty::is.dagitty(variables) ){
 
     existing_dag <- variables
     #existing_dag <- dag
-    node_roles <- getFeatureMap(existing_dag)
+    node_roles <- get_roles(existing_dag)
 
     treatments <- node_roles$treatment
 
@@ -219,11 +220,12 @@ buildGraph <- function(type = c("full", "saturated", "ordered"),
   node_names <- unique( as.vector( c(confounder_vec, m_o_confounder_vec, mediator_vec, unlist(instrumental_variables), competing_exposure_vec, collider_vec) ) )
   node_names <- Filter(Negate(anyNA), node_names)
 
-  exclude_names <-c(treatments, outcomes, latent_vec)
+  exclude_names <- c(treatments, outcomes, latent_vec)
+  exclude_names <- exclude_names[ complete.cases(exclude_names) ]
   node_names <- node_names[!node_names %in% exclude_names]
 
 
-  dag <- construct_dag(edges_df, node_names, treatments, outcomes, latent_vec)
+  dag <- construct_graph(edges_df, node_names, treatments, outcomes, latent_vec)
 
   if( !all(complete.cases(existing_dag)) ){
 
@@ -251,9 +253,115 @@ buildGraph <- function(type = c("full", "saturated", "ordered"),
 }
 
 
+#' Merge two dagitty objects
+#'
+#' merge_graphs() adds new nodes to the first from the second supplied dagitty object, before generating new coordinates for the merged graph.
+#'
+#' @importFrom data.table as.data.table is.data.table
+#' @importFrom dagitty dagitty edges exposures outcomes latents coordinates
+#' @param dag First dagitty object.
+#' @param new_dag Second dagitty object, added to the first.
+#' @param temporal_reference_node Supply an alternative reference, or simply leave blank. Default settings use treatment as the temporal point of reference for adding new (post-treatment) nodes, but if other node types are specified it can be useful to specify the existing node name.
+#' @param coords_spec Set of parameters for generating coordinates. Adjust node placement with lambda, a higher value increases volatility and results in more extreme DAG structures.
+#' @returns A dagitty object
+#' @export
+merge_graphs <- function(dag,
+                         new_dag,
+                         temporal_reference_node = NA,
+                         coords_spec = 0.1
+){
+  .datatable.aware <- TRUE
+
+  edges <- as.data.frame( dagitty::edges(dag) )[, c("v", "e", "w")] # get primary dag edges
+  node_names <- names(dag) # extract dag node names
+
+  treatments <- dagitty::exposures(dag) # get treatments
+  outcomes <- dagitty::outcomes(dag) # get outcomes
+  latent_vec <- unlist(dagitty::latents(dag)) # get dag latent variables
+  coordinates <- dagitty::coordinates(dag) # extract dag coordinates
+
+  new_edges <- as.data.frame( dagitty::edges(new_dag) )[, c("v", "e", "w")]  # get new dag edges
+  new_node_names <- names(new_dag) # extract new dag node names
+
+  existing_node_names <-  new_node_names[ new_node_names %in% node_names ] # saves duplicate node names
+  new_node_names <- new_node_names[ !new_node_names %in% node_names ] # remove duplicate node names
+
+  node_names <- c(node_names, new_node_names) # combine both dag node names
+
+  edges <- rbind(edges, new_edges) # combine both dag edges
+
+  node_name_and_coords_vec <- c()
+
+  if( length(latent_vec) > 0 ){ ########### simplify this section ##############
+
+    if( all(complete.cases(latent_vec)) ) {
+
+      node_name_and_coords_vec <- c(paste(treatments, " [exposure] ", sep=""),
+                                    paste(outcomes, " [outcome] ", sep=""),
+                                    paste(latent_vec, " [latent] ", sep=""),
+                                    paste(node_names, collapse=" "))
+
+    }else{
+      node_name_and_coords_vec <- c(paste(treatments, " [exposure] ", sep=""),
+                                    paste(outcomes, " [outcome] ", sep=""),
+                                    paste(node_names, collapse=" "))
+    }
+
+  }else{
+
+    node_name_and_coords_vec <- c(paste(treatments, " [exposure] ", sep=""),
+                                  paste(outcomes, " [outcome] ", sep=""),
+                                  paste(node_names, collapse=" "))
+  }
+
+  num_edges <- nrow(edges)
+
+  if( num_edges != 0 ){
+
+    edges <- suppressWarnings( sapply(1:num_edges, function(x){
+
+      edges <- paste( edges[x,], collapse=" ")
+
+    }) )
+
+  }
+
+  dag <- paste("dag {", paste(node_name_and_coords_vec, collapse=""), paste(edges, collapse=" "), "}", sep = " ")
+
+  dag <- dagitty::dagitty(dag)
+
+  if( all(!is.na(unlist(coordinates))) ){
+
+    dagitty::coordinates(dag) <- coordinates
+
+  }
+
+  nodes_ordered <- sort( unlist( dagitty::topologicalOrdering(new_dag) ) ) # ggdag estimated temporal order of new nodes
+  temporal_reference_node <- names( nodes_ordered[1] ) # first node is selected as the temporal reference node
+
+  existing_node_names <- names( nodes_ordered[ names(nodes_ordered) %in% existing_node_names ] ) # existing node names in temporal order
+  new_node_names <- names( nodes_ordered[ names(nodes_ordered) %in% new_node_names ] ) # new node names in temporal order
+
+  new_coordinates <- add_merged_node_coordinates(dag = dag,
+                                                 existing_node_names = existing_node_names,
+                                                 new_node_names = new_node_names,
+                                                 temporal_reference_node = temporal_reference_node,
+                                                 nodes_ordered = nodes_ordered,
+                                                 coordinates = coordinates,
+                                                 coords_spec = coords_spec[ complete.cases(coords_spec) ] )
+
+
+  dagitty::coordinates(dag) <- new_coordinates
+
+
+  return(dag)
+
+}
+
+
 #' Add nodes to a dagitty object
 #'
-#' addNodes() allows nodes to be added sequentially to a dagitty object using existing nodes as a reference point.
+#' add_nodes() allows multiple nodes to be added to a dagitty object based on existing nodes or another dagitty object.
 #'
 #' @importFrom magrittr %>%
 #' @param dag A dagitty object. Must include exposure and outcome nodes.
@@ -262,28 +370,96 @@ buildGraph <- function(type = c("full", "saturated", "ordered"),
 #' @param new_node_type A suffix added to each of the new node names, e.g. "post_treatment", or "t" (a number is added for each repeat if num_repeats is specified)
 #' @param temporal_reference_node Supply an alternative reference, or simply leave blank. Default settings use treatment as the temporal point of reference for adding new (post-treatment) nodes, but if other node types are specified it can be useful to specify the existing node name.
 #' @param num_repeats Number of additional copies of nodes, such as time points. Each repeat number is included at the end of new node names (new_new_t1, new_node_t2, etc.).
+#' @param coords_spec Set of parameters for generating coordinates. Adjust node placement with lambda, a higher value increases volatility and results in more extreme DAG structures.
 #' @returns A dagitty object.
 #' @export
-addNodes <- function(dag,
-                     existing_nodes,
-                     existing_node_type = "pre_treatment",
-                     new_node_type = "post_treatment",
-                     temporal_reference_node = NA,
-                     num_repeats = NA,
-                     coords_spec = c(lambda = 1,
-                                     lambda_max = NA,
-                                     iterations = NA)){
+add_nodes <- function(dag,
+                      existing_nodes,
+                      existing_node_type = "pre_treatment",
+                      new_node_type = "post_treatment",
+                      temporal_reference_node = NA,
+                      num_repeats = NA,
+                      coords_spec = 1
+                     ){
 
-  # get edges from dag
-  edges <- as.data.frame( dagitty::edges(dag) )[, c("v", "e", "w")]
-  node_names <- names(dag)
+  edges <- as.data.frame( dagitty::edges(dag) )[, c("v", "e", "w")] # get dag edges
+  node_names <- names(dag) # extract dag node names
 
-  # checks that all specified reference nodes are in the dag
-  if( length( node_names[ node_names %in% existing_nodes] ) != length( existing_nodes ) ){
+  treatments <- dagitty::exposures(dag) # get treatments
+  outcomes <- dagitty::outcomes(dag) # get outcomes
+  latent_vec <- unlist(dagitty::latents(dag)) # get dag latent variables
+  coordinates <- dagitty::coordinates(dag) # extract dag coordinates
+
+  if( dagitty::is.dagitty(existing_nodes) ){   # check for an existing dag (inputted as existing_nodes)
+
+    dag <- merge_dagitty(dag,
+                         edges,
+                         node_names,
+                         existing_nodes,
+                         treatments,
+                         outcomes,
+                         latent_vec,
+                         coordinates,
+                         coords_spec
+                         )
+
+  }else if( length( node_names[ node_names %in% existing_nodes] ) != length( existing_nodes ) ){  # checks that all specified reference nodes are in the dag
 
     stop("Please check reference node input and try again.")
 
+  }else{ # create new nodes by referencing existing nodes
+
+    dag <- create_new_node_graph(dag,
+                                 edges,
+                                 node_names,
+                                 treatments,
+                                 outcomes,
+                                 latent_vec,
+                                 coordinates,
+                                 existing_nodes,
+                                 existing_node_type,
+                                 new_node_type,
+                                 temporal_reference_node,
+                                 num_repeats,
+                                 coords_spec
+                                 )
+
   }
+
+
+  return(dag)
+}
+
+
+
+#' Add nodes to a dagitty object
+#'
+#' create_new_node_graph() is a helper function for add_nodes(). It adds new nodes to a dagitty object by referencing existing nodes.
+#'
+#' @importFrom magrittr %>%
+#' @param dag A dagitty object. Must include exposure and outcome nodes.
+#' @param existing_nodes Vector of existing node names, used as a reference for the new graph nodes, e.g., c("Z1", "Z2", "Z3").
+#' @param existing_node_type A suffix added to each of the reference node names, e.g. "pre_treatment", or "t0".
+#' @param new_node_type A suffix added to each of the new node names, e.g. "post_treatment", or "t" (a number is added for each repeat if num_repeats is specified)
+#' @param temporal_reference_node Supply an alternative reference, or simply leave blank. Default settings use treatment as the temporal point of reference for adding new (post-treatment) nodes, but if other node types are specified it can be useful to specify the existing node name.
+#' @param num_repeats Number of additional copies of nodes, such as time points. Each repeat number is included at the end of new node names (new_new_t1, new_node_t2, etc.).
+#' @param coords_spec Set of parameters for generating coordinates. Adjust node placement with lambda, a higher value increases volatility and results in more extreme DAG structures.
+#' @returns A dagitty object.
+#' @noRd
+create_new_node_graph <- function(dag,
+                                  edges,
+                                  node_names,
+                                  treatments,
+                                  outcomes,
+                                  latent_vec,
+                                  coordinates,
+                                  existing_nodes,
+                                  existing_node_type,
+                                  new_node_type,
+                                  temporal_reference_node,
+                                  num_repeats,
+                                  coords_spec
+                                  ){
 
   # create new node names
   new_node_names <- create_new_node_names(existing_nodes, new_node_type, num_repeats)
@@ -294,12 +470,6 @@ addNodes <- function(dag,
 
   # replace reference nodes in the dag with their new names (coordinates too)
   num_ref_nodes <- length(existing_nodes)
-
-  coordinates <- dagitty::coordinates(dag)
-
-  latent_vec <- unlist(dagitty::latents(dag))
-  treatments <- dagitty::exposures(dag)
-  outcomes <- dagitty::outcomes(dag)
 
   exclude_names <- c(treatments, outcomes, latent_vec)
 
@@ -333,7 +503,7 @@ addNodes <- function(dag,
 
   }
 
-  dag <- construct_dag(edges, node_names, treatments, outcomes, latent_vec)
+  dag <- construct_graph(edges, node_names, treatments, outcomes, latent_vec)
 
   # draw edges for all new nodes (includes connecting parent and children nodes, reference nodes to new nodes, and consecutive new nodes)
   new_node_df <- draw_new_node_edges(dag, new_node_names, existing_node_names, existing_node_type, new_node_type, temporal_reference_node, num_repeats)
@@ -342,7 +512,7 @@ addNodes <- function(dag,
   edges <- rbind(edges, new_node_df)
   edges[] <- lapply(edges, as.character)
 
-  dag <- construct_dag(edges, node_names, treatments, outcomes, latent_vec)
+  dag <- construct_graph(edges, node_names, treatments, outcomes, latent_vec)
 
 
   if(all(!is.na(unlist(coordinates)))){
@@ -368,6 +538,108 @@ addNodes <- function(dag,
   dagitty::coordinates(dag) <- coordinates
 
   return(dag)
+
+}
+
+#' construct dag
+#'
+#' merge_dagitty() is a helper function for add_nodes() and merge_graph a daggity object using edges input.
+#'
+#' @importFrom magrittr %>%
+#' @importFrom data.table as.data.table is.data.table
+#' @importFrom dagitty dagitty
+#' @param edges A data frame of edges.
+#' @returns A dagitty object
+#' @noRd
+merge_dagitty <- function(dag,
+                          edges,
+                          node_names,
+                          new_dag,
+                          treatments,
+                          outcomes,
+                          latent_vec,
+                          coordinates,
+                          coords_spec
+                          ){
+  .datatable.aware <- TRUE
+
+  new_edges <- as.data.frame( # get edges, node names from new daggity object (inputted as existing_nodes)
+    dagitty::edges(new_dag) )[, c("v", "e", "w")]
+
+  new_node_names <- names(new_dag) # extract new dag node names
+  existing_node_names <-  new_node_names[ new_node_names %in% node_names ] # saves duplicate node names
+  new_node_names <- new_node_names[ !new_node_names %in% node_names ] # remove duplicate node names
+
+  node_names <- c(node_names, new_node_names) # combine both dag node names
+
+  edges <- rbind(edges, new_edges) # combine both dag edges
+
+  node_name_and_coords_vec <- c()
+
+  if( length(latent_vec) > 0 ){ ########### simplify this section ##############
+
+    if( all(complete.cases(latent_vec)) ) {
+
+      node_name_and_coords_vec <- c(paste(treatments, " [exposure] ", sep=""),
+                                    paste(outcomes, " [outcome] ", sep=""),
+                                    paste(latent_vec, " [latent] ", sep=""),
+                                    paste(node_names, collapse=" "))
+
+    }else{
+      node_name_and_coords_vec <- c(paste(treatments, " [exposure] ", sep=""),
+                                    paste(outcomes, " [outcome] ", sep=""),
+                                    paste(node_names, collapse=" "))
+    }
+
+  }else{
+
+    node_name_and_coords_vec <- c(paste(treatments, " [exposure] ", sep=""),
+                                  paste(outcomes, " [outcome] ", sep=""),
+                                  paste(node_names, collapse=" "))
+  }
+
+  num_edges <- nrow(edges)
+
+  if( num_edges != 0 ){
+
+    edges <- suppressWarnings( sapply(1:num_edges, function(x){
+
+      edges <- paste( edges[x,], collapse=" ")
+
+    }) )
+
+  }
+
+  dag <- paste("dag {", paste(node_name_and_coords_vec, collapse=""), paste(edges, collapse=" "), "}", sep = " ")
+
+  dag <- dagitty::dagitty(dag)
+
+  if(all(!is.na(unlist(coordinates)))){
+
+    dagitty::coordinates(dag) <- coordinates
+
+  }
+
+  nodes_ordered <- sort( unlist( dagitty::topologicalOrdering(new_dag) ) ) # ggdag estimated temporal order of new nodes
+  temporal_reference_node <- names( nodes_ordered[1] ) # first node is selected as the temporal reference node
+
+  existing_node_names <- names( nodes_ordered[ names(nodes_ordered) %in% existing_node_names ] ) # existing node names in temporal order
+  new_node_names <- names( nodes_ordered[ names(nodes_ordered) %in% new_node_names ] ) # new node names in temporal order
+
+  new_coordinates <- add_merged_node_coordinates(dag = dag,
+                                      existing_node_names = existing_node_names,
+                                      new_node_names = new_node_names,
+                                      temporal_reference_node = temporal_reference_node,
+                                      nodes_ordered = nodes_ordered,
+                                      coordinates = coordinates,
+                                      coords_spec = coords_spec[ complete.cases(coords_spec) ] )
+
+
+  dagitty::coordinates(dag) <- new_coordinates
+
+
+  return(dag)
+
 }
 
 #' Rebuild dag
@@ -396,7 +668,7 @@ rebuild_dag <- function(dag, edges){
   node_names <- node_names[,1][! unlist( node_names[,1] ) %in% exclude_names]
 
   # construct dag
-  dag <- construct_dag(edges, unlist(node_names), treatments, outcomes, latent_vec)
+  dag <- construct_graph(edges, unlist(node_names), treatments, outcomes, latent_vec)
 
 
   if(all(!is.na(unlist(coordinates)))){
@@ -411,7 +683,7 @@ rebuild_dag <- function(dag, edges){
 
 #' construct dag
 #'
-#' construct_dag() rebuilds a dag using a dagitty object and data frame of edges input.
+#' construct_graph() constructs a daggity object using edges input.
 #'
 #' @importFrom magrittr %>%
 #' @importFrom data.table as.data.table is.data.table
@@ -419,17 +691,21 @@ rebuild_dag <- function(dag, edges){
 #' @param edges A data frame of edges.
 #' @returns A dagitty object
 #' @noRd
-construct_dag <- function(edges, node_names, treatments, outcomes, latent_vec){
+construct_graph <- function(edges, node_names, treatments, outcomes, latent_vec){
   .datatable.aware <- TRUE
 
   node_name_and_coords_vec <- c()
 
-  if( length(latent_vec) > 0 ){
+  if( length(latent_vec) > 0 ){ ########### simplify this section ##############
 
     if( all(complete.cases(latent_vec)) ) {
       node_name_and_coords_vec <- c(paste(treatments, " [exposure] ", sep=""),
                                     paste(outcomes, " [outcome] ", sep=""),
                                     paste(latent_vec, " [latent] ", sep=""),
+                                    paste(node_names, collapse=" "))
+    }else{
+      node_name_and_coords_vec <- c(paste(treatments, " [exposure] ", sep=""),
+                                    paste(outcomes, " [outcome] ", sep=""),
                                     paste(node_names, collapse=" "))
     }
 
@@ -470,7 +746,7 @@ construct_dag <- function(edges, node_names, treatments, outcomes, latent_vec){
 #' @noRd
 causalify <- function(dag){
 
-  edges <- getEdges(dag)
+  edges <- get_edges(dag)
 
   node_names <- unique(edges[c("ancestor", "role_ancestor")])
 

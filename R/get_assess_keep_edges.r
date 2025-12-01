@@ -1,7 +1,7 @@
 
-#' Get dag edges and node roles
+#' dagitty node edges and roles
 #'
-#' getEdges() filters a dagitty object and returns a data frame with edges for specified node roles.
+#' get_edges() filters a dagitty object and returns a data frame with edges for specified node roles.
 #'
 #' @importFrom data.table as.data.table
 #' @param dag A dagitty object.
@@ -9,7 +9,7 @@
 #' @param output_structure Outputted data can be a "data.table", "data.frame", or "list".
 #' @returns A data frame, data table, or list of edges for the roles specified in selected_nodes.
 #' @export
-getEdges <- function(dag,
+get_edges <- function(dag,
                      selected_nodes = c("outcome",
                                         "treatment",
                                         "confounder",
@@ -56,7 +56,7 @@ getEdges <- function(dag,
   }
 
 
-  edges <- extract_node_roles(dag) # add ancestor and descendant nodes (calls a function from later in this file)
+  edges <- extract_unique_node_roles(dag) # add ancestor and descendant nodes (calls a function from later in this file)
 
 
   edges <- edges_longer(edges)
@@ -93,88 +93,81 @@ getEdges <- function(dag,
 }
 
 
-#' List of dag node names
+#' dagitty nodes grouped by role
 #'
 #' @param dag dagitty object
 #' @return Nested list of nodes and node relationships
 #' @export
-getFeatureMap <- function(dag){
+get_roles <- function(dag, multiple_roles = FALSE){
   .datatable.aware <- TRUE
 
-  edges <- extract_node_roles(dag)
+  if(multiple_roles == FALSE){
 
-  edges <- edges_longer(edges)
+    edges_wide <- extract_unique_node_roles(dag)
 
+  }else{
 
-  role_names <- c("outcome",
-                  "treatment",
-                  "confounder",
-                  "mediator",
-                  "mediator_outcome_confounder",
-                  "instrumental",
-                  "proxy",
-                  "competing_exposure",
-                  "collider",
-                  "latent",
-                  "observed")
+    edges_wide <- extract_node_roles(dag)
 
-
-  feature_map_new <- list()
-
-  feature_map_new <- lapply( seq_along(role_names), function(x){
-
-    feature_map_new <- unique( unlist(edges[role_ancestor == role_names[x], 1] ) )
-
-  } )
-
-
-  names(feature_map_new) <- role_names
-
-
-  outcomes <- unique( unlist( edges[ role_descendant == "outcome", 3 ] ) )
-  colliders <- unique( unlist( edges[ role_descendant == "collider", 3 ] ) )
-  observed <- unique( unlist( edges[ role_descendant == "observed", 3 ] ) )
-  latent <- unique( unlist( edges[ role_descendant == "latent", 3 ] ) )
-
-
-  missing_outcomes <- outcomes[! outcomes %in% feature_map_new ]
-  missing_colliders <- colliders[! colliders %in% feature_map_new ]
-  missing_observed <- observed[! observed %in% feature_map_new ]
-  missing_latent <- latent[! latent %in% feature_map_new ]
-
-
-  if( length( missing_outcomes ) > 0 ){
-
-    feature_map_new$outcome <- unique( c( feature_map_new$outcome, missing_outcomes ) )
   }
 
-  if( length( missing_colliders ) > 0 ){
+  node_roles <- c("outcome", "treatment", "confounder", "mediator", "mediator_outcome_confounder", "instrumental", "proxy", "competing_exposure", "collider", "latent", "observed")
+  num_roles <- length(node_roles)
 
-    feature_map_new$collider <- unique( c( feature_map_new$collider, missing_colliders ) )
-  }
+  ## ancestor node edges to list ##
+  ancestor_roles <- edges_wide[,1:14]
+  ancestor_roles <- na.omit( reshape(ancestor_roles, varying = list(4:14), idvar = "id",
+                                      v.names = "role", direction = "long")[,c("v", "e", "w", "role", "id")] )
+  ancestor_roles <- ancestor_roles[order(ancestor_roles$id), c(1,4)]
+  names(ancestor_roles)[1] <- "node"
 
-  if( length( missing_observed ) > 0 ){
+  ## group by nodes
+  unique_ancestors <- unique( ancestor_roles[,"node"] ) # vector of unique node names
+  num_unique_ancestors <- nrow(unique_ancestors) # count of unique node names
 
-    feature_map_new$observed <- unique( c( feature_map_new$observed, missing_observed ) )
-  }
+  ## descendant node edges to list ##
+  descendant_roles <- edges_wide[,c(1:3,15:25)]
+  descendant_roles <- na.omit( reshape(descendant_roles, varying = list(4:14), idvar = "id",
+                                        v.names = "role", direction = "long")[,c("v", "e", "w", "role", "id")] )
+  descendant_roles <- descendant_roles[order(descendant_roles$id), c(3,4)]
+  names(descendant_roles)[1] <- "node"
 
-  if( length( missing_latent ) > 0 ){
+  ## find missing edges
+  outcomes <- unique( descendant_roles[ descendant_roles$role == "outcome", ] )
+  colliders <- unique( descendant_roles[ descendant_roles$role == "collider", ] )
+  observed <- unique( descendant_roles[ descendant_roles$role == "observed", ] )
+  latent <- unique( descendant_roles[ descendant_roles$role == "latent", ] )
 
-    feature_map_new$latent <- unique( c( feature_map_new$latent, missing_latent ) )
-  }
+  missing_outcomes <- outcomes[! unlist(outcomes[,1]) %in% unlist(unique_ancestors), ]
+  missing_colliders <- colliders[! unlist(colliders[,1]) %in% unlist(unique_ancestors), ]
+  missing_observed <- observed[! unlist(observed[,1]) %in% unlist(unique_ancestors), ]
+  missing_latent <- latent[! unlist(latent[,1]) %in% unlist(unique_ancestors), ]
+
+  all_roles <- rbind(ancestor_roles, missing_outcomes, missing_colliders, missing_observed, missing_latent)
+
+  # edges grouped by each unique node in a list
+  roles_list <- c()
+
+  roles_list <- suppressWarnings( lapply(1:num_roles, function(x){
+
+    roles_list <-  unique(unlist( all_roles[
+      unlist(all_roles[,"role"]) %in% unlist(node_roles[x]) , ][, 1] ))
+
+  }) )
+
+  names(roles_list) <- node_roles # assign node roles as list element names
+
+  roles_list <- lapply(roles_list, function(x) if(identical(x, character(0))) NA else x)
 
 
-  feature_map_new <- lapply(feature_map_new, function(x) if(identical(x, character(0))) NA else x)
-
-
-  return(feature_map_new)
+  return(roles_list)
 
 }
 
 
 #' Assess dagitty object edges
 #'
-#' assessEdges() provides ways to assess connected edges based on causal criteria and/or user inputs.
+#' assess_edges() provides ways to assess connected edges based on causal criteria and/or user inputs.
 #'
 #' @importFrom data.table as.data.table is.data.table
 #' @importFrom dagitty edges
@@ -183,7 +176,7 @@ getFeatureMap <- function(dag){
 #' @param assess_causal_criteria Defaults to FALSE. If TRUE, the user is guided through a sequence that assesses each pair of connected nodes using causal criteria. Based on the Evidence Synthesis for Constructing Directed Acyclic Graphs (ESC-DAGs) from Ferguson et al. (2020).
 #' @returns A list or vector of edges.
 #' @export
-assessEdges <- function(dag, edges_to_keep = NA, assess_causal_criteria = FALSE){
+assess_edges <- function(dag, edges_to_keep = NA, assess_causal_criteria = FALSE){
   .datatable.aware <- TRUE
   #edges_to_keep <- initial_dag
   #dag <- saturated_graph
@@ -319,7 +312,7 @@ assessEdges <- function(dag, edges_to_keep = NA, assess_causal_criteria = FALSE)
 
 #' Remove dagitty object edges
 #'
-#' keepEdges() removes edges based on user inputs.
+#' keep_edges() removes edges based on user inputs.
 #'
 #' @importFrom data.table as.data.table is.data.table
 #' @importFrom dagitty edges exposures outcomes latents coordinates dagitty isAcyclic
@@ -327,7 +320,7 @@ assessEdges <- function(dag, edges_to_keep = NA, assess_causal_criteria = FALSE)
 #' @param edges_to_keep A vector of directed arrows to be kept between (non-treatment and non-outcome) variables, e.g. c("Z1 -> Z2", "Z2 -> Z3"), c("y", "n", "y"), or c(TRUE, FALSE, TRUE).
 #' @returns A dagitty object, with directed arrows removed based on edges_to_keep.
 #' @export
-keepEdges <- function(dag, edges_to_keep = NA){
+keep_edges <- function(dag, edges_to_keep = NA){
   .datatable.aware <- TRUE
 
   edges_all  <- as.data.table(dagitty::edges(dag))
@@ -385,9 +378,9 @@ keepEdges <- function(dag, edges_to_keep = NA){
 #' @param check_skip_sequence TRUE or FALSE depending on prior inputs
 #' @noRd
 ESC_DAGs_sequence <- function(edges, check_skip_sequence, edges_to_keep){
-  #edges <- edges_to_assess # used for debugging assessEdges()
-  #check_skip_sequence <- FALSE # used for debugging assessEdges()
-  #edges_to_keep <- NA # used for debugging assessEdges()
+  #edges <- edges_to_assess # used for debugging assess_edges()
+  #check_skip_sequence <- FALSE # used for debugging assess_edges()
+  #edges_to_keep <- NA # used for debugging assess_edges()
   if(check_skip_sequence == FALSE) {
 
     num_edges <- nrow(edges)

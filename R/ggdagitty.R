@@ -30,7 +30,7 @@ ggdagitty <- function(dag,
 
   if( any( is.na(dagitty::coordinates(dag)) ) ){
 
-    dag <- getCoords(dag, coords_spec = coords_spec)
+    dag <- add_coords(dag, coords_spec = coords_spec)
 
   }
 
@@ -72,7 +72,7 @@ ggdagitty <- function(dag,
     }else if(label_type == "initials"){
 
 
-      labels <- getLabels(dag)
+      labels <- get_labels(dag)
 
 
     }else{
@@ -158,7 +158,7 @@ ggdagitty <- function(dag,
 #' @param dag A dagittyy object.
 #' @return Labelled vector of node names from the dagitty object
 #' @export
-getLabels <- function(dag){
+get_labels <- function(dag){
 
   names <- as.data.frame(unique(suppressWarnings(ggdag::dag_label(dag)$data["name"])))
   names <- as.vector(names$name)
@@ -172,18 +172,17 @@ getLabels <- function(dag){
 #' Add coordinates to a dagitty object
 #'
 #' @importFrom magrittr %>%
-#' @importFrom ggdag time_ordered_coords
 #' @importFrom dplyr filter select
 #' @param dag Dagitty object, with at least a treatment and outcome set. Nodes are automatically placed in the following categories: treatment, outcome, confounder, mediator, latent variable, mediator-outcome-confounder, or instrumental variable.
 #' @param coords_spec Set of parameters for generating coordinates. Adjust node placement with lambda, a higher value increases volatility and results in more extreme DAG structures. Setting 'lambda_max' generates a DAG at each lambda value between lambda and lambda_max (only used if iterations is supplied). Iterations controls number of repeats for each lambda value (returns the first lambda value if NULL).
-#' @param confounders Vector of confounders in order of occurrence. If left blank, the order is inferred with dagitty::topologicalOrdering().
+#' @param confounders Vector of confounders in order of occurrence.
 #' @return dagitty object with coordinates.
 #' @export
-getCoords <- function(dag,
+add_coords <- function(dag,
                       coords_spec = c(lambda = 0, lambda_max = NA, iterations = NA),
                       confounders = NULL){
 
-  edges <- getFeatureMap(dag)
+  edges <- get_roles(dag)
 
   if( is.null(confounders) ){
 
@@ -496,7 +495,6 @@ check_existing_coordinates <-  function(dag, grouped_nodes, existing_coords, coo
 #' Creates coordinates for new nodes.
 #'
 #' @importFrom dagitty exposures outcomes coordinates latents
-#' @param dag dagitty object
 #' @importFrom magrittr %>%
 #' @param dag A dagitty object. Must include exposure and outcome nodes.
 #' @param reference_nodes Vector of existing node names, used as a reference for the new graph nodes, e.g., c("Z1", "Z2", "Z3").
@@ -510,15 +508,15 @@ check_existing_coordinates <-  function(dag, grouped_nodes, existing_coords, coo
 new_node_coordinates <- function(dag,
                                  existing_node_names,
                                  new_node_names,
-                                 existing_node_type,
-                                 num_repeats,
+                                 existing_node_type = NA,
+                                 num_repeats = NA,
                                  num_ref_nodes,
                                  temporal_reference_node,
                                  coordinates,
-                                 coords_spec){
+                                 coords_spec
+                                 ){
 
-
-  new_node_name_vec <- as.vector(unlist(new_node_names))
+  new_node_name_vec <- as.vector( unlist( new_node_names ) )
 
   num_nodes <- length(new_node_name_vec)
 
@@ -526,7 +524,7 @@ new_node_coordinates <- function(dag,
 
   lambda <- coords_spec[1]/(num_nodes + (num_vars))
 
-  if(is.na(num_repeats)){
+  if( all( !complete.cases(num_repeats) ) ){
 
     num_repeats <- 1
 
@@ -596,12 +594,11 @@ new_node_coordinates <- function(dag,
     })
 
 
-    temporal_reference_node_list <- lapply( 1:length(existing_node_names), function(x){
+    temporal_reference_node_list <- lapply( 1:length( existing_node_names ), function(x){
 
       temporal_reference_node_list <- temporal_reference_node[ temporal_reference_node %in% existing_node_children[[x]] ]
 
     })
-
 
     new_node_y_coords <- c()
 
@@ -709,6 +706,110 @@ new_node_coordinates <- function(dag,
 
 
 
+#' Add coordinates to nodes in a merged dagitty object
+#'
+#' @importFrom dagitty exposures outcomes coordinates latents
+#' @importFrom magrittr %>%
+#' @param dag A dagitty object. Must include exposure and outcome nodes.
+#' @param reference_nodes Vector of existing node names, used as a reference for the new graph nodes, e.g., c("Z1", "Z2", "Z3").
+#' @param new_node_names Inputted vector of node names to be added to the graph.
+#' @param existing_node_type A suffix added to each of the reference node names, e.g. "pre_treatment", or "t0".
+#' @param num_repeats Number of additional copies of nodes, such as time points. Each repeat number is included at the end of new node names (new_new_t1, new_node_t2, etc.).
+#' @param num_ref_nodes Number of reference nodes inputted.
+#' @param coordinates list of coordinates from a dagitty object.
+#' @return dagitty objecty with coordinates.
+#' @noRd
+add_merged_node_coordinates <- function(dag,
+                                 existing_node_names,
+                                 new_node_names,
+                                 temporal_reference_node,
+                                 nodes_ordered,
+                                 coordinates,
+                                 coords_spec = c(lambda = 1,
+                                                 lambda_max = NA,
+                                                 iterations = NA)
+                                 ){
+
+  ## extract existing node coordinates
+  existing_node_coordinates_y <- coordinates$y[ names(coordinates$y) %in% existing_node_names ] # y coordinates
+  existing_node_coordinates_x <- coordinates$x[ names(coordinates$x) %in% existing_node_names ] # x coordinates
+
+  new_node_name_vec <- as.vector( unlist( new_node_names ) ) # new node name vector
+  num_nodes <- length(new_node_name_vec) # number of new nodes
+  num_vars <- length(names(dag)) # total number of nodes (combined dag)
+
+  lambda <- coords_spec[1]/(num_nodes + (num_vars)) # calc lambda value (controls volatility of generated coordinates)
+
+  nodes_parents <- lapply(1:num_nodes, function(x){   # get new node name parents
+    nodes_parents <- dagitty::parents(dag, new_node_name_vec[x])
+  })
+
+  nodes_parents_in_existing_nodes <- lapply(1:num_nodes, function(x){ # get new node name parents in existing nodes (found in both dags prior to merge)
+    nodes_parents_in_existing_nodes <- existing_node_names[ existing_node_names %in% nodes_parents[[x]] ]
+  })
+
+
+  existing_node_children <- lapply( 1:length(new_node_names), function(x){  # get new node name children
+    existing_node_children <- dagitty::children(dag, new_node_names[x])
+  })
+
+  diff_tref_node_to_max <- abs( max( coordinates$y[ names(coordinates$y) # difference between temporal_reference_node and highest y coordinate
+                                                    %in% temporal_reference_node ])
+  ) + max(unlist(coordinates$y))
+
+  y_range_new_node_ratio <- diff_tref_node_to_max * (num_nodes/num_vars) # calculated difference multiplied by new nodes divided by total nodes
+
+  range_x_coordinates <- abs( min( coordinates$x ) ) +
+    max( unlist(coordinates$x) )
+
+
+  quality_check <- FALSE
+
+  iteration <- 0
+
+  while(quality_check == FALSE){
+
+    iteration <- iteration + ( num_nodes*lambda )/2
+
+
+    ## y coordinates ##
+    node_coordinates_y <- suppressWarnings( sapply(  1:num_nodes, function(x){
+
+      node_coordinates_y <-  max( coordinates$y[ names(coordinates$y) %in% temporal_reference_node ] ) + runif( n = 1,
+                                                                                                                min = ( y_range_new_node_ratio * ( x / num_vars ) ) + iteration,
+                                                                                                                max = ( y_range_new_node_ratio * ( x / num_vars ) ) + iteration + 1 )
+
+    } ) )
+
+    names(node_coordinates_y) <- new_node_names
+
+    ## x coordinates ##
+    node_coordinates_x <- sapply(1:num_nodes, function(x){ # generate x node coordinates
+
+      node_coordinates_x <- mean(
+
+        coordinates$x[ names(coordinates$x) %in% unlist(nodes_parents_in_existing_nodes) ]
+      ) + runif( n = 1,
+                 min = - ( range_x_coordinates * ( x / num_vars ) + iteration),
+                 max = ( range_x_coordinates * ( x / num_vars ) + iteration)
+      )
+    })
+
+    names(node_coordinates_x) <- new_node_names
+
+    new_coordinates <- list(x = node_coordinates_x, y = node_coordinates_y)
+
+    quality_check <- quality_check_coords(dag, new_node_names, num_nodes, new_coordinates, coordinates, threshold = 0.5)
+
+  }
+
+  coordinates <- list(x = c( na.omit(coordinates$x), new_coordinates$x), y = c( na.omit(coordinates$y), new_coordinates$y))
+
+  return(coordinates)
+
+}
+
+
 
 #' Checks node coordinates are not overlapping
 #'
@@ -718,7 +819,7 @@ new_node_coordinates <- function(dag,
 #' @param existing_coordinates vector of latent variable nodes.
 #' @return dagitty objecty with coordinates.
 #' @noRd
-quality_check_coords <- function(dag, grouped_nodes, num_nodes, new_coordinates, existing_coords){
+quality_check_coords <- function(dag, grouped_nodes, num_nodes, new_coordinates, existing_coords, threshold = 1){
   #existing_coords <- coordinates # used for debugging new_nodel_coordinates()
   #grouped_nodes <- new_node_names # used for debugging new_nodel_coordinates()
   #grouped_nodes <- latent_variables # used for debugging generate_latent_coordinates()
@@ -743,7 +844,7 @@ quality_check_coords <- function(dag, grouped_nodes, num_nodes, new_coordinates,
 
     }), na.rm=TRUE) / num_nodes
 
-    check_x_coords_within_new_nodes <- coords_x_sum_diff_within_new_nodes > 1
+    check_x_coords_within_new_nodes <- coords_x_sum_diff_within_new_nodes > threshold
 
 
     coords_y_sum_diff_within_new_nodes <- sum( sapply(1:num_nodes, function(a){
@@ -756,7 +857,7 @@ quality_check_coords <- function(dag, grouped_nodes, num_nodes, new_coordinates,
 
     }), na.rm=TRUE) / num_nodes
 
-    check_y_coords_within_new_nodes <- coords_y_sum_diff_within_new_nodes > 1
+    check_y_coords_within_new_nodes <- coords_y_sum_diff_within_new_nodes > threshold
 
     if( check_x_coords_within_new_nodes == FALSE | check_y_coords_within_new_nodes == FALSE ){
 
@@ -791,7 +892,7 @@ quality_check_coords <- function(dag, grouped_nodes, num_nodes, new_coordinates,
 
       , na.rm=TRUE )
 
-    check_new_x_coords_to_existing <- coords_x_min_diff_to_existing_nodes > 1
+    check_new_x_coords_to_existing <- coords_x_min_diff_to_existing_nodes > threshold
 
 
     coords_y_min_diff_to_existing_nodes <- min(
@@ -807,7 +908,7 @@ quality_check_coords <- function(dag, grouped_nodes, num_nodes, new_coordinates,
 
       , na.rm=TRUE )
 
-    check_new_y_coords_to_existing <- coords_y_min_diff_to_existing_nodes > 1
+    check_new_y_coords_to_existing <- coords_y_min_diff_to_existing_nodes > threshold
 
 
   }else{
@@ -826,7 +927,7 @@ quality_check_coords <- function(dag, grouped_nodes, num_nodes, new_coordinates,
 
       , na.rm=TRUE )
 
-    check_new_x_coords_to_existing <- coords_x_min_diff_to_existing_nodes > 1
+    check_new_x_coords_to_existing <- coords_x_min_diff_to_existing_nodes > threshold
 
 
     coords_y_min_diff_to_existing_nodes <- mean(
@@ -842,7 +943,7 @@ quality_check_coords <- function(dag, grouped_nodes, num_nodes, new_coordinates,
 
       , na.rm=TRUE )
 
-    check_new_y_coords_to_existing <- coords_y_min_diff_to_existing_nodes > 1
+    check_new_y_coords_to_existing <- coords_y_min_diff_to_existing_nodes > threshold
 
 
   }
@@ -1187,7 +1288,7 @@ add_labels <- function(dag, dag_df, labels){
                           function(x) if( dag_df$name[x] %in% attr(labels, "names")) attr(labels[ dag_df$name[x] ], "names") )
 
 
-  node_roles <- getFeatureMap(dag)
+  node_roles <- get_roles(dag)
 
   dag_df$role <- sapply( seq_along(dag_df$name), function(x){
 

@@ -117,13 +117,14 @@ extract_instrumental_variables <- function(dag, treatments, outcomes, latent_var
 
 #' Extract node roles
 #'
-#' extract_node_roles() is a helper function for getEdges().
+#' extract_node_roles() is a helper function for get_edges().
 #'
 #' @importFrom data.table as.data.table
+#' @importFrom dagitty edges exposures outcomes latents coordinates dagitty
 #' @param dag A dagitty object.
 #' @returns Data table of edges containing roles for each ancestor and descendant nodes.
 #' @noRd
-extract_node_roles <- function(dag){
+extract_unique_node_roles <- function(dag){
 
   edges_dagitty <- data.table::as.data.table(dagitty::edges(dag))[,1:3]
 
@@ -178,9 +179,11 @@ extract_node_roles <- function(dag){
   # proxy
 
   latent_children <- dagitty::children(dag, latent_vars)
+
   proxy_b <- suppressWarnings( treatment_parents[ treatment_parents %in% latent_children &
                                   !treatment_parents %in% latent_vars &
                                   !treatment_parents %in% treatments ] )# proxy_b
+
   proxy_c <- outcome_parents[ outcome_parents %in% latent_children & # proxy_c
                                 !outcome_parents %in% treatments &
                                 !outcome_parents %in% mediators &
@@ -190,8 +193,10 @@ extract_node_roles <- function(dag){
 
   # collider
   outcome_children <- dagitty::children(dag, outcomes)
+
   colliders <- outcome_children[ outcome_children %in% treatment_children &
-                                   !outcome_children %in% latent_vars ]
+                                   !outcome_children %in% latent_vars &
+                                   !outcome_children %in% outcomes ]
 
   # instrumental variables
   instrumental_vars <- extract_instrumental_variables(dag,
@@ -292,6 +297,178 @@ extract_node_roles <- function(dag){
 
 }
 
+#' Extract node roles
+#'
+#' extract_node_roles() is a helper function for get_edges().
+#'
+#' @importFrom data.table as.data.table
+#' @importFrom dagitty edges exposures outcomes latents coordinates dagitty
+#' @param dag A dagitty object.
+#' @returns Data table of edges containing roles for each ancestor and descendant nodes.
+#' @noRd
+extract_node_roles <- function(dag){
+
+  edges_dagitty <- data.table::as.data.table(dagitty::edges(dag))[,1:3]
+
+  edges <- edges_dagitty[, c("v", "e", "w")]
+
+  # treatment
+  treatments <- dagitty::exposures(dag)
+
+  # outcome
+  outcomes <- dagitty::outcomes(dag)
+
+  # latent variables
+  latent_vars <- dagitty::latents(dag)
+
+  # confounders
+  treatment_parents <- dagitty::parents(dag, treatments)
+  confounders <- treatment_parents[treatment_parents %in% dagitty::parents(dag, outcomes) &
+                                     !treatment_parents %in% treatments &
+                                     !treatment_parents %in% latent_vars]
+
+  # mediators - first parse (includes mediator-outcome confounders)
+  outcome_parents <- dagitty::parents(dag, outcomes)
+  treatment_children <- dagitty::children(dag, treatments)
+
+  nodes_trt_to_y <- nodes_between_treatment_and_outcome(dag, treatments, outcomes)
+
+  mediators <- outcome_parents[ ( outcome_parents %in% treatment_children | outcome_parents %in% nodes_trt_to_y ) &
+                                  !outcome_parents %in% treatments &
+                                  !outcome_parents %in% outcomes &
+                                  !outcome_parents %in% confounders ]
+
+  # mediator-outcome confounders
+  mediator_parents <- dagitty::parents(dag, mediators) # filter to include only parents of mediator variables
+  moc <- mediator_parents[mediator_parents %in% outcome_parents] # include only nodes connected to both mediators and outcome (M <- MOC -> Y)
+  moc <- moc[ !moc %in% c(treatments, confounders) & # remove treatment and confounder nodes
+                !moc %in% treatment_parents ] # double check by removing parents of treatment
+
+  # competing exposure
+  competing_exposure <- outcome_parents[ !outcome_parents %in% mediators &
+                                           !outcome_parents %in% treatments &
+                                           !outcome_parents %in% confounders &
+                                           !outcome_parents %in% outcomes ]
+
+  # proxy
+
+  latent_children <- dagitty::children(dag, latent_vars)
+
+  proxy_b <- suppressWarnings( treatment_parents[ treatment_parents %in% latent_children &
+                                                    !treatment_parents %in% latent_vars &
+                                                    !treatment_parents %in% treatments ] )# proxy_b
+
+  proxy_c <- outcome_parents[ outcome_parents %in% latent_children & # proxy_c
+                                !outcome_parents %in% treatments &
+                                !outcome_parents %in% mediators &
+                                !outcome_parents %in% latent_vars &
+                                !outcome_parents %in% outcomes ]
+  proxy <- c(proxy_b, proxy_c)
+
+  # collider
+  outcome_children <- dagitty::children(dag, outcomes)
+
+  colliders <- outcome_children[ outcome_children %in% treatment_children &
+                                   !outcome_children %in% outcomes ]
+
+  # instrumental variables
+  instrumental_vars <- extract_instrumental_variables(dag,
+                                                      treatments,
+                                                      outcomes,
+                                                      latent_vars,
+                                                      colliders,
+                                                      treatment_parents,
+                                                      treatment_children,
+                                                      mediator_parents,
+                                                      latent_children,
+                                                      outcome_children,
+                                                      outcome_parents)
+
+
+  instrumental_vars <- instrumental_vars[,1][instrumental_vars$role ==  "instrumental"]
+
+
+  # filter latent variables
+  latent_vars <- latent_vars[  !latent_vars %in% treatments &
+                                 !latent_vars %in% outcomes ]
+
+  # catch any remaining variables
+  all_vars <- names(dag)
+
+  observed <- all_vars[!all_vars %in% treatments &
+                         !all_vars %in% colliders &
+                         !all_vars %in% proxy &
+                         !all_vars %in% competing_exposure &
+                         !all_vars %in% mediators &
+                         !all_vars %in% moc &
+                         !all_vars %in% confounders &
+                         !all_vars %in% outcomes &
+                         !all_vars %in% instrumental_vars &
+                         !all_vars %in% latent_vars]
+
+
+  # assign roles for all v in edges
+  edges$ancestor_outcome[edges[, v] %in% outcomes]  <- "outcome"
+
+  edges$ancestor_treatment[edges[, v] %in% treatments]  <- "treatment"
+
+  edges$ancestor_confounder[edges[, v] %in% confounders]  <- "confounder"
+
+  edges$ancestor_moc[edges[, v] %in% moc]  <- "mediator_outcome_confounder"
+
+  edges$ancestor_mediator[ edges[, v] %in% mediators ]  <- "mediator"
+
+  edges$ancestor_iv[edges[, v] %in% instrumental_vars] <- "instrumental"
+
+  edges$ancestor_competing_exposure[edges[, v] %in% competing_exposure &
+                                      !edges[, v] %in% proxy_c ] <- "competing_exposure"
+
+  edges$ancestor_proxy[ ( edges[, v] %in% proxy_b &
+                            !edges[, v] %in% confounders ) | # "proxy_b"
+                          ( edges[, v] %in% proxy_c &
+                              !edges[, v] %in% confounders &
+                              !edges[, v] %in% mediators ) ] <- "proxy"
+
+  edges$ancestor_collider[edges[, v] %in% colliders] <- "collider"
+
+  edges$ancestor_latent[edges$v %in% latent_vars] <- "latent"
+
+  edges$ancestor_observed[edges$v %in% observed] <- "observed"
+
+
+  # assign roles for all v in edges
+  edges$descendant_outcome[edges[, w] %in% outcomes]  <- "outcome"
+
+  edges$descendant_treatment[edges[, w] %in% treatments]  <- "treatment"
+
+  edges$descendant_confounder[edges[, w] %in% confounders]  <- "confounder"
+
+  edges$descendant_moc[edges[, w] %in% moc ]  <- "mediator_outcome_confounder"
+
+  edges$descendant_mediator[edges[, w] %in% mediators]  <- "mediator"
+
+  edges$descendant_iv[edges[, w] %in% instrumental_vars] <- "instrumental"
+
+  edges$descendant_competing_exposure[edges[, w] %in% competing_exposure &
+                                        !edges[, w] %in% proxy_c ] <- "competing_exposure"
+
+  edges$descendant_proxy[ ( edges[, w] %in% proxy_b &
+                              !edges[, w] %in% confounders ) | # "proxy_b"
+                            ( edges[, w] %in% proxy_c &
+                                !edges[, w] %in% confounders &
+                                !edges[, w] %in% mediators ) ] <- "proxy"
+
+  edges$descendant_collider[edges[, w] %in% colliders] <- "collider"
+
+  edges$descendant_latent[edges$w %in% latent_vars] <- "latent"
+
+  edges$descendant_observed[edges$w %in% observed] <- "observed"
+
+  return(edges)
+
+}
+
+
 #' Edges to longer format
 #'
 #' @importFrom data.table as.data.table
@@ -316,7 +493,7 @@ edges_longer <- function(edges){
 
   if( nrow(edges_ancestors) != nrow(edges_descendants) ){ # finds missing latent edges
 
-    edges_descendants <- find_missing_edges(edges_ancestors, edges_descendants)
+    edges_ancestors <- find_missing_edges(edges_ancestors, edges_descendants)
 
   }
 
@@ -331,7 +508,7 @@ edges_longer <- function(edges){
 
 #' Find missing latent edges
 #'
-#' find_missing_edges() is a helper function for getEdges().
+#' find_missing_edges() is a helper function for get_edges().
 #'
 #' @importFrom data.table as.data.table
 #' @param dplyr anti_join semi_join
@@ -430,7 +607,7 @@ nodes_between_treatment_and_outcome <- function(dag, treatments, outcomes){
 #' @param new_node_type A suffix added to each of the new node names, e.g. "post_treatment", or "t" (a number is added for each repeat if num_repeats is specified)
 #' @param num_repeats Number of additional copies of nodes, such as time points. Each repeat number is included at the end of new node names (new_new_t1, new_node_t2, etc.).
 #' @returns A vector of new node names.
-#' @export
+#' @noRd
 create_new_node_names <- function(existing_nodes, new_node_type, num_repeats){
 
   seq_repeats <- seq(num_repeats)
