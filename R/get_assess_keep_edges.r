@@ -8,6 +8,9 @@
 #' @param selected_nodes Nodes to return edges. Defaults to NULL, or can be a character or vector combination of any of the following: c("treatment", "outcome", "confounder", "mediator", "latent", "mediator-outcome-confounder", "instrumental")
 #' @param output_structure Outputted data can be a "data.table", "data.frame", or "list".
 #' @returns A data frame, data table, or list of edges for the roles specified in selected_nodes.
+#' @examples
+#' edges <- get_edges(dag)
+#'
 #' @export
 get_edges <- function(dag,
                      selected_nodes = c("outcome",
@@ -95,8 +98,12 @@ get_edges <- function(dag,
 
 #' dagitty nodes grouped by role
 #'
-#' @param dag dagitty object
+#' @param dag A dagitty object.
+#' @param multiple_roles Defaults to FALSE (one role per node). If set to TRUE, multiple roles can be returned for some nodes (e.g. latent mediator variable).
 #' @return Nested list of nodes and node relationships
+#' @examples
+#' roles_list <- get_roles(dag)
+#'
 #' @export
 get_roles <- function(dag, multiple_roles = FALSE){
   .datatable.aware <- TRUE
@@ -175,6 +182,31 @@ get_roles <- function(dag, multiple_roles = FALSE){
 #' @param edges_to_keep A vector of directed arrows to be kept between (non-treatment and non-outcome) variables, e.g. c("Z1 -> Z2", "Z2 -> Z3"), c("y", "n", "y"), or c(TRUE, FALSE, TRUE).
 #' @param assess_causal_criteria Defaults to FALSE. If TRUE, the user is guided through a sequence that assesses each pair of connected nodes using causal criteria. Based on the Evidence Synthesis for Constructing Directed Acyclic Graphs (ESC-DAGs) from Ferguson et al. (2020).
 #' @returns A list or vector of edges.
+#' @examples
+#' ## initial dag
+#' {
+#'   variables <- c("Z1", "Z2", "Z3") # these are treated as confounders
+#'   treatments <- "X"
+#'   outcomes <- "Y"
+#'   type <- "ordered"
+#'
+#'   dag <- build_graph(type = type,
+#'                      variables = variables,
+#'                      treatments = treatments,
+#'                      outcomes = outcomes)
+#' }
+#'
+#' ## Using a saturated graph as an example, created from an existing dag
+#' saturated_graph <- build_graph(type = c('full', 'saturated'), # choose a type
+#'                                variables = dag) # existing dagitty object inputted
+#'
+#' ## Option 1: existing dag as edges to keep
+#' edges <- assess_edges(saturated_graph, edges_to_keep = dag)
+#'
+#' ## Option 2: guided causal criteria sequence (rule out edges already included in existing dag)
+#' edges_to_keep <- assess_edges(saturated_graph, edges_to_keep = dag,
+#'                               assess_causal_criteria = TRUE)
+#'
 #' @export
 assess_edges <- function(dag, edges_to_keep = NA, assess_causal_criteria = FALSE){
   .datatable.aware <- TRUE
@@ -319,6 +351,30 @@ assess_edges <- function(dag, edges_to_keep = NA, assess_causal_criteria = FALSE
 #' @param dag A saturated graph dagitty object. Exposure and outcome must be indicated, and optionally can include assigned coordinates.
 #' @param edges_to_keep A vector of directed arrows to be kept between (non-treatment and non-outcome) variables, e.g. c("Z1 -> Z2", "Z2 -> Z3"), c("y", "n", "y"), or c(TRUE, FALSE, TRUE).
 #' @returns A dagitty object, with directed arrows removed based on edges_to_keep.
+#' @examples
+#' ## initial dag
+#' {
+#'   variables <- c("Z1", "Z2", "Z3") # these are treated as confounders
+#'   treatments <- "X"
+#'   outcomes <- "Y"
+#'   type <- "ordered"
+#'
+#'   dag <- build_graph(type = type,
+#'                      variables = variables,
+#'                      treatments = treatments,
+#'                      outcomes = outcomes)
+#' }
+#'
+#' ## Using a saturated graph as an example, created from an existing dag
+#' saturated_graph <- build_graph(type = c('full', 'saturated'), # choose a type
+#'                                variables = dag) # existing dagitty object inputted
+#'
+#' ## guided causal criteria sequence (rule out edges already included in existing dag)
+#' edges_to_keep <- assess_edges(saturated_graph, edges_to_keep = dag,
+#'                               assess_causal_criteria = TRUE)
+#'
+#' dag <- keep_edges(saturated_graph, edges_to_keep)
+#'
 #' @export
 keep_edges <- function(dag, edges_to_keep = NA){
   .datatable.aware <- TRUE

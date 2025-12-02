@@ -3,7 +3,6 @@
 #'
 #' draw_edges() is a helper function for buildGraph()
 #'
-#' @importFrom magrittr %>%
 #' @importFrom dplyr bind_rows
 #' @param dag A dagitty object.
 #' @returns Data frame of edges.

@@ -5,8 +5,6 @@
 #'Generates a ggdag plot from a dagitty object, adding coordinates and node labels using initials (capital letters).
 #'Essentially a wrapper for dagitty and ggdag plotting functions with added features.
 #'
-#' @importFrom magrittr %>%
-#' @importFrom dplyr mutate case_when
 #' @importFrom dagitty coordinates
 #' @importFrom ggplot2 ggplot scale_shape_manual scale_size_manual scale_colour_manual labs guides guide_legend theme
 #' @importFrom ggdag geom_dag_edges geom_dag_text geom_dag_label_repel geom_dag_point theme_dag
@@ -17,7 +15,14 @@
 #' @param label_type Defaults to using the node names of the inputted dag, or 'initials' if specified. Labels are only assigned by ggdagitty() if nodes are not already labelled, using a 'ggdag::dag_label()' wrapper..
 #' @param label_placement Labels are placed in a text box adjacent each node by default, or can be placed inside each node using 'label_node'. It is recommended to also specify label_type = 'initials' where label_placement = 'label_node' is used.
 #' @return ggdag plot
-#' @importFrom magrittr %>%
+#' @examples
+#' ggdagitty(dag)
+#'
+#' g <- ggdagitty(dag, coords_spec = 3) # increasing spec for more variation in node placement
+#'
+#' dag <- add_coords(dag, coords_spec = 3) # can also directly update dagitty object node coordinates
+#' ggdagitty(dag)
+#'
 #' @export
 ggdagitty <- function(dag,
                       coords_spec = c( lambda = 0,
@@ -171,12 +176,14 @@ get_labels <- function(dag){
 
 #' Add coordinates to a dagitty object
 #'
-#' @importFrom magrittr %>%
-#' @importFrom dplyr filter select
 #' @param dag Dagitty object, with at least a treatment and outcome set. Nodes are automatically placed in the following categories: treatment, outcome, confounder, mediator, latent variable, mediator-outcome-confounder, or instrumental variable.
 #' @param coords_spec Set of parameters for generating coordinates. Adjust node placement with lambda, a higher value increases volatility and results in more extreme DAG structures. Setting 'lambda_max' generates a DAG at each lambda value between lambda and lambda_max (only used if iterations is supplied). Iterations controls number of repeats for each lambda value (returns the first lambda value if NULL).
 #' @param confounders Vector of confounders in order of occurrence.
 #' @return dagitty object with coordinates.
+#' @examples
+#' dag <- add_coords(dag, coords_spec = 3) # update dagitty object node coordinates
+#' ggdagitty(dag) # check coordinates
+#'
 #' @export
 add_coords <- function(dag,
                       coords_spec = c(lambda = 0, lambda_max = NA, iterations = NA),
@@ -495,7 +502,6 @@ check_existing_coordinates <-  function(dag, grouped_nodes, existing_coords, coo
 #' Creates coordinates for new nodes.
 #'
 #' @importFrom dagitty exposures outcomes coordinates latents
-#' @importFrom magrittr %>%
 #' @param dag A dagitty object. Must include exposure and outcome nodes.
 #' @param reference_nodes Vector of existing node names, used as a reference for the new graph nodes, e.g., c("Z1", "Z2", "Z3").
 #' @param new_node_names Inputted vector of node names to be added to the graph.
@@ -709,7 +715,6 @@ new_node_coordinates <- function(dag,
 #' Add coordinates to nodes in a merged dagitty object
 #'
 #' @importFrom dagitty exposures outcomes coordinates latents
-#' @importFrom magrittr %>%
 #' @param dag A dagitty object. Must include exposure and outcome nodes.
 #' @param reference_nodes Vector of existing node names, used as a reference for the new graph nodes, e.g., c("Z1", "Z2", "Z3").
 #' @param new_node_names Inputted vector of node names to be added to the graph.
@@ -1273,7 +1278,6 @@ tidy_ggdagitty <- function(dag, labels = NULL){
 #'The benefit of this function is that it automatically identifies exposure, outcome, confounder, observed and latent variables inputted from dagitty.net, whereas ggdag::tidy_dagitty only does this for ggdag::dagify objects.
 #'Output can be used with ggdag to create better looking DAGs from dagitty.net code.
 #'
-#' @importFrom magrittr %>%
 #' @param dag dagitty object
 #' @param dag_df a dag object converted to data frame using the ggdag::tidy_dagitty() function, or similar.
 #' @param labels vector of labels for nodes in dagify object

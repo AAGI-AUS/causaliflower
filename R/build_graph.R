@@ -2,11 +2,9 @@
 #'
 #' build_graph() produces a saturated graph by default from the supplied treatments, outcome, confounder, and  mediators (optional) based on the type of graph specified. Optional latent confounder or medfiator variables can be specified.
 #'
-#'
-#' @importFrom magrittr %>%
-#' @importFrom dplyr mutate case_when filter
-#' @importFrom dagitty dagitty is.dagitty
-#' @param type The type of graph generated. Defaults to 'full', producing a fully connected graph with confounders connected in both directions (bi-directional), and to mediators in one direction (uni-directional). If type ='saturated', a similar saturated graph is produced except confounders are not connected to mediators, featuring bi-directional arrows between each of the confounders (follows the ESC-DAGs Mapping Stage in Ferguson et al. (2020)). When type = 'ordered', the order of supplied confounders and mediators determines the order that each node occurs, therefore directed arrows are to be connected in one direction from confounders and mediators to other confounders and mediators, respectively. This builds a saturated DAG with temporal, uni-directional arrows, based on Tennnant et al. (2021).
+#' @importFrom dplyr bind_cols bind_rows
+#' @importFrom dagitty is.dagitty children coordinates
+#' @param type Type of graph generated. Defaults to 'full', producing a fully connected graph with confounders connected in both directions (bi-directional), and to mediators in one direction (uni-directional). If type ='saturated', a similar saturated graph is produced except confounders are not connected to mediators, featuring bi-directional arrows between each of the confounders (follows the ESC-DAGs Mapping Stage in Ferguson et al. (2020)). When type = 'ordered', the order of supplied confounders and mediators determines the order that each node occurs, therefore directed arrows are to be connected in one direction from confounders and mediators to other confounders and mediators, respectively. This builds a saturated DAG with temporal, uni-directional arrows, based on Tennnant et al. (2021).
 #' @param variables Dagitty object, or vector of variable names, e.g. "Z" or c("Z1", "Z2", "Z3"). If variable names are inputted the order determines the assigned coordinates. A list can also be supplied. Variables inputted are treated as confounders. If type = "ordered", confounders located in the same list will be assigned similar coordinates.
 #' @param treatments Treatment variable name, e.g. "X". Must be specified, unless included in the named vector 'variables'.
 #' @param outcomes Outcome variable name, e.g. "Y". Must be specified, unless included in the named vector 'variables'.
@@ -14,72 +12,51 @@
 #' @param latent_variables Character or vector of additional or already supplied latent (unobserved) variable names, e.g. "U" or c("U1", "U2", "M1").
 #' @param instrumental_variables Vector of instrumental variable names, e.g. "IV"
 #' @param mediator_outcome_confounders Vector of mediator-outcome confounder names, that instead of being common causes of treatment and outcome (X <- Z -> Y) are a common cause of mediators and outcome (M <- Z -> Y). A list can also be supplied.
+#' @param competing_exposures Vector of competing exposure names. An arrow is drawn connecting competing exposures to the outcome, with other arrows also connected depending on type of graph specified.
+#' @param colliders Vector of collider variables, with both treatment and outcome parents.
 #' @param coords_spec Set of parameters for generating coordinates. Adjust node placement with lambda, a higher value increases volatility and results in more extreme DAG structures. Setting 'lambda_max' generates a DAG at each lambda value between lambda and lambda_max (only used if iterations is supplied). Iterations controls number of repeats for each lambda value (returns the first lambda value if NA).
 #' @returns A dagitty object, fully connected (saturated) graph.
 #' @examples
-#'
-#'
-#' # There are three main ways to supply variables to build_graph().
-#'
-#' # Option 1: Inputting a named vector of variables inputted (can either include treatment and outcome or as separate inputs)
+#' ## initial variables (see above for full list of possible inputs)
 #' {
-#'   variables <- c(confounders = c("Z1", "Z2", "Z3"),
-#'                  treatments = "X",
-#'                  outcomes = "Y",
-#'                  mediators = "M",
-#'                  instrumental_variables = "IV")
-#' }
-#'
-#' # Three graph types can also be generated. First, we build an 'ordered' graph where the supplied vector order is used to determine the temporal order of confounder nodes.
-#'   type <- "ordered"
-#'
-#'   dag <- build_graph(type = type,
-#'                     variables = variables)
-#'
-#' # Plotting the graph using ggdagitty() assigns coordinates based on the variable roles (confounder, treatments, outcomes, mediator, etc.).
-#' ggdagitty(dag)
-#'
-#' #' # Option 2: The 'confounders' input can be used, while 'variables' is ignored.
-#' #           Separate inputs are required for treatments, outcomes, and other nodes.
-#' {
-#'   confounders <- c("Z1", "Z2", "Z3")
+#'   variables <- c("Z1", "Z2", "Z3") # these are treated as confounders
 #'   treatments <- "X"
 #'   outcomes <- "Y"
-#'   instrumental_variables <- "IV"
-#'   mediator = "M"
 #' }
+#' # Three types of graphs can be generated using build_graph()
 #'
-#' A "saturated" graph type bidirectionally connects each of the confounders, in addition to directed arrows to the outcomes and treatments nodes.
+#' ## Option 1: 'ordered' graph, where the supplied vector order is used to determine the temporal order of confounder nodes.
+#'
+#' type <- "ordered"
+#'
+#' dag <- build_graph(type = type,
+#'                   variables = variables,
+#'                   treatments = treatments,
+#'                   outcomes = outcomes)
+#'
+#' ggdagitty(dag) # Plot the graph with ggdagitty() (assigns coordinates based on the variable roles, e.g., confounders, treatments, outcomes).
+#'
+#'
+#' ## Option 2: 'saturated' graph connecting each of the confounders (inputted as variables)
+#'
 #' type <- "saturated"
 #'
 #' dag <- build_graph(type = type,
+#'                   variables = variables,
 #'                   treatments = treatments,
-#'                   outcomes = outcomes,
-#'                   confounders = confounders,
-#'                   mediators = mediators,
-#'                   instrumental_variable = instrumental_variable)
+#'                   outcomes = outcomes)
 #'
 #' ggdagitty(dag)
 #'
-#' # Option 3: The 'variables' input can be used to connect all variables to each other, treating them as confounders, besides treatments and outcomes and any other separate inputs.
-#' #           With this configuration, the actual 'confounders' input can be left blank. I decided to keep this as an option for users who may not have much 'exposure' to causal graphs.
-#' {
-#'   variables <- c("Z1", "Z2", "Z3")
-#'   treatments <- "X"
-#'   outcomes <- "Y"
-#'   instrumental_variables <- "IV"
-#'   mediator = "M"
-#' }
 #'
-#' # Using type = "full" generates a fully connected graph: all confounders are connected to each other, in both directions, and also to mediators, treatments and outcomes.
+#' ## Option 3: "full" creates a fully connected graph (bidirectional arrows between confounders, and from confounders to all other nodes except treatment and outcome.)
+#'
 #' type <- "full"
 #'
 #' dag <- build_graph(type = type,
 #'                   variables = variables,
 #'                   treatments = treatments,
-#'                   outcomes = outcomes,
-#'                   mediators = mediators,
-#'                   instrumental_variables = instrumental_variables)
+#'                   outcomes = outcomes)
 #'
 #' ggdagitty(dag)
 #'
@@ -264,6 +241,9 @@ build_graph <- function(type = c("full", "saturated", "ordered"),
 #' @param temporal_reference_node Supply an alternative reference, or simply leave blank. Default settings use treatment as the temporal point of reference for adding new (post-treatment) nodes, but if other node types are specified it can be useful to specify the existing node name.
 #' @param coords_spec Set of parameters for generating coordinates. Adjust node placement with lambda, a higher value increases volatility and results in more extreme DAG structures.
 #' @returns A dagitty object
+#' @examples
+#' merged_dag <- merge_graphs(dag, new_dag)
+#'
 #' @export
 merge_graphs <- function(dag,
                          new_dag,
@@ -363,7 +343,6 @@ merge_graphs <- function(dag,
 #'
 #' add_nodes() allows multiple nodes to be added to a dagitty object based on existing nodes or another dagitty object.
 #'
-#' @importFrom magrittr %>%
 #' @param dag A dagitty object. Must include exposure and outcome nodes.
 #' @param existing_nodes Vector of existing node names, used as a reference for the new graph nodes, e.g., c("Z1", "Z2", "Z3").
 #' @param existing_node_type A suffix added to each of the reference node names, e.g. "pre_treatment", or "t0".
@@ -372,6 +351,9 @@ merge_graphs <- function(dag,
 #' @param num_repeats Number of additional copies of nodes, such as time points. Each repeat number is included at the end of new node names (new_new_t1, new_node_t2, etc.).
 #' @param coords_spec Set of parameters for generating coordinates. Adjust node placement with lambda, a higher value increases volatility and results in more extreme DAG structures.
 #' @returns A dagitty object.
+#' @examples
+#' dag <- add_nodes(dag, existing_nodes)
+#'
 #' @export
 add_nodes <- function(dag,
                       existing_nodes,
@@ -431,12 +413,10 @@ add_nodes <- function(dag,
 }
 
 
-
 #' Add nodes to a dagitty object
 #'
 #' create_new_node_graph() is a helper function for add_nodes(). It adds new nodes to a dagitty object by referencing existing nodes.
 #'
-#' @importFrom magrittr %>%
 #' @param dag A dagitty object. Must include exposure and outcome nodes.
 #' @param existing_nodes Vector of existing node names, used as a reference for the new graph nodes, e.g., c("Z1", "Z2", "Z3").
 #' @param existing_node_type A suffix added to each of the reference node names, e.g. "pre_treatment", or "t0".
@@ -541,11 +521,11 @@ create_new_node_graph <- function(dag,
 
 }
 
+
 #' construct dag
 #'
 #' merge_dagitty() is a helper function for add_nodes() and merge_graph a daggity object using edges input.
 #'
-#' @importFrom magrittr %>%
 #' @importFrom data.table as.data.table is.data.table
 #' @importFrom dagitty dagitty
 #' @param edges A data frame of edges.
@@ -642,11 +622,11 @@ merge_dagitty <- function(dag,
 
 }
 
+
 #' Rebuild dag
 #'
 #' rebuild_dag() rebuilds a dag using a dagitty object and data frame of edges input.
 #'
-#' @importFrom magrittr %>%
 #' @importFrom data.table as.data.table is.data.table
 #' @importFrom dagitty edges exposures outcomes latents coordinates dagitty isAcyclic
 #' @param dag A dagitty object.
@@ -680,12 +660,10 @@ rebuild_dag <- function(dag, edges){
 }
 
 
-
 #' construct dag
 #'
 #' construct_graph() constructs a daggity object using edges input.
 #'
-#' @importFrom magrittr %>%
 #' @importFrom data.table as.data.table is.data.table
 #' @importFrom dagitty dagitty
 #' @param edges A data frame of edges.
@@ -734,99 +712,5 @@ construct_graph <- function(edges, node_names, treatments, outcomes, latent_vec)
 
   return(dag)
 
-}
-
-#' create causal dag with hidden nodes
-#'
-#' When used on a dag containing competing exposures, identified here as variables with only a causal path affecting outcome, causalify() adds a latent node affecting treatment and the competing exposure so that it is included in minimal sufficient ajustment sets when dagitty::adjustmentSets() is called.
-#'
-#' @importFrom data.table data.table fcase
-#' @param dag dagitty object
-#' @return Model object of either
-#' @noRd
-causalify <- function(dag){
-
-  edges <- get_edges(dag)
-
-  node_names <- unique(edges[c("ancestor", "role_ancestor")])
-
-  treatments <- node_names[,"ancestor"][node_names[, "role_ancestor"] %in% "treatment"]
-  outcomes <- dagitty::outcomes(dag)
-  latents <- dagitty::latents(dag)
-
-  proxy_var_name <- edges$ancestor[edges$role_ancestor == "competing_exposure"]
-
-  new_edges <- lapply( 1:length(proxy_var_name), function(x){
-
-    new_edges <- c(ancestor = as.character(paste("U",proxy_var_name[x],sep="_")),
-                                                  edge = as.character("->"),
-                                                  descendant = as.character(proxy_var_name[x]),
-                                                  role_ancestor = as.character("latent"),
-                                                  role_descendant =as.character("proxy_c"))
-
-  })
-
-
-  new_outcome_edges <- lapply( 1:length(proxy_var_name), function(x){
-    new_outcome_edges <- c(ancestor = as.character(paste("U",proxy_var_name[x],sep="_")),
-                           edge = as.character("->"),
-                           descendant = as.character(treatments),
-                           role_ancestor = as.character("latent"),
-                           role_descendant =as.character("treatment"))
-  })
-  edges <- dplyr::bind_rows(edges, new_edges, new_outcome_edges)
-
-
-  edges[,"role_ancestor"][edges[, "ancestor"] %in% proxy_var_name] <- "proxy"
-  edges[,"role_descendant"][edges[, "descendant"] %in% proxy_var_name] <- "proxy"
-
-  node_roles <- c("outcome", "treatment", "confounder", "mediator", "mediator_outcome_confounder", "instrumental", "proxy", "competing_exposure", "latent")
-  edges_list <- lapply( seq_along(1:9),
-                        function(x){
-
-                          edges_list <- edges %>% filter( role_ancestor == node_roles[x] )
-                          edges_list[,c(1:3)]
-
-                        } )
-
-
-  node_names <- unique(edges[c("ancestor", "role_ancestor")])
-  node_names <- node_names[,1]
-
-  exclude_names <-c(treatments, outcomes, latents)
-  node_names <- node_names[!node_names %in% exclude_names]
-
-  latents <- c(unlist(latents), as.vector(unique(edges[,"ancestor"][edges[, "role_ancestor"] %in% "latent"])))
-
-  coordinates <- dagitty::coordinates(dag)
-  node_name_and_coords_vec <- c()
-
-  if(length(latents) > 0) {
-    node_name_and_coords_vec <- c(paste(treatments, " [exposure] ", sep=""),
-                                  paste(outcomes, " [outcome] ", sep=""),
-                                  paste(latents, " [latent] ", sep=""),
-                                  paste(node_names, collapse=" "))
-  }else{
-    node_name_and_coords_vec <- c(paste(treatments, " [exposure] ", sep=""),
-                                  paste(outcomes, " [outcome] ", sep=""),
-                                  paste(node_names, collapse=" "))
-  }
-
-  edges_unlist <- dplyr::bind_rows(edges_list)
-
-  edges_unlist <- lapply(1:nrow(edges_unlist), function(x){
-    edges_unlist <- paste(edges_unlist[x,], collapse=" ")
-  })
-  edges_vec <- paste(unlist(edges_unlist), collapse=" ")
-
-  dag <- paste("dag {", paste(node_name_and_coords_vec, collapse=""), edges_vec, "}", sep = " ")
-
-  dag <- dagitty::dagitty(dag)
-
-  # sets coordinates for latent nodes
-  dag <- add_latent_coordinates(dag, latent_variables = latents)
-
-
-  return(dag)
 }
 

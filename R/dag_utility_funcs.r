@@ -5,9 +5,11 @@
 #' mediators() is a dagitty wrapper that identifies nodes along paths between treatment and outcome in a directed acyclic graph.
 #'
 #' @importFrom dagitty exposures outcomes parents
-#' @importFrom magrittr %>%
 #' @param dag A dagitty object.
 #' @returns A vector of mediators, or dataframe of edges.
+#' @examples
+#' mediators(dag)
+#'
 #' @export
 mediators <- function(dag, get_edges = FALSE){
 
@@ -39,9 +41,11 @@ mediators <- function(dag, get_edges = FALSE){
 #' confounders() is a dagitty wrapper that identifies common causes of treatment and outcome in a directed acyclic graph.
 #'
 #' @importFrom dagitty exposures outcomes parents
-#' @importFrom magrittr %>%
 #' @param dag A dagitty object.
 #' @returns  A vector of confounder names, or edges in a data table.
+#' @examples
+#' confounders(dag)
+#'
 #' @export
 confounders <- function(dag, get_edges = FALSE){
 
@@ -72,9 +76,11 @@ confounders <- function(dag, get_edges = FALSE){
 #' moc() is a dagitty wrapper that identifies nodes along paths between treatment and outcome in a directed acyclic graph.
 #'
 #' @importFrom dagitty exposures outcomes latents parents
-#' @importFrom magrittr %>%
 #' @param dag A dagitty object.
 #' @returns A vector of mediator-outcome confounder names, or edges in a data table.
+#' @examples
+#' mediator_outcome_confounders(dag)
+#'
 #' @export
 mediator_outcome_confounders <- function(dag, get_edges = FALSE){
 
@@ -114,6 +120,9 @@ mediator_outcome_confounders <- function(dag, get_edges = FALSE){
 #' @param dag A dagitty object.
 #' @param all_info Defaults to TRUE. Set all_info = FALSE to return only variable names.
 #' @returns A data table of variable names and their roles, or a vector of variable names.
+#' @examples
+#' variables(dag)
+#'
 #' @export
 variables <- function(dag, all_info = TRUE){
 
@@ -138,9 +147,11 @@ variables <- function(dag, all_info = TRUE){
 #' competing_exposure() is a dagitty wrapper that identifies nodes in a directed acyclic graph connected to outcome, other than indicated exposures.
 #'
 #' @importFrom dagitty edges exposures outcomes latents coordinates dagitty
-#' @importFrom magrittr %>%
 #' @param dag A dagitty object.
 #' @returns A vector of competing exposure names, or edges in a data table.
+#' @examples
+#' competing_exposures(dag)
+#'
 #' @export
 competing_exposures <- function(dag, get_edges = FALSE){
 
@@ -187,10 +198,12 @@ competing_exposures <- function(dag, get_edges = FALSE){
 #'
 #' proxies() is a dagitty wrapper that identifies nodes that are proxy variables for indicated unmeasured confounding (existing along a path between a latent variable and outcome) in a directed acyclic graph.
 #'
-#' @importFrom magrittr %>%
 #' @importFrom data.table as.data.table
 #' @param dag A dagitty object.
 #' @returns A vector of proxy variable names, or edges in a data table.
+#' @examples
+#' proxies(dag)
+#'
 #' @export
 proxies <- function(dag, get_edges = FALSE){
   .datatable.aware <- TRUE
@@ -255,9 +268,11 @@ proxies <- function(dag, get_edges = FALSE){
 #' colliders() is a dagitty wrapper that identifies nodes in a directed acyclic graph connected to outcome, other than indicated exposures.
 #'
 #' @importFrom dagitty exposures outcomes children
-#' @importFrom magrittr %>%
 #' @param dag A dagitty object.
 #' @returns A vector of competing exposure names, or edges in a data table.
+#' @examples
+#' colliders(dag)
+#'
 #' @export
 colliders <- function(dag, get_edges = FALSE){
 
@@ -288,9 +303,11 @@ colliders <- function(dag, get_edges = FALSE){
 #' getInstrumentalVariables() is a dagitty wrapper function capable of identifying  multiple instrumental variables in multi-treatment and multi-outcome settings.
 #'
 #' @importFrom dagitty exposures outcomes latents parents children
-#' @importFrom magrittr %>%
 #' @param dag A dagitty object.
 #' @returns Vector of instrumental variable names.
+#' @examples
+#' instrumental_variables(dag)
+#'
 #' @export
 instrumental_variables <- function(dag){
 
@@ -355,6 +372,13 @@ instrumental_variables <- function(dag){
 #' @param smallest Number of sets to return, defaults to the smallest five minimally sufficient adjustment sets.
 #' @param decreasing Defaults to FALSE (showing smallest). Optionally can be set to filter the largest minimally sufficient adjustment sets.
 #' @returns Named list of minimally sufficient adjustment sets.
+#' @examples
+#' minimal_sets(dag) # defaults to the total effect and 5 smallest sets
+#'
+#' minimal_sets(dag, effect = "direct") # direct effect
+#'
+#' minimal_sets(dag, effect = "direct", smallest = 1) # return only the smallest set (direct effect)
+#'
 #' @export
 minimal_sets <- function(dag, treatment = NULL, outcome = NULL, effect = "total", smallest = 5, decreasing = FALSE){
 
@@ -389,9 +413,11 @@ minimal_sets <- function(dag, treatment = NULL, outcome = NULL, effect = "total"
 #' markov_graph()
 #'
 #' @importFrom dagitty exposures outcomes latents parents children
-#' @importFrom magrittr %>%
 #' @param dag A dagitty object.
 #' @returns A dagitty object.
+#' @examples
+#' markov_dag <- markov_graph(dag) # still in development, may produce some unexpected results
+#'
 #' @export
 markov_graph <- function(dag){
 
@@ -485,6 +511,9 @@ markov_graph <- function(dag){
 #'
 #' @param dag dagitty object
 #' @return Nested list of nodes and node relationships
+#' @examples
+#' node_roles(dag)
+#'
 #' @export
 node_roles <- function(dag){
   .datatable.aware <- TRUE
@@ -569,6 +598,9 @@ node_roles <- function(dag){
 #'
 #' @param dag dagitty object
 #' @return Nested list of nodes and node relationships
+#' @examples
+#' node_structure(dag)
+#'
 #' @export
 node_structure <- function(dag){
   .datatable.aware <- TRUE
@@ -716,7 +748,6 @@ roles_longer <- function(dag){
 #' ancestor_edges() is a dagitty wrapper function that returns a list of node names and edges in a dagitty object.
 #'
 #' @importFrom dagitty edges
-#' @importFrom magrittr %>%
 #' @param dag A dagitty object.
 #' @returns Named list of edges.
 #' @noRd

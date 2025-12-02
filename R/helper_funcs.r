@@ -1,8 +1,9 @@
 
-#' Draw instrumental variable edges
+#' Get latent variable names from list
 #'
-#' draw_edges_instrumental_variables() is a helper function for buildGraph().
+#' get_latent_vec() is a helper function for buildGraph().
 #'
+#' @importFrom dplyr bind_cols
 #' @param instrumental_variables Inputted list or vector of instrumental variables.
 #' @returns A vector of latent variable names.
 #' @noRd
@@ -33,7 +34,6 @@ get_latent_vec <- function(latent_variables){
 
 #' extract_instrumental_variables() is a helper to instrumental_variables()
 #'
-#' @importFrom magrittr %>%
 #' @param dag A dagitty object.
 #' @returns Vector of instrumental variable names.
 #' @noRd
@@ -511,7 +511,7 @@ edges_longer <- function(edges){
 #' find_missing_edges() is a helper function for get_edges().
 #'
 #' @importFrom data.table as.data.table
-#' @param dplyr anti_join semi_join
+#' @param dplyr anti_join semi_join bind_rows
 #' @param edges_ancestors Data table of edges containing ancestor node roles.
 #' @param edges_descendants Data table of edges containing descendant node roles.
 #' @returns A data table containing ancestor edges.
@@ -526,10 +526,7 @@ find_missing_edges <- function(edges_ancestors, edges_descendants){
   common_ancestors <- dplyr::semi_join(edges_descendants, edges_ancestors, by = c("v" = "v"))
 
   combined_ancestors <- rbind(edges_ancestors[,1:3], common_ancestors[,1:3])
-  #combined_ancestors[! duplicated(combined_ancestors, fromLast=TRUE) &
-  #                     seq(nrow(combined_ancestors)) <= nrow(edges_ancestors), ]
 
-  #common_ancestors[,1:3][ common_ancestors[,1:3] %in% edges_ancestors[,1:3] ]
   missing_latent_edges <- dplyr::anti_join(edges_ancestors, common_ancestors, by = c("v", "e", "w"))
 
   dplyr::anti_join(edges_ancestors, edges_descendants, by = c("w" = "w"))
@@ -602,7 +599,6 @@ nodes_between_treatment_and_outcome <- function(dag, treatments, outcomes){
 #'
 #' create_new_node_names() is a helper function for addNodes(). It uses existing nodes to create new node names for specified repeats/time points.
 #'
-#' @importFrom magrittr %>%
 #' @param existing_nodes Vector of existing node names, used as a reference for the new graph nodes, e.g., c("Z1", "Z2", "Z3").
 #' @param new_node_type A suffix added to each of the new node names, e.g. "post_treatment", or "t" (a number is added for each repeat if num_repeats is specified)
 #' @param num_repeats Number of additional copies of nodes, such as time points. Each repeat number is included at the end of new node names (new_new_t1, new_node_t2, etc.).
