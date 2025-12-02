@@ -341,7 +341,8 @@ merge_graphs <- function(dag,
 #' Duplicate existing dagitty object nodes
 #'
 #' Create single or multiple copy nodes based on existing nodes, or another dagitty object.
-#'
+#' @importFrom data.table as.data.table is.data.table
+#' @importFrom dagitty edges
 #' @param dag A dagitty object. Must include exposure and outcome nodes.
 #' @param existing_nodes Vector of existing node names, used as a reference for the new graph nodes, e.g., c("Z1", "Z2", "Z3").
 #' @param existing_node_type A suffix added to each of the reference node names, e.g. "pre_treatment", or "t0".
@@ -362,7 +363,7 @@ copy_nodes <- function(dag,
                       num_repeats = NA,
                       coords_spec = 1
                      ){
-
+  .datatable.aware <- TRUE
   edges <- as.data.frame( dagitty::edges(dag) )[, c("v", "e", "w")] # get dag edges
   node_names <- names(dag) # extract dag node names
 
@@ -414,7 +415,8 @@ copy_nodes <- function(dag,
 #' Add nodes to a dagitty object
 #'
 #' Add nodes to a dagitty object, connecting edges based on the 'type' of graph selected, and generate new node coordinates using existing nodes.
-#'
+#' @importFrom data.table as.data.table is.data.table
+#' @importFrom dagitty edges
 #' @param dag A dagitty object. Must include exposure and outcome nodes.
 #' @param new_nodes A suffix added to each of the new node names, e.g. "post_treatment", or "t" (a number is added for each repeat if num_repeats is specified)
 #' @param node_role Role assigned to new nodes, from any of the following: c("confounder", "treatment", "outcome", "mediator", "mediator_outcome_confounder", "instrumental", "competing_exposure", "collider", "latent", "observed").
@@ -434,6 +436,7 @@ add_nodes <- function(dag,
                       node_role = c("confounder", "treatment", "outcome", "mediator", "mediator_outcome_confounder", "instrumental", "competing_exposure", "collider", "latent", "observed"),
                       type = c("full", "saturated", "first", "last"),
                       temporal_reference_node = NA,
+                      print_edges = TRUE,
                       coords_spec = 1
 ){
   .datatable.aware <- TRUE
@@ -442,376 +445,32 @@ add_nodes <- function(dag,
   edges <- as.data.frame( dagitty::edges(dag) )[, c("v", "e", "w")]
   names(edges) <- c("ancestor", "edge", "descendant") # change column names
 
-  ## get initial dag roles
-  dag_roles <- get_roles(dag)
-
-  outcomes  <- dag_roles$outcome
-  treatments <- dag_roles$treatment
-  confounder_vec <- dag_roles$confounder
-  m_o_confounder_vec <- dag_roles$mediator_outcome_confounder
-  mediator_vec <- dag_roles$mediator
-  instrumental_variables <- dag_roles$instrumental
-  competing_exposure_vec <- dag_roles$competing_exposure
-  latent_vec <- dag_roles$latent
-  collider_vec <- dag_roles$collider
-  observed <- dag_roles$observed
-
   dag_node_names <- names(dag) # extract dag node names
-
-  treatments <- dagitty::exposures(dag) # get treatments
-  outcomes <- dagitty::outcomes(dag) # get outcomes
-  latent_vec <- unlist(dagitty::latents(dag)) # get dag latent variables
 
   coordinates <- dagitty::coordinates(dag) # extract dag coordinates
 
-  nodes_ordered <- sort( unlist( dagitty::topologicalOrdering(dag) ) ) # ggdag estimated temporal order of new nodes
-
   new_node_names <- new_nodes[ !new_nodes %in% dag_node_names ] # remove duplicate node names
 
-  if( length( node_role) > 1 | length( node_role) == 0){
 
-    stop("add_nodes() currently only supports single node_role character inputs.")
-
-  }else if( node_role %in% "confounder" ){
-    confounder_occurrance <- as.numeric(order(match(new_nodes, new_nodes)))
-
-    ## confounder edges ##
-    new_edges <- draw_confounder_edges(type,
-                                           outcomes,
-                                           treatments,
-                                           confounder_vec = new_nodes, # new nodes as confounder
-                                           m_o_confounder_vec,
-                                           mediator_vec,
-                                           latent_vec,
-                                           confounder_occurrance)
-
-    # connect all confounders (fully connected or saturated graph type)
-    if( type == "full" | type == "saturated" ){
-
-      confounder_list <- list()
-
-      confounder_list <- suppressWarnings( lapply(1:length(new_nodes), function(x){
-
-        confounder_list[x] <- lapply(1:length(confounder_vec), function(y){
-
-          list( c( ancestor = new_nodes[x], edge = "->", descendant = confounder_vec[y]) )
-
-        })
-
-      }) )
-
-      confounder_list <- Filter(Negate(anyNA), unlist(unlist(confounder_list, recursive = FALSE), recursive = FALSE))
-      new_edges <- dplyr::bind_rows(new_edges, confounder_list)
-
-
-      confounder_list <- suppressWarnings( lapply(1:length(confounder_vec), function(x){
-
-        confounder_list[x] <- lapply(1:length(new_nodes), function(y){
-
-          list( c( ancestor = confounder_vec[x], edge = "->", descendant = new_nodes[y]) )
-
-        })
-
-      }) )
-
-      confounder_list <- Filter(Negate(anyNA), unlist(unlist(confounder_list, recursive = FALSE), recursive = FALSE))
-      new_edges <- dplyr::bind_rows(new_edges, confounder_list)
-
-
-    }else if( type == "first"){
-
-      first_var <- names(nodes_ordered)[ names(nodes_ordered) %in% confounder_vec ][1]
-
-      temporal_reference_node <- first_var
-
-      first_list <- list()
-
-      first_list <- suppressWarnings( lapply(1:length(new_nodes), function(x){
-
-        first_list[x] <- list( c( ancestor = new_nodes[x], edge = "->", descendant = first_var) )
-
-
-      }) )
-
-      first_list <- Filter(Negate(anyNA), unlist(unlist(first_list, recursive = FALSE), recursive = FALSE))
-
-      new_edges <- dplyr::bind_rows(new_edges, first_list)
-
-    }else if( type == "last" | type == "ordered"){
-
-      last_var <- names(nodes_ordered)[ names(nodes_ordered) %in% confounder_vec ][length(confounder_vec) ]
-
-      temporal_reference_node <- last_var
-
-      last_list <- list()
-
-      last_list <- suppressWarnings( lapply(1:length(new_nodes), function(x){
-
-        last_list[x] <- list( c( ancestor = last_var, edge = "->", descendant = new_nodes[x]) )
-
-      }) )
-
-      last_list <- Filter(Negate(anyNA), unlist(unlist(last_list, recursive = FALSE), recursive = FALSE))
-
-      new_edges <- dplyr::bind_rows(new_edges, last_list)
-
-    }
-
-    existing_node_names <- names( nodes_ordered[ names(nodes_ordered) %in% confounder_vec ] ) # existing node names in temporal order
-
-  }else if( node_role %in% "treatment" ){
-    ## treatment edges ##
-    new_edges <- draw_treatment_edges(type,
-                                         outcomes,
-                                         treatments = new_nodes, # new nodes as treatment
-                                         confounder_vec,
-                                         mediator_vec,
-                                         collider_vec)
-
-    # connect all treatments (fully connected or saturated graph type)
-    if( type == "full" ){
-
-      treatment_list <- list()
-
-      treatment_list <- suppressWarnings( lapply(1:length(treatments), function(x){
-
-        treatment_list[x] <- lapply(1:length(new_nodes), function(y){
-
-          list( c( ancestor = treatments[x], edge = "->", descendant = new_nodes[y]) )
-
-        })
-
-      }) )
-
-      treatment_list <- Filter(Negate(anyNA), unlist(unlist(treatment_list, recursive = FALSE), recursive = FALSE))
-      new_edges <- dplyr::bind_rows(new_edges, treatment_list)
-
-
-      treatment_list <- suppressWarnings( lapply(1:length(new_nodes), function(x){
-
-        treatment_list[x] <- lapply(1:length(treatments), function(y){
-
-          list( c( ancestor = new_nodes[x], edge = "->", descendant = treatments[y]) )
-
-        })
-
-      }) )
-
-      treatment_list <- Filter(Negate(anyNA), unlist(unlist(treatment_list, recursive = FALSE), recursive = FALSE))
-      new_edges <- dplyr::bind_rows(new_edges, treatment_list)
-
-    }else if( type == "first"){
-
-      first_var <- names(nodes_ordered)[ names(nodes_ordered) %in% treatments ][1]
-
-      temporal_reference_node <- first_var
-
-      first_list <- list()
-
-      first_list <- suppressWarnings( lapply(1:length(new_nodes), function(x){
-
-        first_list[x] <- list( c( ancestor = new_nodes[x], edge = "->", descendant = first_var) )
-
-
-      }) )
-
-      first_list <- Filter(Negate(anyNA), unlist(unlist(first_list, recursive = FALSE), recursive = FALSE))
-
-      new_edges <- dplyr::bind_rows(new_edges, first_list)
-
-    }else if( type == "last" | type == "ordered"){
-
-      last_var <- names(nodes_ordered)[ names(nodes_ordered) %in% treatments ][length(treatments) ]
-
-      temporal_reference_node <- last_var
-
-      last_list <- list()
-
-      last_list <- suppressWarnings( lapply(1:length(new_nodes), function(x){
-
-        last_list[x] <- list( c( ancestor = last_var, edge = "->", descendant = new_nodes[x]) )
-
-      }) )
-
-      last_list <- Filter(Negate(anyNA), unlist(unlist(last_list, recursive = FALSE), recursive = FALSE))
-
-      new_edges <- dplyr::bind_rows(new_edges, last_list)
-
-    }
-
-
-    treatments <- c(treatments, new_nodes)
-
-    existing_node_names <- names( nodes_ordered[ names(nodes_ordered) %in% treatments ] ) # existing node names in temporal order
-
-  }else if( node_role %in% "outcome" ){
-    ## outcome edges ##
-    new_edges <- draw_outcome_edges(type, outcomes = new_nodes, # new nodes as outcome
-                                    collider_vec)
-
-    outcomes  <- c(outcome, new_nodes)
-
-    existing_node_names <- names( nodes_ordered[ names(nodes_ordered) %in% outcomes ] ) # existing node names in temporal order
-
-  }else if( node_role %in% "mediator" ){
-    ## mediator edges ##
-    new_edges <- draw_mediator_edges(type,
-                                       outcomes,
-                                       mediator_vec = new_nodes, # new nodes as mediator
-                                       latent_vec)
-
-    if(type == "full"){
-
-      mediator_list <- list()
-
-      mediator_list <- suppressWarnings( lapply(1:length(new_nodes), function(x){
-
-        mediator_list[x] <- lapply(1:length(mediator_vec), function(y){
-
-          list( c( ancestor = new_nodes[x], edge = "->", descendant = mediator_vec[y]) )
-
-        })
-
-      }) )
-
-      mediator_list <- Filter( Negate(anyNA), unlist(unlist(mediator_list, recursive = FALSE), recursive = FALSE) )
-      new_edges <- dplyr::bind_rows(new_edges, mediator_list)
-
-      mediator_list <- suppressWarnings( lapply(1:length(new_nodes), function(x){
-
-        mediator_list[x] <- lapply(1:length(new_nodes), function(y){
-
-          list( c( ancestor = mediator_vec[x], edge = "->", descendant = new_nodes[y]) )
-
-        })
-
-      }) )
-
-      mediator_list <- Filter( Negate(anyNA), unlist(unlist(mediator_list, recursive = FALSE), recursive = FALSE) )
-      new_edges <- dplyr::bind_rows(new_edges, mediator_list)
-
-    }else if( type == "first"){
-
-      first_var <- names(nodes_ordered)[ names(nodes_ordered) %in% mediator_vec ][1]
-
-      temporal_reference_node <- first_var
-
-      first_list <- list()
-
-      first_list <- suppressWarnings( lapply(1:length(new_nodes), function(x){
-
-        first_list[x] <- list( c( ancestor = new_nodes[x], edge = "->", descendant = first_var) )
-
-
-      }) )
-
-      first_list <- Filter(Negate(anyNA), unlist(unlist(first_list, recursive = FALSE), recursive = FALSE))
-
-      new_edges <- dplyr::bind_rows(new_edges, first_list)
-
-    }else if( type == "last" | type == "ordered"){
-
-      last_var <- names(nodes_ordered)[ names(nodes_ordered) %in% mediator_vec ][length(mediator_vec) ]
-
-      temporal_reference_node <- last_var
-
-      last_list <- list()
-
-      last_list <- suppressWarnings( lapply(1:length(new_nodes), function(x){
-
-        last_list[x] <- list( c( ancestor = last_var, edge = "->", descendant = new_nodes[x]) )
-
-      }) )
-
-      last_list <- Filter(Negate(anyNA), unlist(unlist(last_list, recursive = FALSE), recursive = FALSE))
-
-      new_edges <- dplyr::bind_rows(new_edges, last_list)
-
-    }
-
-    existing_node_names <- names( nodes_ordered[ names(nodes_ordered) %in% mediator_vec ] ) # existing node names in temporal order
-
-  }else if( node_role %in% "mediator_outcome_confounder" ){
-    ## mediator_outcome_confounder edges ##
-    new_edges <- draw_moc_edges(type,
-                             outcomes,
-                             confounder_vec,
-                             m_o_confounder_vec = new_nodes, # new nodes as mediator_outcome_confounder
-                             mediator_vec,
-                             latent_vec)
-
-    existing_node_names <- names( nodes_ordered[ names(nodes_ordered) %in% m_o_confounder_vec ] ) # existing node names in temporal order
-
-  }else if( node_role %in% "instrumental" ){
-    ## instrumental_variables edges ##
-    new_edges <- draw_iv_edges(instrumental_variables = new_nodes, # new nodes as instrumental
-                               treatments)
-
-    existing_node_names <- names( nodes_ordered[ names(nodes_ordered) %in% instrumental_variables ] ) # existing node names in temporal order
-
-  }else if( node_role %in% "competing_exposure" ){
-    ## competing_exposure edges ##
-    new_edges <- draw_competing_exposure_edges(outcomes,
-                                               competing_exposure_vec = new_nodes) # new nodes as competing_exposure
-
-    existing_node_names <- names( nodes_ordered[ names(nodes_ordered) %in% competing_exposure_vec ] ) # existing node names in temporal order
-
-  }else if( node_role %in% "collider" ){
-    ## outcome edges ##
-    new_edges <- draw_outcome_edges(type,
-                                    outcomes,
-                                    collider_vec = new_nodes) # new nodes as collider
-
-    # connect colliders
-    treatment_list <- list()
-
-    treatment_list <- suppressWarnings( lapply(1:length(treatments), function(x){
-
-      treatment_list[x] <- lapply(1:length(new_nodes), function(y){
-
-        list( c( ancestor = treatments[x], edge = "->", descendant = new_nodes[y]) )
-
-      })
-
-    }) )
-
-    treatment_list <- Filter( Negate(anyNA), unlist(unlist(treatment_list, recursive = FALSE), recursive = FALSE) )
-    new_edges <- dplyr::bind_rows(new_edges, treatment_list)
-
-    existing_node_names <- names( nodes_ordered[ names(nodes_ordered) %in% outcomes ] ) # existing node names in temporal order
-
-  }else if( node_role %in% "latent" ){
-    ## latent_variables edges ##
-    new_edges <- draw_latent_edges(latent_variables = new_nodes) # new nodes as latent
-
-    existing_node_names <- names( nodes_ordered[ names(nodes_ordered) %in% latent_vec ] ) # existing node names in temporal order
-
-    latent_vec <- c(latent_vec, new_nodes)
-
-  }else if( node_role %in% "observed" ){
-    ## connect observed to ancestors and descendants ##
-    new_edges <- draw_observed_edges(observed = new_nodes, # new nodes as observed
-                                       existing_dag)
-
-    existing_node_names <- names( nodes_ordered[ names(nodes_ordered) %in% observed ] ) # existing node names in temporal order
-
-  }else{
-
-    stop("Invalid node_role input. Check documentation for valid currently support inputs and try again.")
-
-  }
-
-  new_edges <- new_edges[ complete.cases(new_edges), ]
+  ## call helper function to draw new node edges etc.
+  output_list <- add_nodes_helper(dag, new_nodes, node_role, type, temporal_reference_node)
+
+  temporal_reference_node <- output_list$temporal_reference_node
+  existing_node_names <- output_list$existing_node_names
+  new_edges <- output_list$new_edges
+  treatments <- output_list$treatments
+  outcomes <- output_list$outcomes
+  latent_vec <- output_list$latent_vec
 
   edges <- merge(edges, new_edges,
                  by = c("ancestor", "edge", "descendant"),
                  all = TRUE) # combine both dag edges
 
-  exclude_names <- c(treatments, outcomes, latent_vec)
+  exclude_names <- c(treatments, outcomes, latent_vec) # create excluded_names
 
-  node_names <- dag_node_names[ !dag_node_names %in% exclude_names ]
+  node_names <- dag_node_names[ !dag_node_names %in% exclude_names ] # remove excluded_names from existing node names
 
-  node_names <- c(node_names, new_node_names) # combine both dag node names
+  node_names <- c(node_names, new_node_names) # combine both existing and new node names
 
   node_name_and_coords_vec <- c()
 
@@ -884,8 +543,44 @@ add_nodes <- function(dag,
                                                  coordinates = coordinates,
                                                  coords_spec = coords_spec[ complete.cases(coords_spec) ] )
 
-
   dagitty::coordinates(dag) <- new_coordinates
+
+  if( print_edges == TRUE){
+
+
+    ## collapse new_edges to a vector and output grouped by nodes
+    unique_ancestors <- unique( new_edges[,"ancestor"] )
+    num_unique_ancestors <- nrow(unique_ancestors)
+
+
+    new_edges_list <- list()
+
+    # new_edges grouped by each unique node in a list
+    new_edges_list <- suppressWarnings( lapply(1:num_unique_ancestors, function(x){
+
+      new_edges[ unlist(new_edges[,"ancestor"]) %in% unlist(unique_ancestors)[x], ]
+
+
+    }) )
+
+    # nodes containing edges are collapsed, outputted in the console to allow easy assessing by copy and paste into .r file
+    new_edges_list <- lapply(1:num_unique_ancestors, function(x){
+
+      new_edges_list <- noquote(
+        paste0( paste0( "'", sapply(1:nrow(new_edges_list[[x]]), function(y){
+
+          new_edges_list[x] <- noquote( paste( new_edges_list[[x]][y,], collapse=" "  ) )
+
+        }), "'", collapse=", " ), sep = "") )
+
+    })
+
+    cat( paste("c(", paste( unlist(new_edges_list), collapse=",\n\n" ), ")", sep = "\n", collapse = "") )
+
+    message("\nPrinted new edges to assess. - copy and paste in a .R file to use as a vector object.\n")
+
+
+  }
 
 
   return(dag)

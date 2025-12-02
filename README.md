@@ -79,27 +79,30 @@ markov_dag <- markov_graph(dag) # simple algorithm, may produce some unexpected 
 
 ```R
 minimal_sets(dag, effect = "direct")
-minimal_sets(new_dag, effect = "direct")
-minimal_sets(markov_dag, effect = "direct")
 ```
 
 
 - display dagitty graphs using ggdag (causaliflower presets)
 
 ```R
-ggdagitty(dag)
 ggdagitty(new_dag)
-ggdagitty(markov_dag)
 ```
 
 
-- add nodes at different time-points using existing nodes in a dagitty object 
+- copy existing nodes to new nodes at different time-points
 
 ```R
-add_nodes(dag, existing_nodes)
+copy_nodes(dag, existing_nodes)
 ```
 
 
+- add nodes and connect to existing nodes (grouped by role, e.g., add confounder/treatment/outcome nodes)
+
+```R
+new_dag <- add_nodes(dag, new_nodes, node_role, type)
+
+ggdagitty(new_dag)
+```
 - functions for extracting edges and node roles in a dagitty object    
 
 ```R

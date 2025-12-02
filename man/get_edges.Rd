@@ -15,7 +15,7 @@ get_edges(
 \arguments{
 \item{dag}{A dagitty object.}
 
-\item{selected_nodes}{Nodes to return edges. Defaults to NULL, or can be a character or vector combination of any of the following: c("treatment", "outcome", "confounder", "mediator", "latent", "mediator-outcome-confounder", "instrumental")}
+\item{selected_nodes}{Nodes to return edges. Defaults to NULL, or can be a character or vector combination of any of the following: c("outcome", "treatment", "confounder", "mediator", "mediator_outcome_confounder", "instrumental", "proxy", "competing_exposure", "collider", "latent", "observed"))}
 
 \item{output_structure}{Outputted data can be a "data.table", "data.frame", or "list".}
 }
