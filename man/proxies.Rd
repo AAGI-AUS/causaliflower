@@ -15,3 +15,7 @@ A vector of proxy variable names, or edges in a data table.
 \description{
 proxies() is a dagitty wrapper that identifies nodes that are proxy variables for indicated unmeasured confounding (existing along a path between a latent variable and outcome) in a directed acyclic graph.
 }
+\examples{
+proxies(dag)
+
+}

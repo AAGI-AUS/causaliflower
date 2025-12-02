@@ -15,3 +15,7 @@ A vector of confounder names, or edges in a data table.
 \description{
 confounders() is a dagitty wrapper that identifies common causes of treatment and outcome in a directed acyclic graph.
 }
+\examples{
+confounders(dag)
+
+}

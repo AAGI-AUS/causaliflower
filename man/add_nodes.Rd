@@ -6,16 +6,21 @@
 \usage{
 add_nodes(
   dag,
-  existing_nodes,
-  existing_node_type = "pre_treatment",
-  new_node_type = "post_treatment",
+  new_nodes,
+  node_role = c("confounder", "treatment", "outcome", "mediator",
+    "mediator_outcome_confounder", "instrumental", "competing_exposure", "collider",
+    "latent", "observed"),
+  type = c("full", "saturated", "ordered"),
   temporal_reference_node = NA,
-  num_repeats = NA,
   coords_spec = 1
 )
 }
 \arguments{
 \item{dag}{A dagitty object. Must include exposure and outcome nodes.}
+
+\item{temporal_reference_node}{Supply an alternative reference, or simply leave blank. Default settings use treatment as the temporal point of reference for adding new (post-treatment) nodes, but if other node types are specified it can be useful to specify the existing node name.}
+
+\item{coords_spec}{Set of parameters for generating coordinates. Adjust node placement with lambda, a higher value increases volatility and results in more extreme DAG structures.}
 
 \item{existing_nodes}{Vector of existing node names, used as a reference for the new graph nodes, e.g., c("Z1", "Z2", "Z3").}
 
@@ -23,15 +28,15 @@ add_nodes(
 
 \item{new_node_type}{A suffix added to each of the new node names, e.g. "post_treatment", or "t" (a number is added for each repeat if num_repeats is specified)}
 
-\item{temporal_reference_node}{Supply an alternative reference, or simply leave blank. Default settings use treatment as the temporal point of reference for adding new (post-treatment) nodes, but if other node types are specified it can be useful to specify the existing node name.}
-
 \item{num_repeats}{Number of additional copies of nodes, such as time points. Each repeat number is included at the end of new node names (new_new_t1, new_node_t2, etc.).}
-
-\item{coords_spec}{Set of parameters for generating coordinates. Adjust node placement with lambda, a higher value increases volatility and results in more extreme DAG structures.}
 }
 \value{
 A dagitty object.
 }
 \description{
-add_nodes() allows multiple nodes to be added to a dagitty object based on existing nodes or another dagitty object.
+Add nodes to a dagitty object, connecting edges based on the 'type' of graph selected, and generate new node coordinates using existing nodes.
+}
+\examples{
+dag <- add_nodes(dag, new_nodes)
+
 }

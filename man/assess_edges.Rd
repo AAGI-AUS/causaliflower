@@ -19,3 +19,29 @@ A list or vector of edges.
 \description{
 assess_edges() provides ways to assess connected edges based on causal criteria and/or user inputs.
 }
+\examples{
+## initial dag
+{
+  variables <- c("Z1", "Z2", "Z3") # these are treated as confounders
+  treatments <- "X"
+  outcomes <- "Y"
+  type <- "ordered"
+
+  dag <- build_graph(type = type,
+                     variables = variables,
+                     treatments = treatments,
+                     outcomes = outcomes)
+}
+
+## Using a saturated graph as an example, created from an existing dag
+saturated_graph <- build_graph(type = c('full', 'saturated'), # choose a type
+                               variables = dag) # existing dagitty object inputted
+
+## Option 1: existing dag as edges to keep
+edges <- assess_edges(saturated_graph, edges_to_keep = dag)
+
+## Option 2: guided causal criteria sequence (rule out edges already included in existing dag)
+edges_to_keep <- assess_edges(saturated_graph, edges_to_keep = dag,
+                              assess_causal_criteria = TRUE)
+
+}

@@ -15,3 +15,7 @@ A vector of mediator-outcome confounder names, or edges in a data table.
 \description{
 moc() is a dagitty wrapper that identifies nodes along paths between treatment and outcome in a directed acyclic graph.
 }
+\examples{
+mediator_outcome_confounders(dag)
+
+}

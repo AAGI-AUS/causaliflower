@@ -23,3 +23,8 @@ dagitty object with coordinates.
 \description{
 Add coordinates to a dagitty object
 }
+\examples{
+dag <- add_coords(dag, coords_spec = 3) # update dagitty object node coordinates
+ggdagitty(dag) # check coordinates
+
+}

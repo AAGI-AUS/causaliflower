@@ -716,7 +716,7 @@ new_node_coordinates <- function(dag,
 #'
 #' @importFrom dagitty exposures outcomes coordinates latents
 #' @param dag A dagitty object. Must include exposure and outcome nodes.
-#' @param reference_nodes Vector of existing node names, used as a reference for the new graph nodes, e.g., c("Z1", "Z2", "Z3").
+#' @param existing_node_names Vector of existing node names, used as a reference for the new graph nodes, e.g., c("Z1", "Z2", "Z3").
 #' @param new_node_names Inputted vector of node names to be added to the graph.
 #' @param existing_node_type A suffix added to each of the reference node names, e.g. "pre_treatment", or "t0".
 #' @param num_repeats Number of additional copies of nodes, such as time points. Each repeat number is included at the end of new node names (new_new_t1, new_node_t2, etc.).
@@ -728,7 +728,6 @@ add_merged_node_coordinates <- function(dag,
                                  existing_node_names,
                                  new_node_names,
                                  temporal_reference_node,
-                                 nodes_ordered,
                                  coordinates,
                                  coords_spec = c(lambda = 1,
                                                  lambda_max = NA,
@@ -780,25 +779,46 @@ add_merged_node_coordinates <- function(dag,
     ## y coordinates ##
     node_coordinates_y <- suppressWarnings( sapply(  1:num_nodes, function(x){
 
-      node_coordinates_y <-  max( coordinates$y[ names(coordinates$y) %in% temporal_reference_node ] ) + runif( n = 1,
-                                                                                                                min = ( y_range_new_node_ratio * ( x / num_vars ) ) + iteration,
-                                                                                                                max = ( y_range_new_node_ratio * ( x / num_vars ) ) + iteration + 1 )
+      node_coordinates_y <-  max( coordinates$y[ names(coordinates$y) %in% temporal_reference_node ]
+                                  ) + runif( n = 1,
+                                             min = ( y_range_new_node_ratio * ( x / num_vars ) ) + iteration,
+                                             max = ( y_range_new_node_ratio * ( x / num_nodes ) ) + iteration + 1 )
 
     } ) )
 
     names(node_coordinates_y) <- new_node_names
 
     ## x coordinates ##
-    node_coordinates_x <- sapply(1:num_nodes, function(x){ # generate x node coordinates
 
-      node_coordinates_x <- mean(
+    if( length( unlist(nodes_parents_in_existing_nodes) ) > 0 ){
 
-        coordinates$x[ names(coordinates$x) %in% unlist(nodes_parents_in_existing_nodes) ]
-      ) + runif( n = 1,
-                 min = - ( range_x_coordinates * ( x / num_vars ) + iteration),
-                 max = ( range_x_coordinates * ( x / num_vars ) + iteration)
-      )
-    })
+      node_coordinates_x <- sapply(1:num_nodes, function(x){ # generate x node coordinates
+
+        node_coordinates_x <- mean(
+
+          coordinates$x[ names(coordinates$x) %in% unlist(nodes_parents_in_existing_nodes) ]
+        ) + runif( n = 1,
+                   min = - ( range_x_coordinates * ( x / num_nodes )*(lambda*10) + iteration),
+                   max = ( range_x_coordinates * ( x / num_nodes )*(lambda*10) + iteration + 1)
+        ) + 1
+      } )
+
+    }else{
+
+      node_coordinates_x <- sapply(1:num_nodes, function(x){ # generate x node coordinates
+
+        node_coordinates_x <- mean(
+
+          coordinates$x[ names(coordinates$x) %in% unlist(temporal_reference_node) ]
+        ) + runif( n = 1,
+                   min = - ( range_x_coordinates * ( x / num_nodes )*(lambda*10) + iteration),
+                   max = ( range_x_coordinates * ( x / num_nodes )*(lambda*10) + iteration + 1)
+        ) + 1
+      } )
+
+
+    }
+
 
     names(node_coordinates_x) <- new_node_names
 
@@ -825,8 +845,8 @@ add_merged_node_coordinates <- function(dag,
 #' @return dagitty objecty with coordinates.
 #' @noRd
 quality_check_coords <- function(dag, grouped_nodes, num_nodes, new_coordinates, existing_coords, threshold = 1){
-  #existing_coords <- coordinates # used for debugging new_nodel_coordinates()
-  #grouped_nodes <- new_node_names # used for debugging new_nodel_coordinates()
+  #existing_coords <- coordinates # used for debugging new_node_coordinates()
+  #grouped_nodes <- new_node_names # used for debugging new_node_coordinates()
   #grouped_nodes <- latent_variables # used for debugging generate_latent_coordinates()
   #num_nodes <- num_latents # used for debugging generate_latent_coordinates()
 

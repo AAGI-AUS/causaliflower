@@ -15,3 +15,7 @@ A vector of mediators, or dataframe of edges.
 \description{
 mediators() is a dagitty wrapper that identifies nodes along paths between treatment and outcome in a directed acyclic graph.
 }
+\examples{
+mediators(dag)
+
+}

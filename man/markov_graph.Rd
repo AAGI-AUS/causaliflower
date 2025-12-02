@@ -15,3 +15,7 @@ A dagitty object.
 \description{
 markov_graph()
 }
+\examples{
+markov_dag <- markov_graph(dag) # still in development, may produce some unexpected results
+
+}

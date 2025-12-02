@@ -30,3 +30,12 @@ ggdag plot
 Generates a ggdag plot from a dagitty object, adding coordinates and node labels using initials (capital letters).
 Essentially a wrapper for dagitty and ggdag plotting functions with added features.
 }
+\examples{
+ggdagitty(dag)
+
+g <- ggdagitty(dag, coords_spec = 3) # increasing spec for more variation in node placement
+
+dag <- add_coords(dag, coords_spec = 3) # can also directly update dagitty object node coordinates
+ggdagitty(dag)
+
+}

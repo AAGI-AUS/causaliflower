@@ -15,3 +15,7 @@ A vector of competing exposure names, or edges in a data table.
 \description{
 competing_exposure() is a dagitty wrapper that identifies nodes in a directed acyclic graph connected to outcome, other than indicated exposures.
 }
+\examples{
+competing_exposures(dag)
+
+}

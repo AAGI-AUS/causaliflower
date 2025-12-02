@@ -17,3 +17,7 @@ A data table of variable names and their roles, or a vector of variable names.
 \description{
 variables() returns a named vector of variables corresponding to nodes in a dag, providing an easy way to extract node roles e.g. "treatment", "outcome", "confounder", "mediator", "latent", "mediator-outcome-confounder", or "instrumental".
 }
+\examples{
+variables(dag)
+
+}

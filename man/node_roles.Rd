@@ -15,3 +15,7 @@ Nested list of nodes and node relationships
 \description{
 node_roles() is a dagitty wrapper that returns a list of node names and their roles.
 }
+\examples{
+node_roles(dag)
+
+}

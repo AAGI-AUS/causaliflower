@@ -7,11 +7,17 @@
 get_roles(dag, multiple_roles = FALSE)
 }
 \arguments{
-\item{dag}{dagitty object}
+\item{dag}{A dagitty object.}
+
+\item{multiple_roles}{Defaults to FALSE (one role per node). If set to TRUE, multiple roles can be returned for some nodes (e.g. latent mediator variable).}
 }
 \value{
 Nested list of nodes and node relationships
 }
 \description{
 dagitty nodes grouped by role
+}
+\examples{
+roles_list <- get_roles(dag)
+
 }

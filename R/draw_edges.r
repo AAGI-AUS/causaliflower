@@ -4,7 +4,20 @@
 #' draw_edges() is a helper function for buildGraph()
 #'
 #' @importFrom dplyr bind_rows
-#' @param dag A dagitty object.
+#' @param type Type of graph generated. Defaults to 'full' (fully connected graph) with arrows drawn between confounders (both directions) and from confounders to mediators. If type ='saturated', a similar saturated graph is produced except confounders are not connected to mediators, featuring bi-directional arrows between each of the confounders (follows the ESC-DAGs Mapping Stage in Ferguson et al. (2020)). When type = 'ordered', the order of supplied confounders and mediators determines the order that each node occurs, therefore directed arrows are to be connected in one direction from confounders and mediators to other confounders and mediators, respectively. This builds a saturated DAG with temporal, uni-directional arrows, based on Tennnant et al. (2021).
+#' @param outcomes Outcome variable name.
+#' @param treatments Treatment variable name.
+#' @param confounder_vec Vector of variable names, treated as confounders. A list can also be supplied. Order determines the assigned coordinates. If type = "ordered", confounders located in the same list will be assigned similar coordinates.
+#' @param m_o_confounder_vec Vector of mediator-outcome confounder names, that instead of being common causes of treatment and outcome (X <- Z -> Y) are a common cause of mediators and outcome (M <- Z -> Y). A list can also be supplied.
+#' @param mediator_vec Character or vector of mediator variable names.
+#' @param instrumental_variables Inputted instrumental variable names.
+#' @param competing_exposure_vec Vector of competing exposure names. An arrow is drawn connecting competing exposures to the outcome, with other arrows also connected depending on type of graph specified.
+#' @param latent_vec Vector of additional or already supplied latent (unobserved) variable names.
+#' @param latent_variables List or vector of additional or already supplied latent (unobserved) variable names.
+#' @param collider_vec Vector of collider variables, with both treatment and outcome parents.
+#' @param observed Vector of variables without roles, also not unobserved (latent).
+#' @param confounder_occurrance Ordered vector of confounders
+#' @param existing_dag An existing dagitty object may be supplied.
 #' @returns Data frame of edges.
 #' @noRd
 draw_edges <- function(type,
@@ -21,6 +34,83 @@ draw_edges <- function(type,
                        observed,
                        confounder_occurrance,
                        existing_dag = NA){
+
+  ## outcome edges ##
+  outcome_df <- draw_outcome_edges(type, outcomes, collider_vec)
+  ## treatment edges ##
+  treatment_df <- draw_treatment_edges(type,
+                                   outcomes,
+                                   treatments,
+                                   confounder_vec,
+                                   mediator_vec,
+                                   collider_vec)
+  ## confounder edges ##
+  confounder_df <- draw_confounder_edges(type,
+                                    outcomes,
+                                    treatments,
+                                    confounder_vec,
+                                    m_o_confounder_vec,
+                                    mediator_vec,
+                                    latent_vec,
+                                    confounder_occurrance)
+  ## mediator edges ##
+  mediator_df <- draw_mediator_edges(type,
+                                     outcomes,
+                                     mediator_vec,
+                                     latent_vec)
+
+  ## mediator_outcome_confounder edges ##
+  moc_df <- draw_moc_edges(type,
+                           outcomes,
+                           confounder_vec,
+                           m_o_confounder_vec,
+                           mediator_vec,
+                           latent_vec)
+
+  ## competing_exposure edges ##
+  competing_exposure_df <- draw_competing_exposure_edges(outcomes, competing_exposure_vec)
+
+  ## connect observed to ancestors and descendants ##
+  observed_df <- draw_observed_edges(observed, existing_dag)
+
+  ## instrumental_variables edges ##
+  instrumental_df <- draw_iv_edges(instrumental_variables, treatments)
+
+  ## latent_variables edges ##
+  latent_df <- draw_latent_edges(latent_variables)
+
+  ## row bind edges ##
+  edges_df <- rbind(treatment_df, outcome_df, confounder_df, moc_df, mediator_df, instrumental_df, latent_df, competing_exposure_df, observed_df)  # row bind all edge data frames
+
+  edges_df <- unique(edges_df) # remove duplicate edges
+
+  edges_df <- na.omit(edges_df) # remove NAs
+
+  edges_df <- edges_df[edges_df$ancestor != edges_df$descendant, ] # remove edges with identical ancestor and descendant node names
+
+
+  return(edges_df)
+
+}
+
+
+
+
+
+#' Draw outcome edges
+#'
+#' draw_outcome_edges() is a helper function for buildGraph()
+#'
+#' @importFrom dplyr bind_rows
+#' @param type Type of graph generated. Defaults to 'full' (fully connected graph) with arrows drawn between confounders (both directions) and from confounders to mediators. If type ='saturated', a similar saturated graph is produced except confounders are not connected to mediators, featuring bi-directional arrows between each of the confounders (follows the ESC-DAGs Mapping Stage in Ferguson et al. (2020)). When type = 'ordered', the order of supplied confounders and mediators determines the order that each node occurs, therefore directed arrows are to be connected in one direction from confounders and mediators to other confounders and mediators, respectively. This builds a saturated DAG with temporal, uni-directional arrows, based on Tennnant et al. (2021).
+#' @param outcomes Outcome variable name.
+#' @param collider_vec Vector of collider variables, with both treatment and outcome parents.
+#' @returns Data frame of edges.
+#' @noRd
+draw_outcome_edges <- function(type,
+                               outcomes,
+                               collider_vec
+                               ){
 
   ## outcome edges ##
   outcome_list <- c()
@@ -43,6 +133,32 @@ draw_edges <- function(type,
   }
   outcome_df <- dplyr::bind_rows(outcome_list)
 
+  return(outcome_df)
+
+}
+
+
+#' Draw treatment edges
+#'
+#' draw_treatment_edges() is a helper function for buildGraph()
+#'
+#' @importFrom dplyr bind_rows
+#' @param dag A dagitty object.
+#' @param type Type of graph generated. Defaults to 'full' (fully connected graph) with arrows drawn between confounders (both directions) and from confounders to mediators. If type ='saturated', a similar saturated graph is produced except confounders are not connected to mediators, featuring bi-directional arrows between each of the confounders (follows the ESC-DAGs Mapping Stage in Ferguson et al. (2020)). When type = 'ordered', the order of supplied confounders and mediators determines the order that each node occurs, therefore directed arrows are to be connected in one direction from confounders and mediators to other confounders and mediators, respectively. This builds a saturated DAG with temporal, uni-directional arrows, based on Tennnant et al. (2021).
+#' @param outcomes Outcome variable name.
+#' @param treatments Treatment variable name.
+#' @param confounder_vec Vector of variable names, treated as confounders. A list can also be supplied. Order determines the assigned coordinates. If type = "ordered", confounders located in the same list will be assigned similar coordinates.
+#' @param mediator_vec Character or vector of mediator variable names.
+#' @param collider_vec Vector of collider variables, with both treatment and outcome parents.
+#' @returns Data frame of edges.
+#' @noRd
+draw_treatment_edges <- function(type,
+                                 outcomes,
+                                 treatments,
+                                 confounder_vec,
+                                 mediator_vec,
+                                 collider_vec
+                                 ){
   ## treatment edges ##
   treatment_list <- c()
   # connect outcome
@@ -104,6 +220,34 @@ draw_edges <- function(type,
     treatment_df <- dplyr::bind_rows(treatment_df, treatment_list)
   }
 
+  return(treatment_df)
+}
+
+
+#' Draw confounder edges
+#'
+#' draw_confounder_edges() is a helper function for buildGraph()
+#'
+#' @importFrom dplyr bind_rows
+#' @param type Type of graph generated. Defaults to 'full' (fully connected graph) with arrows drawn between confounders (both directions) and from confounders to mediators. If type ='saturated', a similar saturated graph is produced except confounders are not connected to mediators, featuring bi-directional arrows between each of the confounders (follows the ESC-DAGs Mapping Stage in Ferguson et al. (2020)). When type = 'ordered', the order of supplied confounders and mediators determines the order that each node occurs, therefore directed arrows are to be connected in one direction from confounders and mediators to other confounders and mediators, respectively. This builds a saturated DAG with temporal, uni-directional arrows, based on Tennnant et al. (2021).
+#' @param outcomes Outcome variable name.
+#' @param treatments Treatment variable name.
+#' @param confounder_vec Vector of variable names, treated as confounders. A list can also be supplied. Order determines the assigned coordinates. If type = "ordered", confounders located in the same list will be assigned similar coordinates.
+#' @param m_o_confounder_vec Vector of mediator-outcome confounder names, that instead of being common causes of treatment and outcome (X <- Z -> Y) are a common cause of mediators and outcome (M <- Z -> Y). A list can also be supplied.
+#' @param mediator_vec Character or vector of mediator variable names.
+#' @param latent_vec Vector of additional or already supplied latent (unobserved) variable names.
+#' @param confounder_occurrance Ordered vector of confounders
+#' @returns Data frame of edges.
+#' @noRd
+draw_confounder_edges <- function(type,
+                                  outcomes,
+                                  treatments,
+                                  confounder_vec,
+                                  m_o_confounder_vec,
+                                  mediator_vec,
+                                  latent_vec,
+                                  confounder_occurrance
+                                  ){
   ## confounder edges ##
   confounder_list <- c()
 
@@ -152,7 +296,7 @@ draw_edges <- function(type,
     confounder_list <- Filter(Negate(anyNA), unlist(unlist(confounder_list, recursive = FALSE), recursive = FALSE))
     confounder_df <- dplyr::bind_rows(confounder_df, confounder_list)
 
-    # connect confounders to mediators, and confounders to mediator-outcome confoundres if the inputted dag type is "full"
+    # connect confounders to mediators, confounders to mediator-outcome confounders, and confounders to latents if the inputted dag type is "full"
     if( type == "full" ){
 
       confounder_list <- suppressWarnings( lapply(1:length(confounder_vec), function(x){
@@ -183,6 +327,20 @@ draw_edges <- function(type,
       confounder_list <- Filter(Negate(anyNA), unlist(unlist(confounder_list, recursive = FALSE), recursive = FALSE))
       confounder_df <- dplyr::bind_rows(confounder_df, confounder_list)
 
+      # connect latent variables
+      confounder_list <- suppressWarnings( lapply(1:length(confounder_vec), function(x){
+
+        confounder_list[x] <- lapply(1:length(latent_vec), function(y){
+
+          list( c( ancestor = confounder_vec[x], edge = "->", descendant = latent_vec[y]) )
+
+        })
+
+      }) )
+
+      confounder_list <- Filter( Negate(anyNA), unlist(unlist(confounder_list, recursive = FALSE), recursive = FALSE) )
+      confounder_df <- dplyr::bind_rows(confounder_df, confounder_list)
+
     }
 
   }else if( type == "ordered" ){
@@ -205,6 +363,26 @@ draw_edges <- function(type,
 
   confounder_df <- unique(confounder_df) # remove duplicate edges
   confounder_df <- confounder_df[confounder_df$ancestor != confounder_df$descendant, ] # remove edges with identical ancestor and descendant node names
+
+  return(confounder_df)
+}
+
+#' Draw mediator edges
+#'
+#' draw_mediator_edges() is a helper function for buildGraph()
+#'
+#' @importFrom dplyr bind_rows
+#' @param type Type of graph generated. Defaults to 'full' (fully connected graph) with arrows drawn between confounders (both directions) and from confounders to mediators. If type ='saturated', a similar saturated graph is produced except confounders are not connected to mediators, featuring bi-directional arrows between each of the confounders (follows the ESC-DAGs Mapping Stage in Ferguson et al. (2020)). When type = 'ordered', the order of supplied confounders and mediators determines the order that each node occurs, therefore directed arrows are to be connected in one direction from confounders and mediators to other confounders and mediators, respectively. This builds a saturated DAG with temporal, uni-directional arrows, based on Tennnant et al. (2021).
+#' @param outcomes Outcome variable name.
+#' @param mediator_vec Character or vector of mediator variable names.
+#' @param latent_vec Vector of additional or already supplied latent (unobserved) variable names.
+#' @returns Data frame of edges.
+#' @noRd
+draw_mediator_edges <- function(type,
+                                outcomes,
+                                mediator_vec,
+                                latent_vec
+                                ){
 
   if( all( complete.cases(mediator_vec) ) ){
     ## mediator edges ##
@@ -261,6 +439,28 @@ draw_edges <- function(type,
 
   }
 
+  return(mediator_df)
+}
+
+#' Draw mediator-outcome confounder edges
+#'
+#' draw_moc_edges() is a helper function for buildGraph()
+#'
+#' @importFrom dplyr bind_rows
+#' @param type Type of graph generated. Defaults to 'full' (fully connected graph) with arrows drawn between confounders (both directions) and from confounders to mediators. If type ='saturated', a similar saturated graph is produced except confounders are not connected to mediators, featuring bi-directional arrows between each of the confounders (follows the ESC-DAGs Mapping Stage in Ferguson et al. (2020)). When type = 'ordered', the order of supplied confounders and mediators determines the order that each node occurs, therefore directed arrows are to be connected in one direction from confounders and mediators to other confounders and mediators, respectively. This builds a saturated DAG with temporal, uni-directional arrows, based on Tennnant et al. (2021).
+#' @param outcomes Outcome variable name.
+#' @param m_o_confounder_vec Vector of mediator-outcome confounder names, that instead of being common causes of treatment and outcome (X <- Z -> Y) are a common cause of mediators and outcome (M <- Z -> Y). A list can also be supplied.
+#' @param mediator_vec Character or vector of mediator variable names.
+#' @param latent_vec Vector of additional or already supplied latent (unobserved) variable names.
+#' @returns Data frame of edges.
+#' @noRd
+draw_moc_edges <- function(type,
+                           outcomes,
+                           confounder_vec,
+                           m_o_confounder_vec,
+                           mediator_vec,
+                           latent_vec
+                           ){
 
   if( all( complete.cases(m_o_confounder_vec) ) ){
 
@@ -333,6 +533,22 @@ draw_edges <- function(type,
 
   }
 
+  return(moc_df)
+}
+
+
+#' Draw graph edges
+#'
+#' draw_edges() is a helper function for buildGraph()
+#'
+#' @importFrom dplyr bind_rows
+#' @param outcomes Outcome variable name.
+#' @param competing_exposure_vec Vector of competing exposure names. An arrow is drawn connecting competing exposures to the outcome, with other arrows also connected depending on type of graph specified.
+#' @returns Data frame of edges.
+#' @noRd
+draw_competing_exposure_edges <- function(outcomes,
+                                          competing_exposure_vec
+                                          ){
 
   if( all( complete.cases(competing_exposure_vec) ) ){
 
@@ -358,6 +574,22 @@ draw_edges <- function(type,
     competing_exposure_df <- data.frame(NULL)
 
   }
+
+  return(competing_exposure_df)
+}
+
+
+#' Draw graph edges
+#'
+#' draw_edges() is a helper function for buildGraph()
+#'
+#' @importFrom dplyr bind_rows
+#' @param observed Vector of variables without roles, also not unobserved (latent).
+#' @param existing_dag An existing dagitty object may be supplied.
+#' @returns Data frame of edges.
+#' @noRd
+draw_observed_edges <- function(observed,
+                       existing_dag = NA){
 
   if( all( complete.cases(observed) ) ) {
 
@@ -403,27 +635,7 @@ draw_edges <- function(type,
 
   }
 
-
-  ## instrumental_variables edges ##
-  instrumental_df <- draw_iv_edges(instrumental_variables, treatments)
-
-
-  ## latent_variables edges ##
-  latent_df <- draw_latent_edges(latent_variables)
-
-
-
-  edges_df <- rbind(treatment_df, outcome_df, confounder_df, moc_df, mediator_df, instrumental_df, latent_df, competing_exposure_df, observed_df)  # row bind all edge data frames
-
-  edges_df <- unique(edges_df) # remove duplicate edges
-
-  edges_df <- na.omit(edges_df) # remove NAs
-
-  edges_df <- edges_df[edges_df$ancestor != edges_df$descendant, ] # remove edges with identical ancestor and descendant node names
-
-
-  return(edges_df)
-
+  return(observed_df)
 }
 
 

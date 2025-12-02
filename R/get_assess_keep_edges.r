@@ -5,7 +5,7 @@
 #'
 #' @importFrom data.table as.data.table
 #' @param dag A dagitty object.
-#' @param selected_nodes Nodes to return edges. Defaults to NULL, or can be a character or vector combination of any of the following: c("treatment", "outcome", "confounder", "mediator", "latent", "mediator-outcome-confounder", "instrumental")
+#' @param selected_nodes Nodes to return edges. Defaults to NULL, or can be a character or vector combination of any of the following: c("outcome", "treatment", "confounder", "mediator", "mediator_outcome_confounder", "instrumental", "proxy", "competing_exposure", "collider", "latent", "observed"))
 #' @param output_structure Outputted data can be a "data.table", "data.frame", or "list".
 #' @returns A data frame, data table, or list of edges for the roles specified in selected_nodes.
 #' @examples
@@ -18,9 +18,12 @@ get_edges <- function(dag,
                                         "confounder",
                                         "mediator",
                                         "mediator_outcome_confounder",
-                                        "instrumental", "proxy",
-                                        "competing_exposure", "collider",
-                                        "latent", "observed"),
+                                        "instrumental",
+                                        "proxy",
+                                        "competing_exposure",
+                                        "collider",
+                                        "latent",
+                                        "observed"),
                      output_structure = "data.table"){
   .datatable.aware <- TRUE
 

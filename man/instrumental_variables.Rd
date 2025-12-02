@@ -15,3 +15,7 @@ Vector of instrumental variable names.
 \description{
 getInstrumentalVariables() is a dagitty wrapper function capable of identifying  multiple instrumental variables in multi-treatment and multi-outcome settings.
 }
+\examples{
+instrumental_variables(dag)
+
+}

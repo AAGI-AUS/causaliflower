@@ -32,3 +32,11 @@ Named list of minimally sufficient adjustment sets.
 \description{
 minimal_sets() is a dagitty::adjustmentSets() wrapper for obtaining minimal adjustment sets, returning the smallest 5 (if available) by default.
 }
+\examples{
+minimal_sets(dag) # defaults to the total effect and 5 smallest sets
+
+minimal_sets(dag, effect = "direct") # direct effect
+
+minimal_sets(dag, effect = "direct", smallest = 1) # return only the smallest set (direct effect)
+
+}

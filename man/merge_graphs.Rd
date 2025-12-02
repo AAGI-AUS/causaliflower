@@ -21,3 +21,7 @@ A dagitty object
 \description{
 merge_graphs() adds new nodes to the first from the second supplied dagitty object, before generating new coordinates for the merged graph.
 }
+\examples{
+merged_dag <- merge_graphs(dag, new_dag)
+
+}

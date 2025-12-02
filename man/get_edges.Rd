@@ -25,3 +25,7 @@ A data frame, data table, or list of edges for the roles specified in selected_n
 \description{
 get_edges() filters a dagitty object and returns a data frame with edges for specified node roles.
 }
+\examples{
+edges <- get_edges(dag)
+
+}

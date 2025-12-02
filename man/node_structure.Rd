@@ -15,3 +15,7 @@ Nested list of nodes and node relationships
 \description{
 node_structure() is a dagitty wrapper function that returns a list of node names extrated from a dagitty object, including the name and role of their ancestor and descendant nodes.
 }
+\examples{
+node_structure(dag)
+
+}
