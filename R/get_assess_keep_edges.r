@@ -221,7 +221,7 @@ assess_edges <- function(dag, edges_to_keep = NA, assess_causal_criteria = FALSE
    #print(edges_to_assess, quote=FALSE)
    #cat("\nAssess the posited causal relationships? (ESC-DAGs causal criteria and counterfactual thought experiment sequence)", "\n")
 
-    edges_to_keep <- ESC_DAGs_sequence(edges_to_assess, check_skip_sequence, edges_to_keep)
+    edges_to_keep <- causal_criteria_sequence(edges_to_assess, check_skip_sequence, edges_to_keep)
 
     return(edges_to_keep)
 
@@ -372,12 +372,12 @@ keep_edges <- function(dag, edges_to_keep = NA){
 }
 
 
-#' ESC-DAGs causal criteria for removinng edges
+#' Assess edges using causal criteria (ESC-DAGs Protocol)
 #' @param edges vector of edges whose relationships are to be assessed
 #' @param num_edges number of edges to be assessed
 #' @param check_skip_sequence TRUE or FALSE depending on prior inputs
 #' @noRd
-ESC_DAGs_sequence <- function(edges, check_skip_sequence, edges_to_keep){
+causal_criteria_sequence <- function(edges, check_skip_sequence, edges_to_keep){
   #edges <- edges_to_assess # used for debugging assess_edges()
   #check_skip_sequence <- FALSE # used for debugging assess_edges()
   #edges_to_keep <- NA # used for debugging assess_edges()

@@ -4,15 +4,16 @@ The causaliflower package provides simple ways of working with causal graphs in 
 
 It makes use of existing functions for analysing and visualising directed acylic graphs (DAGs), including 'dagitty' and 'ggdag'. 
 
->What do you get when you can't think of a name for a causality + farming related R package? 
-
-Causality + cauliflower = 'causaliflower' (working title - please help!)
-
 
 ## Overview
+
+###  What is causaliflower?
+
+>Causality + cauliflower = 'causaliflower' (working title!)
+
 The central focus of causaliflower is to provide open-source software for building causal graphs and analysing their structures in a cohesive workflow.
 
-The code below gives some idea of what this looks like, however an introductory vignette will be provided on release including an in-depth example.
+The code below gives an idea, however an introductory vignette provided on release will include more in-depth examples.
 
 
 ### In This Version of causaliflower
@@ -23,7 +24,8 @@ The code below gives some idea of what this looks like, however an introductory 
 ```R
 
 dag <- build_graph(type = 'ordered', variables, treatments, outcomes, # required inputs
-                   mediators, latent_variables, instrumental_variables, mediator_outcome_confounders, competing_exposures, colliders) # optional inputs
+                   mediators, latent_variables, instrumental_variables, # useful inputs
+                   mediator_outcome_confounders, competing_exposures, colliders) # more inputs
 
 ```
 
@@ -32,16 +34,17 @@ dag <- build_graph(type = 'ordered', variables, treatments, outcomes, # required
 
 ```R
 saturated_graph <- build_graph(type = c('full', 'saturated'), # choose a type
-                               variables = dag) # input existing dagitty object
+                               variables = dag) # existing dagitty object inputted
 ```
 
 
 - assess the implied causal relationships using causal criteria (deciding which edges to keep)
 
 ```R
-edges <- assess_edges(saturated_graph, edges_to_keep = dag, ) 
+edges <- assess_edges(saturated_graph, edges_to_keep = dag) 
 
-edges_to_keep <- assess_edges(saturated_graph, edges_to_keep = dag, assess_causal_criteria = TRUE)
+edges_to_keep <- assess_edges(saturated_graph, edges_to_keep = dag, 
+                      assess_causal_criteria = TRUE) # guided causal criteria sequence
 
 dag <- keep_edges(saturated_graph, edges_to_keep)
 ```
@@ -58,16 +61,17 @@ dag <- add_coords(dag) # also called in build_graph()
 
 ```R
 new_dag <- build_graph(type = 'ordered', variables, treatments, outcomes, # required inputs
-                       mediators, latent_variables, instrumental_variables, coords_spec = 2) # optional inputs
+                       mediators, latent_variables, instrumental_variables,
+                       coords_spec = 2) # higher spec increases volatility in node placement
             
 new_dag <- merge_graphs(dag, new_dag)
 ```
 
 
-- simplify representation using markov principles to remove edges (a simple algorithm, but may produce some unexpected results)
+- simplify graph using markov properties (removes unnecessary edges)
 
 ```R
-markov_dag <- markov_graph(dag)
+markov_dag <- markov_graph(dag) # simple algorithm, may produce some unexpected results
 ```
 
 
