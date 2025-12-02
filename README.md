@@ -18,44 +18,98 @@ The code below gives some idea of what this looks like, however an introductory 
 ### In This Version of causaliflower
 
 
-- build a directed acyclic graph from scratch, with minimal input    
+- build a directed (hopefully acyclic) graph from scratch with flexible inputs (as few or many as needed).
 
 ```R
-buildGraph(type = 'ordered', variables, treatments, outcomes)
+
+dag <- build_graph(type = 'ordered', variables, treatments, outcomes, # required inputs
+                   mediators, latent_variables, instrumental_variables, mediator_outcome_confounders, competing_exposures, colliders) # optional inputs
+
 ```
 
-- saturate (fully connect) a graph before causal criteria is used to assess each implied relationship, deciding which edges to keep (or remove)
+
+- draw edges between nodes in a dagitty objectto create a saturated or fully connected graph
 
 ```R
-buildGraph(type = c('full', 'saturated'), variables, treatments, outcomes)
-
-assessEdges(dag)
-
-keepEdges(dag, edges_to_keep)
+saturated_graph <- build_graph(type = c('full', 'saturated'), # choose a type
+                               variables = dag) # input existing dagitty object
 ```
 
-- generate coordinates
+
+- assess the implied causal relationships using causal criteria (deciding which edges to keep)
 
 ```R
-getCoords(dag) - also automatically generated with buildGraph()
+edges <- assess_edges(saturated_graph, edges_to_keep = dag, ) 
+
+edges_to_keep <- assess_edges(saturated_graph, edges_to_keep = dag, assess_causal_criteria = TRUE)
+
+dag <- keep_edges(saturated_graph, edges_to_keep)
 ```
 
-- add nodes to a dagitty object at different time-points, based on existing node names
+
+- update graph with new coordinates 
 
 ```R
-addNodes(dag, reference_nodes)
+dag <- add_coords(dag) # also called in build_graph()
 ```
 
-- extract edges and node roles in a dagitty object    
+
+- merge two dagitty objects
 
 ```R
-getEdges(dag)
+new_dag <- build_graph(type = 'ordered', variables, treatments, outcomes, # required inputs
+                       mediators, latent_variables, instrumental_variables, coords_spec = 2) # optional inputs
+            
+new_dag <- merge_graphs(dag, new_dag)
 ```
 
-- other functions for extracting node names and roles 
+
+- simplify representation using markov principles to remove edges (a simple algorithm, but may produce some unexpected results)
 
 ```R
-getFeatureMap(dag)  
+markov_dag <- markov_graph(dag)
+```
+
+
+- obtain minimally sufficient adjustment sets (returns smallest 5 sets by default)
+
+```R
+minimal_sets(dag, effect = "direct")
+minimal_sets(new_dag, effect = "direct")
+minimal_sets(markov_dag, effect = "direct")
+```
+
+
+- display dagitty graphs using ggdag (causaliflower presets)
+
+```R
+ggdagitty(dag)
+ggdagitty(new_dag)
+ggdagitty(markov_dag)
+```
+
+
+- add nodes at different time-points using existing nodes in a dagitty object 
+
+```R
+add_nodes(dag, existing_nodes)
+```
+
+
+- functions for extracting edges and node roles in a dagitty object    
+
+```R
+get_edges(dag)
+get_roles(dag)  
+
+node_roles(dag)
+node_structure(dag)
+```
+
+
+- other dag utility functions
+
+```R
 variables(dag)  
 colliders(dag)  
 competing_exposures(dag) 
