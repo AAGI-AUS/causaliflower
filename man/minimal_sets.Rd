@@ -9,7 +9,7 @@ minimal_sets(
   treatment = NULL,
   outcome = NULL,
   effect = "total",
-  smallest = 5,
+  num_sets = 5,
   decreasing = FALSE
 )
 }
@@ -22,9 +22,9 @@ minimal_sets(
 
 \item{effect}{Defaults to total effect, options available as per dagitty::adjustmentSets()}
 
-\item{smallest}{Number of sets to return, defaults to the smallest five minimally sufficient adjustment sets.}
+\item{num_sets}{Number of sets to return, defaults to the smallest five minimally sufficient adjustment sets.}
 
-\item{decreasing}{Defaults to FALSE (showing smallest). Optionally can be set to filter the largest minimally sufficient adjustment sets.}
+\item{decreasing}{Defaults to FALSE (shows minimally sufficient). Optionally can be set to filter the largest minimally sufficient adjustment sets.}
 }
 \value{
 Named list of minimally sufficient adjustment sets.
@@ -37,6 +37,6 @@ minimal_sets(dag) # defaults to the total effect and 5 smallest sets
 
 minimal_sets(dag, effect = "direct") # direct effect
 
-minimal_sets(dag, effect = "direct", smallest = 1) # return only the smallest set (direct effect)
+minimal_sets(dag, effect = "direct", num_sets = 1) # return only the smallest set (direct effect)
 
 }

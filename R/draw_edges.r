@@ -3,7 +3,7 @@
 #'
 #' draw_edges() is a helper function for buildGraph()
 #'
-#' @importFrom dplyr bind_rows
+#' @importFrom data.table as.data.table
 #' @param type Type of graph generated. Defaults to 'full' (fully connected graph) with arrows drawn between confounders (both directions) and from confounders to mediators. If type ='saturated', a similar saturated graph is produced except confounders are not connected to mediators, featuring bi-directional arrows between each of the confounders (follows the ESC-DAGs Mapping Stage in Ferguson et al. (2020)). When type = 'ordered', the order of supplied confounders and mediators determines the order that each node occurs, therefore directed arrows are to be connected in one direction from confounders and mediators to other confounders and mediators, respectively. This builds a saturated DAG with temporal, uni-directional arrows, based on Tennnant et al. (2021).
 #' @param outcomes Outcome variable name.
 #' @param treatments Treatment variable name.
@@ -34,7 +34,7 @@ draw_edges <- function(type,
                        observed,
                        confounder_occurrance,
                        existing_dag = NA){
-
+  .datatable.aware <- TRUE
   ## outcome edges ##
   outcome_df <- draw_outcome_edges(type, outcomes, collider_vec)
   ## treatment edges ##
@@ -61,6 +61,7 @@ draw_edges <- function(type,
 
   ## mediator_outcome_confounder edges ##
   moc_df <- draw_moc_edges(type,
+                           treatments,
                            outcomes,
                            confounder_vec,
                            m_o_confounder_vec,
@@ -80,11 +81,20 @@ draw_edges <- function(type,
   latent_df <- draw_latent_edges(latent_variables)
 
   ## row bind edges ##
-  edges_df <- rbind(treatment_df, outcome_df, confounder_df, moc_df, mediator_df, instrumental_df, latent_df, competing_exposure_df, observed_df)  # row bind all edge data frames
+  edges_df <- rbind(treatment_df,
+                    outcome_df,
+                    confounder_df,
+                    moc_df,
+                    mediator_df,
+                    instrumental_df,
+                    latent_df,
+                    competing_exposure_df,
+                    observed_df,
+                    fill=TRUE)  # row bind all edge data frames
 
   edges_df <- unique(edges_df) # remove duplicate edges
 
-  edges_df <- na.omit(edges_df) # remove NAs
+  edges_df <- edges_df[ complete.cases(edges_df), ] # remove NAs
 
   edges_df <- edges_df[edges_df$ancestor != edges_df$descendant, ] # remove edges with identical ancestor and descendant node names
 
@@ -95,13 +105,11 @@ draw_edges <- function(type,
 
 
 
-
-
 #' Draw outcome edges
 #'
 #' draw_outcome_edges() is a helper function for buildGraph()
 #'
-#' @importFrom dplyr bind_rows
+#' @importFrom data.table as.data.table
 #' @param type Type of graph generated. Defaults to 'full' (fully connected graph) with arrows drawn between confounders (both directions) and from confounders to mediators. If type ='saturated', a similar saturated graph is produced except confounders are not connected to mediators, featuring bi-directional arrows between each of the confounders (follows the ESC-DAGs Mapping Stage in Ferguson et al. (2020)). When type = 'ordered', the order of supplied confounders and mediators determines the order that each node occurs, therefore directed arrows are to be connected in one direction from confounders and mediators to other confounders and mediators, respectively. This builds a saturated DAG with temporal, uni-directional arrows, based on Tennnant et al. (2021).
 #' @param outcomes Outcome variable name.
 #' @param collider_vec Vector of collider variables, with both treatment and outcome parents.
@@ -112,10 +120,11 @@ draw_outcome_edges <- function(type,
                                collider_vec
                                ){
 
-  ## outcome edges ##
-  outcome_list <- c()
+
   # connect colliders
   if( all( complete.cases(collider_vec) ) ){
+    ## outcome edges ##
+    outcome_list <- c()
 
     outcome_list <- suppressWarnings( lapply(1:length(outcomes), function(x){
 
@@ -127,13 +136,17 @@ draw_outcome_edges <- function(type,
 
     }) )
 
-    outcome_list <- Filter( Negate(anyNA), unlist(unlist(outcome_list, recursive = FALSE), recursive = FALSE) )
+    outcome_list <- Filter(Negate(anyNA), unlist(outcome_list, recursive = FALSE) )
+
+    outcome_df <- as.data.table( do.call( rbind, unlist(outcome_list, recursive = FALSE) ) )
+
+    return(outcome_df)
 
 
   }
-  outcome_df <- dplyr::bind_rows(outcome_list)
 
-  return(outcome_df)
+  return( data.frame(NULL) )
+
 
 }
 
@@ -142,7 +155,7 @@ draw_outcome_edges <- function(type,
 #'
 #' draw_treatment_edges() is a helper function for buildGraph()
 #'
-#' @importFrom dplyr bind_rows
+#' @importFrom data.table as.data.table
 #' @param dag A dagitty object.
 #' @param type Type of graph generated. Defaults to 'full' (fully connected graph) with arrows drawn between confounders (both directions) and from confounders to mediators. If type ='saturated', a similar saturated graph is produced except confounders are not connected to mediators, featuring bi-directional arrows between each of the confounders (follows the ESC-DAGs Mapping Stage in Ferguson et al. (2020)). When type = 'ordered', the order of supplied confounders and mediators determines the order that each node occurs, therefore directed arrows are to be connected in one direction from confounders and mediators to other confounders and mediators, respectively. This builds a saturated DAG with temporal, uni-directional arrows, based on Tennnant et al. (2021).
 #' @param outcomes Outcome variable name.
@@ -173,7 +186,8 @@ draw_treatment_edges <- function(type,
   }) )
 
   treatment_list <- Filter(Negate(anyNA), unlist(treatment_list, recursive = FALSE))
-  treatment_df <- dplyr::bind_rows(treatment_list)
+  treatment_df <- as.data.table( do.call( rbind, unlist(treatment_list, recursive = FALSE) ) )
+
 
   # connect mediators
   treatment_list <- suppressWarnings( lapply(1:length(treatments), function(x){
@@ -186,8 +200,10 @@ draw_treatment_edges <- function(type,
 
   }) )
 
-  treatment_list <- Filter( Negate(anyNA), unlist(unlist(treatment_list, recursive = FALSE), recursive = FALSE) )
-  treatment_df <- dplyr::bind_rows(treatment_df, treatment_list)
+  treatment_list <- Filter(Negate(anyNA), unlist(treatment_list, recursive = FALSE))
+  treatment_unlist <- as.data.table( do.call( rbind, unlist(treatment_list, recursive = FALSE) ) )
+
+  treatment_df <- rbind(treatment_df, treatment_unlist)
 
   # connect colliders
   treatment_list <- suppressWarnings( lapply(1:length(treatments), function(x){
@@ -200,8 +216,10 @@ draw_treatment_edges <- function(type,
 
   }) )
 
-  treatment_list <- Filter( Negate(anyNA), unlist(unlist(treatment_list, recursive = FALSE), recursive = FALSE) )
-  treatment_df <- dplyr::bind_rows(treatment_df, treatment_list)
+  treatment_list <- Filter(Negate(anyNA), unlist(treatment_list, recursive = FALSE))
+  treatment_unlist <- as.data.table( do.call( rbind, unlist(treatment_list, recursive = FALSE) ) )
+
+  treatment_df <- rbind(treatment_df, treatment_unlist)
 
   # connect all confounders (fully connected or saturated graph type)
   if( type == "full" ){
@@ -216,8 +234,11 @@ draw_treatment_edges <- function(type,
 
     }) )
 
-    treatment_list <- Filter(Negate(anyNA), unlist(unlist(treatment_list, recursive = FALSE), recursive = FALSE))
-    treatment_df <- dplyr::bind_rows(treatment_df, treatment_list)
+    treatment_list <- Filter(Negate(anyNA), unlist(treatment_list, recursive = FALSE))
+    treatment_unlist <- as.data.table( do.call( rbind, unlist(treatment_list, recursive = FALSE) ) )
+
+    treatment_df <- rbind(treatment_df, treatment_unlist)
+
   }
 
   return(treatment_df)
@@ -228,7 +249,7 @@ draw_treatment_edges <- function(type,
 #'
 #' draw_confounder_edges() is a helper function for buildGraph()
 #'
-#' @importFrom dplyr bind_rows
+#' @importFrom data.table as.data.table
 #' @param type Type of graph generated. Defaults to 'full' (fully connected graph) with arrows drawn between confounders (both directions) and from confounders to mediators. If type ='saturated', a similar saturated graph is produced except confounders are not connected to mediators, featuring bi-directional arrows between each of the confounders (follows the ESC-DAGs Mapping Stage in Ferguson et al. (2020)). When type = 'ordered', the order of supplied confounders and mediators determines the order that each node occurs, therefore directed arrows are to be connected in one direction from confounders and mediators to other confounders and mediators, respectively. This builds a saturated DAG with temporal, uni-directional arrows, based on Tennnant et al. (2021).
 #' @param outcomes Outcome variable name.
 #' @param treatments Treatment variable name.
@@ -248,130 +269,150 @@ draw_confounder_edges <- function(type,
                                   latent_vec,
                                   confounder_occurrance
                                   ){
-  ## confounder edges ##
-  confounder_list <- c()
 
-  # connect outcome
-  confounder_list <- suppressWarnings( lapply(1:length(confounder_vec), function(x){
+  if( length(confounder_vec > 1) ){
+    ## confounder edges ##
+    confounder_list <- c()
 
-    confounder_list[x] <- lapply(1:length(outcomes), function(y){
-
-      list( c( ancestor = confounder_vec[x], edge = "->", descendant = outcomes[y]) )
-
-    })
-
-  }) )
-
-
-  confounder_list <- Filter(Negate(anyNA), unlist(confounder_list, recursive = FALSE))
-  confounder_df <- dplyr::bind_rows(confounder_list)
-
-  # connect treatment
-  confounder_list <- suppressWarnings( lapply(1:length(confounder_vec), function(x){
-
-    confounder_list[x] <- lapply(1:length(treatments), function(y){
-
-      list( c( ancestor = confounder_vec[x], edge = "->", descendant = treatments[y]) )
-
-    })
-
-  }) )
-
-  confounder_list <- Filter(Negate(anyNA),  unlist(unlist(confounder_list, recursive = FALSE), recursive = FALSE))
-  confounder_df <- dplyr::bind_rows(confounder_df, confounder_list)
-
-  # connect all confounders (fully connected or saturated graph type)
-  if( type == "full" | type == "saturated" ){
-
+    # connect outcome
     confounder_list <- suppressWarnings( lapply(1:length(confounder_vec), function(x){
 
-      confounder_list[x] <- lapply(1:length(confounder_vec), function(y){
+      confounder_list[x] <- lapply(1:length(outcomes), function(y){
 
-        list( c( ancestor = confounder_vec[x], edge = "->", descendant = confounder_vec[y]) )
+        list( c( ancestor = confounder_vec[x], edge = "->", descendant = outcomes[y]) )
 
       })
 
     }) )
 
-    confounder_list <- Filter(Negate(anyNA), unlist(unlist(confounder_list, recursive = FALSE), recursive = FALSE))
-    confounder_df <- dplyr::bind_rows(confounder_df, confounder_list)
-
-    # connect confounders to mediators, confounders to mediator-outcome confounders, and confounders to latents if the inputted dag type is "full"
-    if( type == "full" ){
-
-      confounder_list <- suppressWarnings( lapply(1:length(confounder_vec), function(x){
-
-        confounder_list[x] <- lapply(1:length(mediator_vec), function(y){
-
-          list( c( ancestor = confounder_vec[x], edge = "->", descendant = mediator_vec[y]) )
-
-        })
-
-      }) )
-
-      confounder_list <- Filter(Negate(anyNA), unlist(unlist(confounder_list, recursive = FALSE), recursive = FALSE))
-      confounder_df <- dplyr::bind_rows(confounder_df, confounder_list)
+    confounder_list <- Filter(Negate(anyNA), unlist(confounder_list, recursive = FALSE))
+    confounder_df <- as.data.table( do.call( rbind, unlist(confounder_list, recursive = FALSE) ) )
 
 
-      # connect mediator-outcome confounders
-      confounder_list <- suppressWarnings( lapply(1:length(confounder_vec), function(x){
+    # connect treatment
+    confounder_list <- suppressWarnings( lapply(1:length(confounder_vec), function(x){
 
-        confounder_list[x] <- lapply(1:length(m_o_confounder_vec), function(y){
+      confounder_list[x] <- lapply(1:length(treatments), function(y){
 
-          list( c( ancestor = confounder_vec[x], edge = "->", descendant = m_o_confounder_vec[y]) )
-
-        })
-
-      }) )
-
-      confounder_list <- Filter(Negate(anyNA), unlist(unlist(confounder_list, recursive = FALSE), recursive = FALSE))
-      confounder_df <- dplyr::bind_rows(confounder_df, confounder_list)
-
-      # connect latent variables
-      confounder_list <- suppressWarnings( lapply(1:length(confounder_vec), function(x){
-
-        confounder_list[x] <- lapply(1:length(latent_vec), function(y){
-
-          list( c( ancestor = confounder_vec[x], edge = "->", descendant = latent_vec[y]) )
-
-        })
-
-      }) )
-
-      confounder_list <- Filter( Negate(anyNA), unlist(unlist(confounder_list, recursive = FALSE), recursive = FALSE) )
-      confounder_df <- dplyr::bind_rows(confounder_df, confounder_list)
-
-    }
-
-  }else if( type == "ordered" ){
-
-    confounder_list <- suppressWarnings(lapply(1:length(confounder_vec), function(x){
-
-      confounder_list[x] <- lapply(1:length(confounder_vec), function(y){
-
-        list( c( ancestor = confounder_vec[x], edge = "->", descendant = confounder_vec[y], ancestor_order = confounder_occurrance[x], descendant_order = confounder_occurrance[y] ) )
+        list( c( ancestor = confounder_vec[x], edge = "->", descendant = treatments[y]) )
 
       })
 
-    }))
+    }) )
 
-    confounder_list <- Filter(Negate(anyNA), unlist(unlist(confounder_list, recursive = FALSE), recursive = FALSE)) # unnested list and remove NA's
-    confounder_order_df <- dplyr::bind_rows(confounder_list) # bind list elements to a single data frame
-    confounder_order_df <- confounder_order_df[,c(1:3)][!confounder_order_df$ancestor_order > confounder_order_df$descendant_order, ] # remove rows where temporal logic is not followed
-    confounder_df <- rbind(confounder_df, confounder_order_df)
+    confounder_list <- Filter(Negate(anyNA), unlist(confounder_list, recursive = FALSE))
+    confounder_unlist <- as.data.table( do.call( rbind, unlist(confounder_list, recursive = FALSE) ) )
+
+    confounder_df <- rbind(confounder_df, confounder_unlist)
+
+
+    # connect all confounders (fully connected or saturated graph type)
+    if( type == "full" | type == "saturated" ){
+      confounder_list <- suppressWarnings( lapply(1:length(confounder_vec), function(x){
+
+        confounder_list[x] <- lapply(1:length(confounder_vec), function(y){
+
+          list( c( ancestor = confounder_vec[x], edge = "->", descendant = confounder_vec[y]) )
+
+        })
+
+      }) )
+
+      confounder_list <- Filter(Negate(anyNA), unlist(confounder_list, recursive = FALSE))
+      confounder_unlist <- as.data.table( do.call( rbind, unlist(confounder_list, recursive = FALSE) ) )
+
+      confounder_df <- rbind(confounder_df, confounder_unlist)
+
+
+      # connect confounders to mediators, confounders to mediator-outcome confounders, and confounders to latents if the inputted dag type is "full"
+      if( type == "full" ){
+
+        confounder_list <- suppressWarnings( lapply(1:length(confounder_vec), function(x){
+
+          confounder_list[x] <- lapply(1:length(mediator_vec), function(y){
+
+            list( c( ancestor = confounder_vec[x], edge = "->", descendant = mediator_vec[y]) )
+
+          })
+
+        }) )
+
+        confounder_list <- Filter(Negate(anyNA), unlist(confounder_list, recursive = FALSE))
+        confounder_unlist <- as.data.table( do.call( rbind, unlist(confounder_list, recursive = FALSE) ) )
+
+        confounder_df <- rbind(confounder_df, confounder_unlist)
+
+
+        # connect mediator-outcome confounders
+        confounder_list <- suppressWarnings( lapply(1:length(confounder_vec), function(x){
+
+          confounder_list[x] <- lapply(1:length(m_o_confounder_vec), function(y){
+
+            list( c( ancestor = confounder_vec[x], edge = "->", descendant = m_o_confounder_vec[y]) )
+
+          })
+
+        }) )
+
+        confounder_list <- Filter(Negate(anyNA), unlist(confounder_list, recursive = FALSE))
+        confounder_unlist <- as.data.table( do.call( rbind, unlist(confounder_list, recursive = FALSE) ) )
+
+        confounder_df <- rbind(confounder_df, confounder_unlist)
+
+
+        # connect latent variables
+        confounder_list <- suppressWarnings( lapply(1:length(confounder_vec), function(x){
+
+          confounder_list[x] <- lapply(1:length(latent_vec), function(y){
+
+            list( c( ancestor = confounder_vec[x], edge = "->", descendant = latent_vec[y]) )
+
+          })
+
+        }) )
+
+        confounder_list <- Filter(Negate(anyNA), unlist(confounder_list, recursive = FALSE))
+        confounder_unlist <- as.data.table( do.call( rbind, unlist(confounder_list, recursive = FALSE) ) )
+
+        confounder_df <- rbind(confounder_df, confounder_unlist)
+
+      }
+
+    }else if( type == "ordered" ){
+
+      confounder_list <- suppressWarnings(lapply(1:length(confounder_vec), function(x){
+
+        confounder_list[x] <- lapply(1:length(confounder_vec), function(y){
+
+          list( c( ancestor = confounder_vec[x], edge = "->", descendant = confounder_vec[y], ancestor_order = confounder_occurrance[x], descendant_order = confounder_occurrance[y] ) )
+
+        })
+
+      }))
+
+      confounder_list <- Filter(Negate(anyNA), unlist(confounder_list, recursive = FALSE))
+      confounder_order_df <- as.data.table( do.call( rbind, unlist(confounder_list, recursive = FALSE) ) )
+
+      confounder_order_df <- confounder_order_df[,c(1:3)][!confounder_order_df$ancestor_order > confounder_order_df$descendant_order, ] # remove rows where temporal logic is not followed
+      confounder_df <- rbind(confounder_df, confounder_order_df)
+    }
+
+    confounder_df <- unique(confounder_df) # remove duplicate edges
+    confounder_df <- confounder_df[confounder_df$ancestor != confounder_df$descendant, ] # remove edges with identical ancestor and descendant node names
+
+    return(confounder_df)
+
   }
 
-  confounder_df <- unique(confounder_df) # remove duplicate edges
-  confounder_df <- confounder_df[confounder_df$ancestor != confounder_df$descendant, ] # remove edges with identical ancestor and descendant node names
+  return( data.frame(NULL) )
 
-  return(confounder_df)
 }
 
 #' Draw mediator edges
 #'
 #' draw_mediator_edges() is a helper function for buildGraph()
 #'
-#' @importFrom dplyr bind_rows
+#' @importFrom data.table as.data.table
 #' @param type Type of graph generated. Defaults to 'full' (fully connected graph) with arrows drawn between confounders (both directions) and from confounders to mediators. If type ='saturated', a similar saturated graph is produced except confounders are not connected to mediators, featuring bi-directional arrows between each of the confounders (follows the ESC-DAGs Mapping Stage in Ferguson et al. (2020)). When type = 'ordered', the order of supplied confounders and mediators determines the order that each node occurs, therefore directed arrows are to be connected in one direction from confounders and mediators to other confounders and mediators, respectively. This builds a saturated DAG with temporal, uni-directional arrows, based on Tennnant et al. (2021).
 #' @param outcomes Outcome variable name.
 #' @param mediator_vec Character or vector of mediator variable names.
@@ -399,8 +440,9 @@ draw_mediator_edges <- function(type,
 
     }) )
 
-    mediator_list <- Filter( Negate(anyNA), unlist(mediator_list, recursive = FALSE) )
-    mediator_df <- dplyr::bind_rows(mediator_list)
+    mediator_list <- Filter(Negate(anyNA), unlist(mediator_list, recursive = FALSE))
+    mediator_df <- as.data.table( do.call( rbind, unlist(mediator_list, recursive = FALSE) ) )
+
 
     # connect all mediators if the inputted dag type is "full"
     if(type == "full"){
@@ -415,8 +457,11 @@ draw_mediator_edges <- function(type,
 
       }) )
 
-      mediator_list <- Filter( Negate(anyNA), unlist(unlist(mediator_list, recursive = FALSE), recursive = FALSE) )
-      mediator_df <- dplyr::bind_rows(mediator_df, mediator_list)
+      mediator_list <- Filter(Negate(anyNA), unlist(mediator_list, recursive = FALSE))
+      mediator_unlist <- as.data.table( do.call( rbind, unlist(mediator_list, recursive = FALSE) ) )
+
+      mediator_df <- rbind(mediator_df, mediator_unlist)
+
 
       mediator_list <- suppressWarnings( lapply(1:length(mediator_vec), function(x){
 
@@ -428,25 +473,26 @@ draw_mediator_edges <- function(type,
 
       }) )
 
-      mediator_list <- Filter( Negate(anyNA), unlist(unlist(mediator_list, recursive = FALSE), recursive = FALSE) )
-      mediator_df <- dplyr::bind_rows(mediator_df, mediator_list)
+      mediator_list <- Filter(Negate(anyNA), unlist(mediator_list, recursive = FALSE))
+      mediator_unlist <- as.data.table( do.call( rbind, unlist(mediator_list, recursive = FALSE) ) )
+
+      mediator_df <- rbind(mediator_df, mediator_unlist)
 
     }
 
-  }else{
-
-    mediator_df <- data.frame(NULL)
+    return(mediator_df)
 
   }
 
-  return(mediator_df)
+  return( data.frame(NULL) )
+
 }
 
 #' Draw mediator-outcome confounder edges
 #'
 #' draw_moc_edges() is a helper function for buildGraph()
 #'
-#' @importFrom dplyr bind_rows
+#' @importFrom data.table as.data.table
 #' @param type Type of graph generated. Defaults to 'full' (fully connected graph) with arrows drawn between confounders (both directions) and from confounders to mediators. If type ='saturated', a similar saturated graph is produced except confounders are not connected to mediators, featuring bi-directional arrows between each of the confounders (follows the ESC-DAGs Mapping Stage in Ferguson et al. (2020)). When type = 'ordered', the order of supplied confounders and mediators determines the order that each node occurs, therefore directed arrows are to be connected in one direction from confounders and mediators to other confounders and mediators, respectively. This builds a saturated DAG with temporal, uni-directional arrows, based on Tennnant et al. (2021).
 #' @param outcomes Outcome variable name.
 #' @param m_o_confounder_vec Vector of mediator-outcome confounder names, that instead of being common causes of treatment and outcome (X <- Z -> Y) are a common cause of mediators and outcome (M <- Z -> Y). A list can also be supplied.
@@ -455,6 +501,7 @@ draw_mediator_edges <- function(type,
 #' @returns Data frame of edges.
 #' @noRd
 draw_moc_edges <- function(type,
+                           treatments,
                            outcomes,
                            confounder_vec,
                            m_o_confounder_vec,
@@ -478,8 +525,9 @@ draw_moc_edges <- function(type,
 
     }) )
 
-    moc_list <- Filter(Negate(anyNA), unlist(unlist(moc_list, recursive = FALSE), recursive = FALSE))
-    moc_df <- dplyr::bind_rows(moc_list)
+    moc_list <- Filter(Negate(anyNA), unlist(moc_list, recursive = FALSE))
+    moc_df <- as.data.table( do.call( rbind, unlist(moc_list, recursive = FALSE) ) )
+
 
     # connect treatments if the inputted dag type is "full"
     if(type == "full"){
@@ -494,8 +542,10 @@ draw_moc_edges <- function(type,
 
       }) )
 
-      moc_list <- Filter(Negate(anyNA), unlist( unlist(moc_list, recursive = FALSE), recursive = FALSE))
-      moc_df <- dplyr::bind_rows(moc_df, moc_list)
+      moc_list <- Filter(Negate(anyNA), unlist(moc_list, recursive = FALSE))
+      moc_unlist <- as.data.table( do.call( rbind, unlist(moc_list, recursive = FALSE) ) )
+
+      moc_df <- rbind(moc_df, moc_unlist)
 
       # connect all latents if the inputted dag type is "full"
       moc_list <- suppressWarnings( lapply(1:length(m_o_confounder_vec), function(x){
@@ -508,8 +558,10 @@ draw_moc_edges <- function(type,
 
       }) )
 
-      moc_list <- Filter(Negate(anyNA), unlist( unlist(moc_list, recursive = FALSE), recursive = FALSE))
-      moc_df <- dplyr::bind_rows(moc_df, moc_list)
+      moc_list <- Filter(Negate(anyNA), unlist(moc_list, recursive = FALSE))
+      moc_unlist <- as.data.table( do.call( rbind, unlist(moc_list, recursive = FALSE) ) )
+
+      moc_df <- rbind(moc_df, moc_unlist)
 
     }
 
@@ -524,16 +576,17 @@ draw_moc_edges <- function(type,
 
     }) )
 
-    moc_list <- Filter(Negate(anyNA), unlist(unlist(moc_list, recursive = FALSE), recursive = FALSE))
-    moc_df <- dplyr::bind_rows(moc_df, moc_list)
+    moc_list <- Filter(Negate(anyNA), unlist(moc_list, recursive = FALSE))
+    moc_unlist <- as.data.table( do.call( rbind, unlist(moc_list, recursive = FALSE) ) )
 
-  }else{
+    moc_df <- rbind(moc_df, moc_unlist)
 
-    moc_df <- data.frame(NULL)
+    return(moc_df)
 
   }
 
-  return(moc_df)
+  return( data.frame(NULL) )
+
 }
 
 
@@ -541,7 +594,7 @@ draw_moc_edges <- function(type,
 #'
 #' draw_edges() is a helper function for buildGraph()
 #'
-#' @importFrom dplyr bind_rows
+#' @importFrom data.table as.data.table
 #' @param outcomes Outcome variable name.
 #' @param competing_exposure_vec Vector of competing exposure names. An arrow is drawn connecting competing exposures to the outcome, with other arrows also connected depending on type of graph specified.
 #' @returns Data frame of edges.
@@ -566,16 +619,15 @@ draw_competing_exposure_edges <- function(outcomes,
 
     }) )
 
-    competing_exposure_list <- Filter(Negate(anyNA), unlist(unlist(competing_exposure_list, recursive = FALSE), recursive = FALSE))
-    competing_exposure_df <- dplyr::bind_rows(competing_exposure_list)
+    competing_exposure_list <- Filter(Negate(anyNA), unlist(competing_exposure_list, recursive = FALSE))
+    competing_exposure_df <- as.data.table( do.call( rbind, unlist(competing_exposure_list, recursive = FALSE) ) )
 
-  }else{
-
-    competing_exposure_df <- data.frame(NULL)
+    return(competing_exposure_df)
 
   }
 
-  return(competing_exposure_df)
+  return( data.frame(NULL) )
+
 }
 
 
@@ -583,7 +635,7 @@ draw_competing_exposure_edges <- function(outcomes,
 #'
 #' draw_edges() is a helper function for buildGraph()
 #'
-#' @importFrom dplyr bind_rows
+#' @importFrom data.table as.data.table
 #' @param observed Vector of variables without roles, also not unobserved (latent).
 #' @param existing_dag An existing dagitty object may be supplied.
 #' @returns Data frame of edges.
@@ -609,8 +661,9 @@ draw_observed_edges <- function(observed,
 
     }) )
 
-    observed_list <- Filter(Negate(anyNA), unlist(unlist(observed_list, recursive = FALSE), recursive = FALSE))
-    observed_df <- dplyr::bind_rows(observed_list)
+    observed_list <- Filter(Negate(anyNA), unlist(observed_list, recursive = FALSE))
+    observed_df <- as.data.table( do.call( rbind, unlist(observed_list, recursive = FALSE) ) )
+
 
     # connect ancestors
     observed_ancestors <- dagitty::parents(existing_dag, observed)
@@ -625,17 +678,17 @@ draw_observed_edges <- function(observed,
 
     }) )
 
-    observed_list <- Filter(Negate(anyNA), unlist(unlist(observed_list, recursive = FALSE), recursive = FALSE))
-    observed_df <- dplyr::bind_rows(observed_df, observed_list)
+    observed_list <- Filter(Negate(anyNA), unlist(observed_list, recursive = FALSE))
+    observed_unlist <- as.data.table( do.call( rbind, unlist(observed_list, recursive = FALSE) ) )
 
+    observed_df <- rbind(observed_df, observed_unlist)
 
-  }else{
-
-    observed_df <- data.frame(NULL)
+    return(observed_df)
 
   }
 
-  return(observed_df)
+  return( data.frame(NULL) )
+
 }
 
 
@@ -643,6 +696,7 @@ draw_observed_edges <- function(observed,
 #'
 #' draw_iv_edges() is a helper function for buildGraph().
 #'
+#' @importFrom data.table as.data.table
 #' @param instrumental_variables Inputted list or vector of instrumental variables.
 #' @param treatments Vector of treatments.
 #' @returns A data frame of instrumental variable edges.
@@ -666,9 +720,8 @@ draw_iv_edges <- function(instrumental_variables, treatments){
 
       } ) )
 
-
-      instrumental_list <- Filter(Negate(anyNA), unlist(unlist(instrumental_list, recursive = FALSE), recursive = FALSE))
-      instrumental_df <- dplyr::bind_rows(instrumental_list)
+      instrumental_list <- Filter(Negate(anyNA), unlist(instrumental_list, recursive = FALSE))
+      instrumental_df <- as.data.table( do.call( rbind, unlist(instrumental_list, recursive = FALSE) ) )
 
 
     }else{
@@ -690,21 +743,16 @@ draw_iv_edges <- function(instrumental_variables, treatments){
 
       }) )
 
-      instrumental_list <- Filter(Negate(anyNA), unlist(unlist(instrumental_list, recursive = FALSE), recursive = FALSE))
-      instrumental_df <- dplyr::bind_rows(instrumental_list)
-
+      instrumental_list <- Filter(Negate(anyNA), unlist(instrumental_list, recursive = FALSE))
+      instrumental_df <- as.data.table( do.call( rbind, unlist(instrumental_list, recursive = FALSE) ) )
 
     }
 
-
-  }else{
-
-    instrumental_df <- NA
+    return( instrumental_df )
 
   }
 
-
-  return(instrumental_df)
+  return( data.frame(NULL) )
 
 }
 
@@ -713,6 +761,7 @@ draw_iv_edges <- function(instrumental_variables, treatments){
 #'
 #' draw_latent_edges() is a helper function for buildGraph().
 #'
+#' @importFrom data.table as.data.table
 #' @param latent_variables Inputted list or vector of latent variables.
 #' @returns A data frame of latent variable edges.
 #' @noRd
@@ -738,25 +787,16 @@ draw_latent_edges <- function(latent_variables){
 
       } ) )
 
+      latent_list <- Filter(Negate(anyNA), unlist(latent_list, recursive = FALSE))
+      latent_df <- as.data.table( do.call( rbind, unlist(latent_list, recursive = FALSE) ) )
 
-      latent_list <- Filter(Negate(anyNA), unlist(unlist(latent_list, recursive = FALSE), recursive = FALSE))
-      latent_df <- dplyr::bind_rows(latent_list)
-
-
-    }else{
-
-      latent_df <- NA
     }
 
-
-  }else{
-
-    latent_df <- NA
+    return(latent_df)
 
   }
 
-
-  return(latent_df)
+  return( data.frame(NULL) )
 
 }
 
@@ -765,6 +805,7 @@ draw_latent_edges <- function(latent_variables){
 #'
 #' draw_new_node_edges() is a helper function for addNodes().
 #'
+#' @importFrom data.table as.data.table
 #' @param dag A dagitty object. Must include exposure and outcome nodes.
 #' @param new_node_names Inputted vector of node names to be added to the graph.
 #' @param existing_node_names Inputted vector of node names, used as a reference for the new graph nodes.
@@ -906,4 +947,53 @@ draw_new_node_edges <- function(dag, new_node_names, existing_node_names, existi
 
 }
 
+#' Fully connect new nodes to others
+#'
+#' connect_all_nodes_to_new() is a helper function for saturate_nodes() that draws edges between new and existing nodes, in both directions.
+#'
+#' @importFrom data.table as.data.table
+#' @param dag An existing dagitty object.
+#' @param new_nodes A vector of new nodes.
+#' @noRd
+connect_all_nodes_to_new <- function(dag, new_nodes){
+  .datatable.aware <- TRUE
+
+  ## get node names
+  node_names <- names( dag )
+
+  ## new_nodes as ancestors
+  node_list <- c()
+
+  node_list <- suppressWarnings( lapply(1:length(new_nodes), function(x){
+
+    node_list[x] <- lapply(1:length(node_names), function(y){
+
+      list( c( ancestor = new_nodes[x], edge = "->", descendant = node_names[y]) )
+
+    })
+
+  }) )
+
+  node_list <- Filter(Negate(anyNA), unlist(node_list, recursive = FALSE))
+  edges <- as.data.table( do.call( rbind, unlist(node_list, recursive = FALSE) ) )
+
+  ## new_nodes as descendants
+  node_list <- suppressWarnings( lapply(1:length(node_names), function(x){
+
+    node_list[x] <- lapply(1:length(new_nodes), function(y){
+
+      list( c( ancestor = node_names[x], edge = "->", descendant = new_nodes[y]) )
+
+    })
+
+  }) )
+
+  node_list <- Filter(Negate(anyNA), unlist(node_list, recursive = FALSE))
+  node_unlist <- as.data.table( do.call( rbind, unlist(node_list, recursive = FALSE) ) )
+
+  edges <- rbind(edges, node_unlist)
+
+  return( edges )
+
+}
 

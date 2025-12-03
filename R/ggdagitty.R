@@ -757,15 +757,16 @@ add_merged_node_coordinates <- function(dag,
     existing_node_children <- dagitty::children(dag, new_node_names[x])
   })
 
-  diff_tref_node_to_max <- abs( max( coordinates$y[ names(coordinates$y) # difference between temporal_reference_node and highest y coordinate
-                                                    %in% temporal_reference_node ])
-  ) + max(unlist(coordinates$y))
+
+  diff_tref_node_to_max <- abs( abs( max( coordinates$y[ names(coordinates$y) # difference between temporal_reference_node and highest y coordinate
+                                                    %in% temporal_reference_node ], na.rm = TRUE )
+  ) - max( unlist( coordinates$y ), na.rm = TRUE ) ) + 1
+
 
   y_range_new_node_ratio <- diff_tref_node_to_max * (num_nodes/num_vars) # calculated difference multiplied by new nodes divided by total nodes
 
-  range_x_coordinates <- abs( min( coordinates$x ) ) +
-    max( unlist(coordinates$x) )
-
+  range_x_coordinates <- abs( min( unlist( coordinates$x ), na.rm = TRUE) ) +
+    max( unlist(coordinates$x), na.rm = TRUE)
 
   quality_check <- FALSE
 
@@ -775,14 +776,13 @@ add_merged_node_coordinates <- function(dag,
 
     iteration <- iteration + ( num_nodes*lambda )/2
 
-
     ## y coordinates ##
     node_coordinates_y <- suppressWarnings( sapply(  1:num_nodes, function(x){
 
       node_coordinates_y <-  max( coordinates$y[ names(coordinates$y) %in% temporal_reference_node ]
                                   ) + runif( n = 1,
-                                             min = ( y_range_new_node_ratio * ( x / num_vars ) ) + iteration,
-                                             max = ( y_range_new_node_ratio * ( x / num_nodes ) ) + iteration + 1 )
+                                             min = ( y_range_new_node_ratio * ( x / num_vars ) )*(lambda*10) + iteration,
+                                             max = ( y_range_new_node_ratio * ( x / num_nodes ) )*(lambda*10) + iteration + 1 )
 
     } ) )
 

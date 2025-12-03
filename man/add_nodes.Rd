@@ -7,10 +7,8 @@
 add_nodes(
   dag,
   new_nodes,
-  node_role = c("confounder", "treatment", "outcome", "mediator",
-    "mediator_outcome_confounder", "instrumental", "competing_exposure", "collider",
-    "latent", "observed"),
-  type = c("full", "saturated", "first", "last"),
+  node_role = NULL,
+  type = "full",
   temporal_reference_node = NA,
   print_edges = TRUE,
   coords_spec = 1
@@ -19,13 +17,15 @@ add_nodes(
 \arguments{
 \item{dag}{A dagitty object. Must include exposure and outcome nodes.}
 
-\item{new_nodes}{A suffix added to each of the new node names, e.g. "post_treatment", or "t" (a number is added for each repeat if num_repeats is specified)}
+\item{new_nodes}{Inputted vector of node names to be added to the graph.}
 
-\item{node_role}{Role assigned to new nodes, from any of the following: c("confounder", "treatment", "outcome", "mediator", "mediator_outcome_confounder", "instrumental", "competing_exposure", "collider", "latent", "observed").}
+\item{node_role}{Determines which nodes will be connected, defaults to "confounder". Options include the following: c("confounder", "treatment", "outcome", "mediator", "mediator_outcome_confounder", "instrumental", "competing_exposure", "collider", "latent", "observed").}
 
 \item{type}{Type of graph generated. Defaults to 'full' (fully connected graph) with arrows drawn between confounders (both directions) and from confounders to mediators. If type ='saturated', a similar saturated graph is produced except confounders are not connected to mediators, featuring bi-directional arrows between each of the confounders (follows the ESC-DAGs Mapping Stage in Ferguson et al. (2020)). When type = 'first' or 'last', inputted new_nodes are ordered first or last if a confounder, mediator, or treatment node_role is selected.}
 
 \item{temporal_reference_node}{Supply an alternative reference, or simply leave blank. Default settings uses dagitty::topologicalOrdering() and selects the first of the inputted node_role (e.g., first confounder) as the temporal point of reference. If type = 'last', the last node is used.}
+
+\item{print_edges}{Print new edges in console, defaults to TRUE.}
 
 \item{coords_spec}{Set of parameters for generating coordinates. Adjust node placement with lambda, a higher value increases volatility and results in more extreme DAG structures.}
 }
@@ -36,9 +36,6 @@ A dagitty object.
 Add nodes to a dagitty object, connecting edges based on the 'type' of graph selected, and generate new node coordinates using existing nodes.
 }
 \examples{
-dag <- add_nodes(dag,
-                 new_nodes = new_node_vec,,
-                 node_role = "confounder",
-                 type = "last")
+dag <- add_nodes(dag, new_nodes, node_role)
 
 }

@@ -23,9 +23,7 @@ The code below gives an idea, however an introductory vignette provided on relea
 
 ```R
 
-dag <- build_graph(type = 'ordered', variables, treatments, outcomes, # required inputs
-                   mediators, latent_variables, instrumental_variables, # useful inputs
-                   mediator_outcome_confounders, competing_exposures, colliders) # more inputs
+dag <- build_graph(type = 'ordered', variables, treatments, outcomes) # required inputs
 
 ```
 
@@ -61,7 +59,7 @@ dag <- add_coords(dag) # also called in build_graph()
 
 ```R
 new_dag <- build_graph(type = 'ordered', variables, treatments, outcomes, # required inputs
-                       mediators, latent_variables, instrumental_variables,
+                       mediators, latent_variables, instrumental_variables, # more inputs
                        coords_spec = 2) # higher spec increases volatility in node placement
             
 new_dag <- merge_graphs(dag, new_dag)
@@ -96,13 +94,15 @@ copy_nodes(dag, existing_nodes)
 ```
 
 
-- add nodes and connect to existing nodes (grouped by role, e.g., add confounder/treatment/outcome nodes)
+- add nodes, or the saturate connection of existing nodes (grouped by role, e.g., add confounder/treatment/outcome nodes)
 
 ```R
-new_dag <- add_nodes(dag, new_nodes, node_role, type)
+add_nodes(dag, new_nodes)
 
-ggdagitty(new_dag)
+saturate_nodes(dag, new_nodes)
 ```
+
+
 - functions for extracting edges and node roles in a dagitty object    
 
 ```R

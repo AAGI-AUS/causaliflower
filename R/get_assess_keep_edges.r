@@ -101,6 +101,7 @@ get_edges <- function(dag,
 
 #' dagitty nodes grouped by role
 #'
+#' @importFrom data.table as.data.table
 #' @param dag A dagitty object.
 #' @param multiple_roles Defaults to FALSE (one role per node). If set to TRUE, multiple roles can be returned for some nodes (e.g. latent mediator variable).
 #' @return Nested list of nodes and node relationships
@@ -278,33 +279,8 @@ assess_edges <- function(dag, edges_to_keep = NA, assess_causal_criteria = FALSE
 
       }
 
-
-      ## collapse edges_to_assess to a vector and output grouped by nodes
-      unique_ancestors <- unique( edges_to_assess[,"v"] )
-      num_unique_ancestors <- nrow(unique_ancestors)
-
-
-      edges_assess_list <- list()
-
-      # edges_to_assess grouped by each unique node in a list
-      edges_assess_list <- suppressWarnings( lapply(1:num_unique_ancestors, function(x){
-
-        edges_to_assess[ unlist(edges_to_assess[,"v"]) %in% unlist(unique_ancestors[x]), ]
-
-
-      }) )
-
-      # nodes containing edges are collapsed, outputted in the console to allow easy assessing by copy and paste into .r file
-      edges_assess_list <- lapply(1:num_unique_ancestors, function(x){
-
-        edges_assess_list <- noquote(
-          paste0( paste0( "'", sapply(1:nrow(edges_assess_list[[x]]), function(y){
-
-            edges_assess_list[x] <- noquote( paste( edges_assess_list[[x]][y,], collapse=" "  ) )
-
-            }), "'", collapse=", " ), sep = "") )
-
-      })
+      # group edges_to_assess by unique node names
+      edges_assess_list <- print_edges_helper(edges_to_assess)
 
       cat( paste("c(", paste( unlist(edges_assess_list), collapse=",\n\n" ), ")", sep = "\n", collapse = "") )
 
@@ -423,7 +399,7 @@ keep_edges <- function(dag, edges_to_keep = NA){
 
 
   if(dagitty::isAcyclic(dag) == FALSE){
-    warning("The outputted grpah contains cycles, and is therefore not a directed acyclic graph (DAG). Relationships may need to be further assessed.")
+    warning("The outputted graph contains cycles, and is therefore not a directed acyclic graph (DAG). Relationships may need to be further assessed.")
   }
 
   return(dag)

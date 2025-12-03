@@ -302,6 +302,7 @@ colliders <- function(dag, get_edges = FALSE){
 #'
 #' getInstrumentalVariables() is a dagitty wrapper function capable of identifying  multiple instrumental variables in multi-treatment and multi-outcome settings.
 #'
+#'
 #' @importFrom dagitty exposures outcomes latents parents children
 #' @param dag A dagitty object.
 #' @returns Vector of instrumental variable names.
@@ -364,30 +365,43 @@ instrumental_variables <- function(dag){
 #'
 #' minimal_sets() is a dagitty::adjustmentSets() wrapper for obtaining minimal adjustment sets, returning the smallest 5 (if available) by default.
 #'
+#' @importFrom data.table as.data.table is.data.table
 #' @importFrom dagitty adjustmentSets
 #' @param dag A dagitty object.
 #' @param treatment Vector of treatment(s).
 #' @param outcome Vector of outcome(s).
 #' @param effect Defaults to total effect, options available as per dagitty::adjustmentSets()
-#' @param smallest Number of sets to return, defaults to the smallest five minimally sufficient adjustment sets.
-#' @param decreasing Defaults to FALSE (showing smallest). Optionally can be set to filter the largest minimally sufficient adjustment sets.
+#' @param num_sets Number of sets to return, defaults to the smallest five minimally sufficient adjustment sets.
+#' @param decreasing Defaults to FALSE (shows minimally sufficient). Optionally can be set to filter the largest minimally sufficient adjustment sets.
 #' @returns Named list of minimally sufficient adjustment sets.
 #' @examples
 #' minimal_sets(dag) # defaults to the total effect and 5 smallest sets
 #'
 #' minimal_sets(dag, effect = "direct") # direct effect
 #'
-#' minimal_sets(dag, effect = "direct", smallest = 1) # return only the smallest set (direct effect)
+#' minimal_sets(dag, effect = "direct", num_sets = 1) # return only the smallest set (direct effect)
 #'
 #' @export
-minimal_sets <- function(dag, treatment = NULL, outcome = NULL, effect = "total", smallest = 5, decreasing = FALSE){
+minimal_sets <- function(dag,
+                         treatment = NULL,
+                         outcome = NULL,
+                         effect = "total",
+                         num_sets = 5,
+                         decreasing = FALSE
+                         ){
 
   adjustment_sets <- dagitty::adjustmentSets(dag,
                                              exposure = treatment,
                                              outcome = outcome,
                                              type = "minimal",
                                              effect = effect)
+  if( length(adjustment_sets) == 0){
 
+    warning("No available adjustment sets. Try adjusting parameters, or assess edges using assess_edges(dag, assess_causal_criteria = TRUE).")
+
+    return(invisible())
+
+  }
   adj_set_length <- sapply(adjustment_sets, length)
   adjustment_sets <- adjustment_sets[ order(adj_set_length, decreasing = decreasing)]
 
@@ -399,7 +413,7 @@ minimal_sets <- function(dag, treatment = NULL, outcome = NULL, effect = "total"
 
   names(adjustment_sets_list) <- adj_set_length
 
-  adjustment_sets <- adjustment_sets_list[1:smallest]
+  adjustment_sets <- adjustment_sets_list[1:num_sets]
 
   adjustment_sets <- Filter(Negate(is.null), adjustment_sets)
 
@@ -412,6 +426,7 @@ minimal_sets <- function(dag, treatment = NULL, outcome = NULL, effect = "total"
 #'
 #' markov_graph()
 #'
+#' @importFrom data.table as.data.table
 #' @importFrom dagitty exposures outcomes latents parents children
 #' @param dag A dagitty object.
 #' @returns A dagitty object.
@@ -509,6 +524,7 @@ markov_graph <- function(dag){
 #'
 #' node_roles() is a dagitty wrapper that returns a list of node names and their roles.
 #'
+#' @importFrom data.table as.data.table is.data.table
 #' @param dag dagitty object
 #' @return Nested list of nodes and node relationships
 #' @examples
@@ -596,6 +612,7 @@ node_roles <- function(dag){
 #'
 #' node_structure() is a dagitty wrapper function that returns a list of node names extrated from a dagitty object, including the name and role of their ancestor and descendant nodes.
 #'
+#' @importFrom data.table as.data.table is.data.table
 #' @param dag dagitty object
 #' @return Nested list of nodes and node relationships
 #' @examples
@@ -700,6 +717,7 @@ node_structure <- function(dag){
 
 #' Long format node roles
 #'
+#' @importFrom data.table as.data.table is.data.table
 #' @param dag dagitty object
 #' @return Nested list of nodes and node relationships
 #' @noRd
