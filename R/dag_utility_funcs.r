@@ -386,10 +386,9 @@ minimal_sets <- function(dag,
                          treatment = NULL,
                          outcome = NULL,
                          effect = "total",
-                         num_sets = 5,
-                         decreasing = FALSE
+                         num_sets = 5
                          ){
-
+  .datatable.aware <- TRUE
   adjustment_sets <- dagitty::adjustmentSets(dag,
                                              exposure = treatment,
                                              outcome = outcome,
@@ -397,23 +396,38 @@ minimal_sets <- function(dag,
                                              effect = effect)
   if( length(adjustment_sets) == 0){
 
-    warning("No available adjustment sets. Try adjusting parameters, or assess edges using assess_edges(dag, assess_causal_criteria = TRUE).")
+    message("No available adjustment sets. Try adjusting parameters, or assess edges using assess_edges(dag, assess_causal_criteria = TRUE).")
 
     return(invisible())
 
   }
-  adj_set_length <- sapply(adjustment_sets, length)
-  adjustment_sets <- adjustment_sets[ order(adj_set_length, decreasing = decreasing)]
 
-  adjustment_sets_list <- lapply(1:length(adj_set_length), function(x){
+  adjustment_sets_list <- lapply(1:length(adjustment_sets), function(x){
 
-    adjustment_sets[[x]] <- adjustment_sets[[x]]
+    adjustment_sets <- adjustment_sets[[x]]
 
   })
 
-  names(adjustment_sets_list) <- adj_set_length
+  set_length <- sapply(adjustment_sets_list, length)
+  names(adjustment_sets_list) <- set_length
 
-  adjustment_sets <- adjustment_sets_list[1:num_sets]
+  adjustment_sets_list <- adjustment_sets_list[order(set_length)]
+
+  adjustment_sets <- adjustment_sets_list[1:(num_sets+1)]
+
+  if( length( adjustment_sets[[1]] ) == length( adjustment_sets[[num_sets]] ) &
+      length( adjustment_sets[[num_sets]] ) == length(unlist(adjustment_sets[num_sets+1])) ){
+
+    warning("\nA minimally sufficient adjustment set has been excluded from the minimal_sets() output.
+            \nIf this is accidental, it is highly recommended to adjust the num_sets parameter input and run again.")
+
+  }else if(  length( adjustment_sets[[num_sets]] ) > 0 & length( adjustment_sets[[num_sets]] ) == length(unlist(adjustment_sets[num_sets+1])) ){
+
+    warning("Same length adjustment set has been not outputted.")
+
+  }
+
+  adjustment_sets <- adjustment_sets_list[1:(num_sets)]
 
   adjustment_sets <- Filter(Negate(is.null), adjustment_sets)
 
@@ -435,7 +449,7 @@ minimal_sets <- function(dag,
 #'
 #' @export
 markov_graph <- function(dag){
-
+  .datatable.aware <- TRUE
 
   edges <- data.table::as.data.table(dagitty::edges(dag))[,1:3]
   edges <- edges[, c("v", "e", "w")]
@@ -770,6 +784,7 @@ roles_longer <- function(dag){
 #' @returns Named list of edges.
 #' @noRd
 ancestor_edges <- function(dag){
+  .datatable.aware <- TRUE
 
   edges <- data.table::as.data.table(dagitty::edges(dag))[,1:3]
   edges <- edges[, c("v", "e", "w")]

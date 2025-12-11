@@ -9,8 +9,7 @@ minimal_sets(
   treatment = NULL,
   outcome = NULL,
   effect = "total",
-  num_sets = 5,
-  decreasing = FALSE
+  num_sets = 5
 )
 }
 \arguments{

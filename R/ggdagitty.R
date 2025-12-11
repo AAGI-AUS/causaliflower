@@ -174,7 +174,7 @@ get_labels <- function(dag){
 }
 
 
-#' Add coordinates to a dagitty object
+#' Generate all new coordinates
 #'
 #' @param dag Dagitty object, with at least a treatment and outcome set. Nodes are automatically placed in the following categories: treatment, outcome, confounder, mediator, latent variable, mediator-outcome-confounder, or instrumental variable.
 #' @param coords_spec Set of parameters for generating coordinates. Adjust node placement with lambda, a higher value increases volatility and results in more extreme DAG structures. Setting 'lambda_max' generates a DAG at each lambda value between lambda and lambda_max (only used if iterations is supplied). Iterations controls number of repeats for each lambda value (returns the first lambda value if NULL).
@@ -258,10 +258,329 @@ add_coords <- function(dag,
 }
 
 
+#' Create coordinates for new nodes
+#'
+#' @importFrom ggdag time_ordered_coords
+#' @param dag A dagitty object. Must include exposure and outcome nodes.
+#' @param new_node_names Vector of new node names. When new nodes are specified, existing nodes can be used as a reference point. Otherwise, all new coordinates are generated using ggdag::automatically generates
+#' @param coordinates list of coordinates from a dagitty object.
+#' @param coords_spec Parameters used for generating coordinates. Adjust node placement with lambda; a higher value increases volatility and results in more extreme DAG structures. Threshold controls the closeness of nodes.
+#' @return Dagitty coordinates.
+#' @examples
+#' coordinates <- node_coords(dag, coords_spec = c(0.1, 0.5)) # generate new coordinates
+#'
+#' dagitty::coordinates(dag) <- coordinates # add coordinates to dagitty object
+#'
+#' @export
+node_coords <- function(dag,
+                       new_node_names = NULL,
+                       coordinates = NA,
+                       coords_spec = c(lambda = 1, threshold = 1)
+){
+
+  new_node_name_vec <- as.vector( unlist( new_node_names ) ) # new node name vector
+  num_nodes <- length( new_node_name_vec ) # number of new nodes
+  dag_node_names <- names(dag)
+  num_vars <- length( dag_node_names ) # total number of nodes (combined dag)
+
+  lambda <- coords_spec[1]/(num_nodes + (num_vars)) # calc lambda value (controls volatility of generated coordinates)
+  threshold <- coords_spec[2]
+
+  if( num_nodes < 1 ){
+
+    new_node_names <- dag_node_names
+
+  }
+
+  node_roles <- get_roles(dag)
+
+  confounders <- node_roles$confounder
+  mediators <- node_roles$mediator
+  mediator_outcome_confounders <- node_roles$mediator_outcome_confounder
+  instrumental_variables <- node_roles$instrumental
+  proxy_variables <- node_roles$proxy
+  competing_exposures <- node_roles$competing_exposure
+  colliders <- node_roles$collider
+  latent_variables <- node_roles$latent
+  observed <- node_roles$observed
+  outcomes <- node_roles$outcome
+  treatments <- node_roles$treatment
+
+  if( all( !complete.cases( unlist(coordinates) ) ) ){
+
+    var_order <- c(confounders, instrumental_variables, mediator_outcome_confounders,
+                   treatments, observed, competing_exposures,
+                   proxy_variables, latent_variables, mediators,
+                   outcomes, colliders)
+
+    var_order <- var_order[complete.cases(var_order)]
+
+    ## get default ordered coordinates
+    coordinates <- ggdag::time_ordered_coords(unlist(var_order), direction = c("x"), auto_sort_direction = c("right"))
+
+    coordinates_x <- coordinates$x
+    names(coordinates_x) <- coordinates$name
+
+    coordinates_y <- (ggdag::time_ordered_coords(unlist(var_order), direction = c("y"), auto_sort_direction = c("right")))$y
+    names(coordinates_y) <- coordinates$name
+
+    coordinates <- list(x = coordinates_x, y = coordinates_y)
+
+  }
+
+  if( all( complete.cases(confounders) ) ){
+
+    ## confounders
+    new_node_name_vec <- confounders[ confounders %in% new_node_names ]
+    num_nodes <- length(new_node_name_vec)
+
+    if( num_nodes > 0 ){
+
+      # new node coordinates (without treatments/outcomes)
+      coordinates_x <- coordinates$x[ !names(coordinates$x) %in% c(treatments, outcomes)]
+      coordinates_y <- coordinates$y[ !names(coordinates$y) %in% c(treatments, outcomes)]
+
+      coordinates <- suppressWarnings( merged_node_coords_helper(dag,
+                                                                 new_node_name_vec = new_node_name_vec,
+                                                                 num_nodes = num_nodes,
+                                                                 coordinates_x = coordinates_x,
+                                                                 coordinates_y = coordinates_y,
+                                                                 treatments = treatments,
+                                                                 outcomes = outcomes,
+                                                                 num_vars = num_vars,
+                                                                 lambda = lambda,
+                                                                 threshold = threshold)
+      )
+    }
+
+
+  }
+
+  if( all( complete.cases(treatments) ) ){
+    ## treatments
+    new_node_name_vec <- treatments
+    num_nodes <- length(treatments)
+
+    # new node coordinates (without treatments/outcomes)
+    coordinates_x <- coordinates$x[ !names(coordinates$x) %in% c(outcomes)]
+    coordinates_y <- coordinates$y[ !names(coordinates$y) %in% c(outcomes)]
+
+    coordinates <- suppressWarnings( merged_node_coords_helper(dag,
+                                                               new_node_name_vec = new_node_name_vec,
+                                                               num_nodes = num_nodes,
+                                                               coordinates_x = coordinates_x,
+                                                               coordinates_y = coordinates_y,
+                                                               outcomes = outcomes,
+                                                               num_vars = num_vars,
+                                                               lambda = lambda,
+                                                               threshold = threshold)
+    )
+  }
+
+  if(  all( complete.cases(instrumental_variables) ) ){
+
+    ## instrumental_variables
+    new_node_name_vec <- instrumental_variables
+    num_nodes <- length(new_node_name_vec)
+
+    # new node coordinates (without treatments/outcomes)
+    coordinates_x <- coordinates$x[ !names(coordinates$x) %in% c(outcomes)]
+    coordinates_y <- coordinates$y[ !names(coordinates$y) %in% c(outcomes)]
+
+    coordinates <- suppressWarnings( merged_node_coords_helper(dag,
+                                                               new_node_name_vec = new_node_name_vec,
+                                                               num_nodes = num_nodes,
+                                                               coordinates_x = coordinates_x,
+                                                               coordinates_y = coordinates_y,
+                                                               outcomes = outcomes,
+                                                               num_vars = num_vars,
+                                                               lambda = lambda,
+                                                               threshold = threshold)
+    )
+
+  }
+
+  if( all( complete.cases(mediator_outcome_confounders) ) ){
+    ## mediator_outcome_confounders
+    new_node_name_vec <- mediator_outcome_confounders
+    num_nodes <- length(mediator_outcome_confounders)
+
+    # new node coordinates (without outcomes)
+    coordinates_x <- coordinates$x[ !names(coordinates$x) %in% c(outcomes)]
+    coordinates_y <- coordinates$y[ !names(coordinates$y) %in% c(outcomes)]
+
+    coordinates <- suppressWarnings( merged_node_coords_helper(dag,
+                                                               new_node_name_vec = new_node_name_vec,
+                                                               num_nodes = num_nodes,
+                                                               coordinates_x = coordinates_x,
+                                                               coordinates_y = coordinates_y,
+                                                               outcomes = outcomes,
+                                                               post_treatment = TRUE,
+                                                               num_vars = num_vars,
+                                                               lambda = lambda,
+                                                               threshold = threshold)
+    )
+  }
+
+  if( all( complete.cases(proxy_variables) ) ){
+
+    ## proxy_variables
+    new_node_name_vec <- proxy_variables
+    num_nodes <- length(new_node_name_vec)
+
+    # new node coordinates (without outcomes)
+    coordinates_x <- coordinates$x[ !names(coordinates$x) %in% c(outcomes)]
+    coordinates_y <- coordinates$y[ !names(coordinates$y) %in% c(outcomes)]
+
+    coordinates <- suppressWarnings( merged_node_coords_helper(dag,
+                                                               new_node_name_vec = new_node_name_vec,
+                                                               num_nodes = num_nodes,
+                                                               coordinates_x = coordinates_x,
+                                                               coordinates_y = coordinates_y,
+                                                               outcomes = outcomes,
+                                                               num_vars = num_vars,
+                                                               lambda = lambda,
+                                                               threshold = threshold)
+    )
+
+  }
+
+  if( all( complete.cases(mediators) ) ){
+    ## mediators
+    new_node_name_vec <- mediators
+    num_nodes <- length(mediators)
+
+    # new node coordinates (without outcomes)
+    coordinates_x <- coordinates$x[ !names(coordinates$x) %in% c(outcomes)]
+    coordinates_y <- coordinates$y[ !names(coordinates$y) %in% c(outcomes)]
+
+    coordinates <- suppressWarnings( merged_node_coords_helper(dag,
+                                                               new_node_name_vec = new_node_name_vec,
+                                                               num_nodes = num_nodes,
+                                                               coordinates_x = coordinates_x,
+                                                               coordinates_y = coordinates_y,
+                                                               outcomes = outcomes,
+                                                               post_treatment = TRUE,
+                                                               num_vars = num_vars,
+                                                               lambda = lambda,
+                                                               threshold = threshold)
+    )
+  }
+
+
+  if( all( complete.cases(outcomes) ) ){
+    ## outcomes
+    new_node_name_vec <- outcomes
+    num_nodes <- length(outcomes)
+
+    coordinates <- suppressWarnings( merged_node_coords_helper(dag,
+                                                               new_node_name_vec = new_node_name_vec,
+                                                               num_nodes = num_nodes,
+                                                               coordinates_x = coordinates$x,
+                                                               coordinates_y = coordinates$y,
+                                                               outcomes = outcomes,
+                                                               post_treatment = TRUE,
+                                                               num_vars = num_vars,
+                                                               lambda = lambda,
+                                                               threshold = threshold)
+    )
+  }
+
+  if( all( complete.cases(colliders) ) ){
+    ## colliders
+    new_node_name_vec <- colliders
+    num_nodes <- length(colliders)
+
+    coordinates <- suppressWarnings( merged_node_coords_helper(dag,
+                                                               new_node_name_vec = new_node_name_vec,
+                                                               num_nodes = num_nodes,
+                                                               coordinates_x = coordinates$x,
+                                                               coordinates_y = coordinates$y,
+                                                               outcomes = outcomes,
+                                                               post_outcome = TRUE,
+                                                               num_vars = num_vars,
+                                                               lambda = lambda,
+                                                               threshold = threshold)
+    )
+  }
+
+  if( all( complete.cases(competing_exposures) ) ){
+
+    ## competing_exposures
+    new_node_name_vec <- competing_exposures
+    num_nodes <- length(new_node_name_vec)
+
+    coordinates <- suppressWarnings( merged_node_coords_helper(dag,
+                                                               new_node_name_vec = new_node_name_vec,
+                                                               num_nodes = num_nodes,
+                                                               coordinates_x = coordinates$x,
+                                                               coordinates_y = coordinates$y,
+                                                               outcomes = outcomes,
+                                                               post_outcome = TRUE,
+                                                               num_vars = num_vars,
+                                                               lambda = lambda,
+                                                               threshold = threshold)
+    )
+
+  }
+
+  if( all( complete.cases(latent_variables) ) ){
+
+    ## latent_variables
+    new_node_name_vec <- latent_variables
+    num_nodes <- length(new_node_name_vec)
+
+    # new node coordinates
+    coordinates_x <- coordinates$x
+    coordinates_y <- coordinates$y
+
+    coordinates <- suppressWarnings( merged_node_coords_helper(dag,
+                                                               new_node_name_vec = new_node_name_vec,
+                                                               num_nodes = num_nodes,
+                                                               coordinates_x = coordinates_x,
+                                                               coordinates_y = coordinates_y,
+                                                               post_outcome = TRUE,
+                                                               outcomes = outcomes,
+                                                               num_vars = num_vars,
+                                                               lambda = lambda,
+                                                               threshold = threshold)
+    )
+
+  }
+
+  if( all( complete.cases(observed) ) ){
+    ## observed
+    new_node_name_vec <- observed
+    num_nodes <- length(observed)
+
+    # new node coordinates
+    coordinates_x <- coordinates$x
+    coordinates_y <- coordinates$y
+
+    coordinates <- suppressWarnings( merged_node_coords_helper(dag,
+                                                               new_node_name_vec = new_node_name_vec,
+                                                               num_nodes = num_nodes,
+                                                               coordinates_x = coordinates_x,
+                                                               coordinates_y = coordinates_y,
+                                                               post_outcome = TRUE,
+                                                               outcomes = outcomes,
+                                                               num_vars = num_vars,
+                                                               lambda = lambda,
+                                                               threshold = threshold)
+    )
+  }
+
+  coordinates <- list(x = round( coordinates$x[order(names(coordinates$x))], 3), y = round( coordinates$y[order(names(coordinates$y))], 3) )
+
+  return(coordinates)
+
+}
+
+
 
 #' Add coordinates to a dagitty object
 #'
-#' @importFrom dagitty exposures outcomes coordinates latents topologicalOrdering
+#' @importFrom dagitty coordinates parents
 #' @importFrom ggdag time_ordered_coords
 #' @param dag dagitty object
 #' @param confounders vector of confounders nodes in the supplied dag.
@@ -272,7 +591,8 @@ add_coords <- function(dag,
 #' @noRd
 add_coordinates <- function(dag, treatments, outcomes, confounders, mediators, instrumental_variables, mediator_outcome_confounders, competing_exposures, latent_variables, colliders,
                             lambda = 0,
-                            observed = NA){
+                            observed = NA
+                            ){
 
   o <- length(outcomes)
   t <- length(treatments)
@@ -280,8 +600,6 @@ add_coordinates <- function(dag, treatments, outcomes, confounders, mediators, i
   num_confounders <- c <- length(confounders)
 
   if( all( complete.cases( unlist(instrumental_variables) ) ) ){
-
-    instrumental_variables <- unique( draw_iv_edges(instrumental_variables, treatments)$ancestor )
 
     i <- length(instrumental_variables)
 
@@ -293,7 +611,7 @@ add_coordinates <- function(dag, treatments, outcomes, confounders, mediators, i
   }
   if( all( complete.cases( unlist(latent_variables) ) ) ){
 
-    latent_variables <- get_latent_vec(latent_variables)
+    #latent_variables <- get_latent_vec(latent_variables)
 
     l <- length(latent_variables)
 
@@ -333,28 +651,29 @@ add_coordinates <- function(dag, treatments, outcomes, confounders, mediators, i
     coll <- 0
   }
 
-
-  var_order <- na.omit( c(unlist(confounders, recursive = FALSE), mediator_outcome_confounders, mediators, instrumental_variables, competing_exposures, colliders, treatments, outcomes) )
-
+  ## variable order (used for generating coordinates)
+  var_order <- na.omit( c( unlist(confounders, recursive = FALSE), mediator_outcome_confounders, mediators, instrumental_variables, competing_exposures, colliders, treatments, outcomes) )
 
   num_vars <- n <- length(unlist(var_order))
 
+  ## lambda tuning parameter
   lambda <- lambda/(c + (n-i))
-
   #print(paste("Coordinates added with randomization multiplier set to:", lambda/(num_confounders + (n-i))))
 
-  # get default ordered coordinates
+  ## get default ordered coordinates
   coords <- ggdag::time_ordered_coords(unlist(var_order), direction = c("x"), auto_sort_direction = c("right"))
   coords$y <- (ggdag::time_ordered_coords(unlist(var_order), direction = c("y"), auto_sort_direction = c("right")))$y
 
-  # randomize default coordinates
-  rand_num_x <- runif(num_vars, min = -lambda/2, max = lambda/2)
-  rand_num_y <- runif(num_vars, min = -lambda/2, max = lambda/2)
+  ## randomize default coordinates
+  rand_num_x <- runif(num_vars, min = -lambda, max = lambda)
+  rand_num_y <- runif(num_vars, min = -lambda, max = lambda)
 
   coords$y <- coords$y + rand_num_y
   coords$x <- coords$x + rand_num_x
 
-  # confounders
+  ## initial coordinates ##
+
+  ## confounders
   rand_conf_x_y <- sort(rlnorm(num_confounders*2), decreasing = FALSE)*(lambda/(n-i))
 
   rand_conf_x <- rev(rand_conf_x_y)
@@ -365,10 +684,14 @@ add_coordinates <- function(dag, treatments, outcomes, confounders, mediators, i
   rand_conf_y <- c(0, seq(-(c)*(lambda/3), -c*(lambda^2), length.out = num_confounders/2),
                    seq(c*(lambda/3), c*(lambda), length.out = num_confounders/2))[1:(num_confounders)] + (rand_conf_y*(n-i))[1:(num_confounders)]
 
-  coords[1:num_confounders,]$x <- coords[1:num_confounders,]$x + rand_conf_x[1:num_confounders]
-  coords[1:num_confounders,]$y <- coords[1:num_confounders,]$y + rand_conf_y[1:num_confounders]
+  conf_num_vars_modifier <- seq(0, num_vars, length.out = c)
 
-  # mediator-outcome-confounders
+  seq_conf <- seq(0, c, length.out = c)
+
+  coords[1:num_confounders,]$x <- coords[1:num_confounders,]$x + conf_num_vars_modifier*0.6 + rand_conf_x[1:num_confounders]
+  coords[1:num_confounders,]$y <- coords[1:num_confounders,]$y + conf_num_vars_modifier*0.2 + rand_conf_y[1:num_confounders] - c/num_vars*seq_conf
+
+  ## mediator-outcome-confounders
   if( all( complete.cases( mediator_outcome_confounders) ) ){
 
     a <- 1 + as.integer(!is.null((lambda/lambda)))
@@ -387,22 +710,24 @@ add_coordinates <- function(dag, treatments, outcomes, confounders, mediators, i
 
   }
 
-  trt_y_max <- seq( 1.1 - length(t)/3,
+  ## treatments
+  trt_y_max <- seq( 0 + length(t)/3,
                     1.1 + length(t)/n,  length.out = t )
 
   trt_x_min <- seq( ( ((num_confounders/num_vars)*(lambda*num_vars)) - (i/n) ) ,
                     ( ((num_confounders/num_vars)*(lambda*num_vars)) + (i/3) ) ,  length.out = t )
 
-  coords[ ( nrow(coords) -t):(nrow(coords)-1), ]$x <- ( coords[ ( nrow(coords) -t):(nrow(coords)-1), ]$x + trt_x_min )
-  coords[ ( nrow(coords) -t):(nrow(coords)-1), ]$y <- trt_y_max
+  coords[ ( nrow(coords) - t - o + 1 ):( nrow(coords) - o ), ]$x <- coords[ ( nrow(coords) - t - o + 1):(nrow(coords) - o ), ]$x + trt_x_min
+  coords[ ( nrow(coords) - t - o + 1 ):( nrow(coords) - o ), ]$y <- trt_y_max
 
+  ## outcomes
   outcome_x_min <- ((m-i)*(lambda)*2) + m - i
   outcome_y_min <- ((m-i)*(lambda)*2) + i
 
-  coords[nrow(coords),]$x <- coords[nrow(coords),]$x + outcome_x_min
-  coords[nrow(coords),]$y <- coords[nrow(coords),]$y - outcome_y_min
+  coords[ ( nrow(coords) - o + 1 ):( nrow(coords) ), ]$x <- coords[ ( nrow(coords) - o + 1 ):( nrow(coords) ), ]$x + outcome_x_min
+  coords[ ( nrow(coords) - o + 1 ):( nrow(coords) ), ]$y <- coords[ ( nrow(coords) - o + 1 ):( nrow(coords) ), ]$y - outcome_y_min
 
-  # mediators
+  ## mediators
   if( all( complete.cases( mediators) ) ){
 
     a <- 1 + as.integer(!is.na((lambda/lambda)))
@@ -420,43 +745,82 @@ add_coordinates <- function(dag, treatments, outcomes, confounders, mediators, i
 
   }
 
-  # instrumental variables
-  if( all( complete.cases( unlist(instrumental_variables) ) ) ){
+  ## fine-tune treatment coordinates (based on parent nodes)
+  grouped_nodes <- treatments
+  len <- t
 
-    instr_y <- seq( ( trt_y_max - (1 + (i/n)) )[1] , (trt_y_max - i )[t], length.out = i) # fix these coords
+  group_parent_max_y_coord <- parent_node_max_coords(dag,
+                                                group_node_names = treatments,
+                                                num_group_nodes = t,
+                                                coordinates_x_or_y = coords$y,
+                                                coord_names = coords$name)
 
-    instr_x <- seq( ( ( coords[nrow(coords)-t-o+1,]$x ) - i*(c/n) ) , ( ( coords[nrow(coords)-o-1,]$x ) + i) ,  length.out = i)
+  # update treatment y-coords
+  coords[ ( nrow(coords) - t - o + 1):(nrow(coords) - o ), ]$y <- coords[ ( nrow(coords) - t - o + 1):(nrow(coords) - o ), ]$y + group_parent_max_y_coord
 
-    coords[(num_confounders+moc+m+1):(num_confounders+moc+m+i),]$y <- instr_y
-    coords[(num_confounders+moc+m+1):(num_confounders+moc+m+i),]$x <- instr_x
+  # update treatment x-coords
+  coords[ ( nrow(coords) - t - o + 1):(nrow(coords) - o ), ]$x <- max( coords$x ) + ( max( coords$x ) -
+                                                                                        coords[ ( nrow(coords) - t - o + 1):(nrow(coords) - o ), ]$x )
 
-  }
+  ## fine-tune outcome coordinates (based on parent nodes)
+  group_parent_max_y_coord <- parent_node_max_coords(dag,
+                                                group_node_names = outcomes,
+                                                num_group_nodes = o,
+                                                coordinates_x_or_y = coords$y,
+                                                coord_names = coords$name)
 
-  # competing exposures
+  # update outcome y-coords
+  coords[ ( nrow(coords) - o + 1 ):( nrow(coords) ), ]$y <- group_parent_max_y_coord + abs( ( group_parent_max_y_coord - coords[ ( nrow(coords) - o + 1 ):( nrow(coords) ), ]$y ) )
+
+  # update outcome x-coords
+  coords[ ( nrow(coords) - o + 1 ):( nrow(coords) ), ]$x <- max( coords$x ) + abs( ( max( coords$x ) - coords[ ( nrow(coords) - o + 1 ):( nrow(coords) ), ]$x ) )
+
+
+  ## competing exposures
   if( all( complete.cases( competing_exposures) ) ){
+
+    trt_updat_x_max <- max( coords[ ( nrow(coords) - t - o + 1):(nrow(coords) - o ), ]$x )
+
 
     comp_y <- seq( ( coords[nrow(coords),]$y - (comp*(3/comp)) ) , (coords[nrow(coords),]$y - (comp*(2/comp))*(c/n) ), length.out = comp)
 
-    comp_x <- seq( ( coords[nrow(coords),]$x ) - comp , ( coords[nrow(coords),]$x ) - (comp*(c/n) )  , length.out = comp)
+
+    comp_x <- seq( ( trt_updat_x_max + ( max( coords$x ) / num_vars ) + 1 ), ( trt_updat_x_max + ( max( coords$x ) / num_vars ) + comp + 1 ), length.out = comp)
 
     coords[(num_confounders+moc+m+i+1):(num_confounders+moc+m+i+comp),]$y <- comp_y
     coords[(num_confounders+moc+m+i+1):(num_confounders+moc+m+i+comp),]$x <- comp_x
 
   }
 
-  # colliders
+  ## colliders
   if( all( complete.cases( colliders) ) ){
 
-    coll_y <- seq( ( coords[nrow(coords),]$y + (coll*(coll/3)) ) , (coords[nrow(coords),]$y + (coll*(coll/2))*(c/n) ), length.out = coll)
+    coll_y <- seq( ( coords[nrow(coords),]$y + ( max( coords$y ) / num_vars )*lambda + 1 ), (coords[nrow(coords),]$y + ( max( coords$y ) / num_vars )*lambda + coll ), length.out = coll )
 
-    coll_x <- seq( ( coords[nrow(coords),]$x ) + coll + 0.5 , ( coords[nrow(coords),]$x ) + (coll*(coll/2) )  , length.out = coll)
+    coll_x <- seq( ( coords[nrow(coords),]$x + coll*lambda ), ( coords[nrow(coords),]$x + ( coll*(coll/2)*lambda ) ), length.out = coll)
 
     coords[(num_confounders+moc+m+i+comp+1):(num_confounders+moc+m+i+comp+coll),]$y <- coll_y
     coords[(num_confounders+moc+m+i+comp+1):(num_confounders+moc+m+i+comp+coll),]$x <- coll_x
 
   }
+
+  ## instrumental variables
+  if( all( complete.cases( unlist(instrumental_variables) ) ) ){
+
+    instr_y <- seq( ( coords[nrow(coords)-t-o+1,]$y - ( 1 + (i/n) )*1.5 ) , ( coords[nrow(coords)-o-1,]$y - i ), length.out = i) # fix these coords
+
+    instr_x <- seq( ( coords[nrow(coords)-t-o+1,]$x + i*(c/n) ) , ( coords[nrow(coords)-o-1,]$x + i ),  length.out = i)
+
+    coords[(num_confounders+moc+m+1):(num_confounders+moc+m+i),]$y <- instr_y
+    coords[(num_confounders+moc+m+1):(num_confounders+moc+m+i),]$x <- instr_x
+
+  }
+
+
+  ## final coordinates ##
   coords_x <- coords$x
   coords_y <- coords$y
+
   names(coords_x) <- coords$name
   names(coords_y) <- coords$name
 
@@ -497,343 +861,6 @@ check_existing_coordinates <-  function(dag, grouped_nodes, existing_coords, coo
 
   return(coords_list)
 }
-
-
-#' Creates coordinates for new nodes.
-#'
-#' @importFrom dagitty exposures outcomes coordinates latents
-#' @param dag A dagitty object. Must include exposure and outcome nodes.
-#' @param reference_nodes Vector of existing node names, used as a reference for the new graph nodes, e.g., c("Z1", "Z2", "Z3").
-#' @param new_node_names Inputted vector of node names to be added to the graph.
-#' @param existing_node_type A suffix added to each of the reference node names, e.g. "pre_treatment", or "t0".
-#' @param num_repeats Number of additional copies of nodes, such as time points. Each repeat number is included at the end of new node names (new_new_t1, new_node_t2, etc.).
-#' @param num_ref_nodes Number of reference nodes inputted.
-#' @param coordinates list of coordinates from a dagitty object.
-#' @return dagitty objecty with coordinates.
-#' @noRd
-new_node_coordinates <- function(dag,
-                                 existing_node_names,
-                                 new_node_names,
-                                 existing_node_type = NA,
-                                 num_repeats = NA,
-                                 num_ref_nodes,
-                                 temporal_reference_node,
-                                 coordinates,
-                                 coords_spec
-                                 ){
-
-  new_node_name_vec <- as.vector( unlist( new_node_names ) )
-
-  num_nodes <- length(new_node_name_vec)
-
-  num_vars <- length(names(dag))
-
-  lambda <- coords_spec[1]/(num_nodes + (num_vars))
-
-  if( all( !complete.cases(num_repeats) ) ){
-
-    num_repeats <- 1
-
-  }
-
-
-  nodes_parents <- lapply(1:num_nodes, function(x){
-
-    nodes_parents <- dagitty::parents(dag, new_node_name_vec[x])
-
-  })
-
-  nodes_parents_in_existing_nodes <- lapply(1:num_nodes, function(x){
-
-    nodes_parents_in_existing_nodes <- existing_node_names[ existing_node_names %in% nodes_parents[[x]] ]
-
-  })
-
-
-  if( existing_node_type == "pre_treatment" & !all( complete.cases(temporal_reference_node) ) ){
-
-    treatments <- dagitty::exposures(dag)
-
-
-    existing_node_children <- lapply( 1:length(existing_node_names), function(x){
-
-      existing_node_children <- dagitty::children(dag, existing_node_names[x])
-
-    })
-
-
-    treatments_list <- lapply( 1:length(existing_node_names), function(x){
-
-      treatments_list <- treatments[ treatments %in% existing_node_children[[x]] ]
-
-    })
-
-
-    new_node_y_coords <- c()
-
-    new_node_y_coords <- sapply(1:num_ref_nodes, function(x){
-
-      if( length( treatments_list[[x]] ) == 0 ){
-
-        new_node_y_coords[ ( ( (x-1)*num_repeats ) + 1 ):(x*num_repeats) ] <- max( coordinates$y[ names(coordinates$y) %in% treatments ] )
-
-      }else{
-
-        new_node_y_coords[ ( ( (x-1)*num_repeats ) + 1 ):(x*num_repeats) ] <- max( coordinates$y[ names(coordinates$y) %in% treatments_list[[x]] ] )
-      }
-
-      new_node_y_coords
-
-    })
-
-    new_node_y_coords <- unlist(new_node_y_coords)
-
-    new_node_y_coords <- new_node_y_coords[complete.cases(new_node_y_coords)]
-
-  }else if( all( complete.cases(temporal_reference_node) ) ){
-
-
-    existing_node_children <- lapply( 1:length(existing_node_names), function(x){
-
-      existing_node_children <- dagitty::children(dag, existing_node_names[x])
-
-    })
-
-
-    temporal_reference_node_list <- lapply( 1:length( existing_node_names ), function(x){
-
-      temporal_reference_node_list <- temporal_reference_node[ temporal_reference_node %in% existing_node_children[[x]] ]
-
-    })
-
-    new_node_y_coords <- c()
-
-    new_node_y_coords <- sapply(1:num_ref_nodes, function(x){
-
-      if( length( temporal_reference_node_list[[x]] ) == 0 ){
-
-        new_node_y_coords[ ( ( (x-1)*num_repeats ) + 1 ):(x*num_repeats) ] <- max( coordinates$y[ names(coordinates$y) %in% temporal_reference_node ] )
-
-      }else{
-
-        new_node_y_coords[ ( ( (x-1)*num_repeats ) + 1 ):(x*num_repeats) ] <- max( coordinates$y[ names(coordinates$y) %in% temporal_reference_node_list[[x]] ] )
-      }
-
-      new_node_y_coords
-
-    })
-
-    new_node_y_coords <- unlist(new_node_y_coords)
-
-    new_node_y_coords <- new_node_y_coords[complete.cases(new_node_y_coords)]
-
-
-
-  }else{
-
-    new_node_y_coords <- sapply(1:num_nodes, function(x){
-
-      if( length( nodes_parents_in_existing_nodes[[x]] ) > 0 ) {
-
-        new_node_y_coords <- max( coordinates$y[ names(coordinates$y) %in% nodes_parents_in_existing_nodes[[x]] ] )
-
-      }else{
-
-        new_node_y_coords <- mean( coordinates$y[ names(coordinates$y) %in% unlist(nodes_parents_in_existing_nodes) ]
-                                   ) + runif(n = 1,
-                                             min = ( num_nodes/num_vars ),
-                                             max = num_nodes )
-
-        }
-      })
-    }
-
-
-  new_node_x_coords <- sapply(1:num_nodes, function(x){
-
-    if( length( nodes_parents_in_existing_nodes[[x]] ) > 0 ) {
-
-      new_node_x_coords <- mean( coordinates$x[ names(coordinates$x) %in% nodes_parents_in_existing_nodes[[x]] ] )
-
-    }else{
-
-      new_node_x_coords <- mean( coordinates$x[ names(coordinates$x) %in% unlist(nodes_parents_in_existing_nodes) ]
-                                 ) + runif(n = 1,
-                                           min = ( num_nodes/num_vars ),
-                                           max = num_nodes )
-      }
-
-    })
-
-
-  quality_check <- FALSE
-
-  iteration <- 0
-
-  while(quality_check == FALSE){
-
-    iteration <- iteration + 1*lambda
-
-
-    ## y coordinates ##
-    new_y_coords <- suppressWarnings( sapply(  new_node_y_coords, function(x){
-
-      new_y_coords <-  x + runif(n = 1,
-                                   min = ( num_nodes/num_vars ),
-                                   max = ( iteration )*num_nodes + ( num_nodes/num_vars ) )
-
-    } ) )
-
-    ## x coordinates ##
-    new_x_coords <- suppressWarnings( sapply(  new_node_x_coords, function(x){
-
-      new_x_coords <- x + runif(n = 1,
-                                   min = ( num_nodes/num_vars - iteration),
-                                   max = iteration*num_nodes + ( num_nodes/num_vars - iteration) )
-
-    } ) )
-
-    new_coordinates <- list(x = new_x_coords, y = new_y_coords)
-
-    quality_check <- quality_check_coords(dag, new_node_names, num_nodes, new_coordinates, coordinates)
-
-  }
-
-  names(new_coordinates$x) <- new_node_names
-
-  names(new_coordinates$y) <- new_node_names
-
-  coordinates <- list(x = c( na.omit(coordinates$x), new_coordinates$x), y = c( na.omit(coordinates$y), new_coordinates$y))
-
-  return(coordinates)
-
-}
-
-
-
-
-#' Add coordinates to nodes in a merged dagitty object
-#'
-#' @importFrom dagitty exposures outcomes coordinates latents
-#' @param dag A dagitty object. Must include exposure and outcome nodes.
-#' @param existing_node_names Vector of existing node names, used as a reference for the new graph nodes, e.g., c("Z1", "Z2", "Z3").
-#' @param new_node_names Inputted vector of node names to be added to the graph.
-#' @param existing_node_type A suffix added to each of the reference node names, e.g. "pre_treatment", or "t0".
-#' @param num_repeats Number of additional copies of nodes, such as time points. Each repeat number is included at the end of new node names (new_new_t1, new_node_t2, etc.).
-#' @param num_ref_nodes Number of reference nodes inputted.
-#' @param coordinates list of coordinates from a dagitty object.
-#' @return dagitty objecty with coordinates.
-#' @noRd
-add_merged_node_coordinates <- function(dag,
-                                 existing_node_names,
-                                 new_node_names,
-                                 temporal_reference_node,
-                                 coordinates,
-                                 coords_spec = c(lambda = 1,
-                                                 lambda_max = NA,
-                                                 iterations = NA)
-                                 ){
-
-  ## extract existing node coordinates
-  existing_node_coordinates_y <- coordinates$y[ names(coordinates$y) %in% existing_node_names ] # y coordinates
-  existing_node_coordinates_x <- coordinates$x[ names(coordinates$x) %in% existing_node_names ] # x coordinates
-
-  new_node_name_vec <- as.vector( unlist( new_node_names ) ) # new node name vector
-  num_nodes <- length(new_node_name_vec) # number of new nodes
-  num_vars <- length(names(dag)) # total number of nodes (combined dag)
-
-  lambda <- coords_spec[1]/(num_nodes + (num_vars)) # calc lambda value (controls volatility of generated coordinates)
-
-  nodes_parents <- lapply(1:num_nodes, function(x){   # get new node name parents
-    nodes_parents <- dagitty::parents(dag, new_node_name_vec[x])
-  })
-
-  nodes_parents_in_existing_nodes <- lapply(1:num_nodes, function(x){ # get new node name parents in existing nodes (found in both dags prior to merge)
-    nodes_parents_in_existing_nodes <- existing_node_names[ existing_node_names %in% nodes_parents[[x]] ]
-  })
-
-
-  existing_node_children <- lapply( 1:length(new_node_names), function(x){  # get new node name children
-    existing_node_children <- dagitty::children(dag, new_node_names[x])
-  })
-
-
-  diff_tref_node_to_max <- abs( abs( max( coordinates$y[ names(coordinates$y) # difference between temporal_reference_node and highest y coordinate
-                                                    %in% temporal_reference_node ], na.rm = TRUE )
-  ) - max( unlist( coordinates$y ), na.rm = TRUE ) ) + 1
-
-
-  y_range_new_node_ratio <- diff_tref_node_to_max * (num_nodes/num_vars) # calculated difference multiplied by new nodes divided by total nodes
-
-  range_x_coordinates <- abs( min( unlist( coordinates$x ), na.rm = TRUE) ) +
-    max( unlist(coordinates$x), na.rm = TRUE)
-
-  quality_check <- FALSE
-
-  iteration <- 0
-
-  while(quality_check == FALSE){
-
-    iteration <- iteration + ( num_nodes*lambda )/2
-
-    ## y coordinates ##
-    node_coordinates_y <- suppressWarnings( sapply(  1:num_nodes, function(x){
-
-      node_coordinates_y <-  max( coordinates$y[ names(coordinates$y) %in% temporal_reference_node ]
-                                  ) + runif( n = 1,
-                                             min = ( y_range_new_node_ratio * ( x / num_vars ) )*(lambda*10) + iteration,
-                                             max = ( y_range_new_node_ratio * ( x / num_nodes ) )*(lambda*10) + iteration + 1 )
-
-    } ) )
-
-    names(node_coordinates_y) <- new_node_names
-
-    ## x coordinates ##
-
-    if( length( unlist(nodes_parents_in_existing_nodes) ) > 0 ){
-
-      node_coordinates_x <- sapply(1:num_nodes, function(x){ # generate x node coordinates
-
-        node_coordinates_x <- mean(
-
-          coordinates$x[ names(coordinates$x) %in% unlist(nodes_parents_in_existing_nodes) ]
-        ) + runif( n = 1,
-                   min = - ( range_x_coordinates * ( x / num_nodes )*(lambda*10) + iteration),
-                   max = ( range_x_coordinates * ( x / num_nodes )*(lambda*10) + iteration + 1)
-        ) + 1
-      } )
-
-    }else{
-
-      node_coordinates_x <- sapply(1:num_nodes, function(x){ # generate x node coordinates
-
-        node_coordinates_x <- mean(
-
-          coordinates$x[ names(coordinates$x) %in% unlist(temporal_reference_node) ]
-        ) + runif( n = 1,
-                   min = - ( range_x_coordinates * ( x / num_nodes )*(lambda*10) + iteration),
-                   max = ( range_x_coordinates * ( x / num_nodes )*(lambda*10) + iteration + 1)
-        ) + 1
-      } )
-
-
-    }
-
-
-    names(node_coordinates_x) <- new_node_names
-
-    new_coordinates <- list(x = node_coordinates_x, y = node_coordinates_y)
-
-    quality_check <- quality_check_coords(dag, new_node_names, num_nodes, new_coordinates, coordinates, threshold = 0.5)
-
-  }
-
-  coordinates <- list(x = c( na.omit(coordinates$x), new_coordinates$x), y = c( na.omit(coordinates$y), new_coordinates$y))
-
-  return(coordinates)
-
-}
-
 
 
 #' Checks node coordinates are not overlapping
@@ -1027,6 +1054,15 @@ generate_latent_coordinates <- function(dag, latent_variables, coordinates, lamb
 
       })
 
+    latent_parents <- lapply(1:num_latents, function(x){
+
+      latent_parents <- dagitty::parents(dag, latent_variables[x])
+
+    })
+
+    latent_descendants <- latent_descendants[[1]][ ! latent_descendants[[1]] %in% latent_parents[[1]]]
+
+
     }else{
 
       if( all( complete.cases(latent_variables) ) ){
@@ -1057,20 +1093,27 @@ generate_latent_coordinates <- function(dag, latent_variables, coordinates, lamb
           new_y_coords <- min( coordinates$y[ names(coordinates$y) %in% latent_descendants[[x]] ]
           ) - runif(n = 1,
                     min = ( num_latents),
-                    max = iteration + (num_latents + x) )
+                    max = iteration + (num_latents + x) )*lambda - 1
 
         }else if( length( unlist(latent_descendants) > 0) ){
 
           new_y_coords <- min( coordinates$y[ names(coordinates$y) %in% unlist(latent_descendants) ]
           ) - runif(n = 1,
                     min = ( num_latents ),
-                    max = iteration + (num_latents + x) )
+                    max = iteration + (num_latents + x) )*lambda - 1
+
+        }else if( length( unlist(latent_parents) ) > 0 ){
+
+          new_y_coords <- min( coordinates$y[ names(coordinates$y) %in% unlist(latent_parents) ]
+          ) + runif(n = 1,
+                    min = ( num_latents ),
+                    max = iteration + (num_latents + x) )*lambda + 1
 
         }else{
 
           new_y_coords <- x - runif(n = 1,
                                     min = ( num_latents/num_vars ),
-                                    max = iteration + (num_latents + x) )
+                                    max = iteration + (num_latents + x) )*lambda
 
         }
 
@@ -1084,20 +1127,20 @@ generate_latent_coordinates <- function(dag, latent_variables, coordinates, lamb
           new_node_x_coords <- min( coordinates$x[ names(coordinates$x) %in% latent_descendants[[x]] ]
           ) - runif(n = 1,
                     min = ( num_latents/num_vars ),
-                    max = iteration + (num_latents + x)/2 )
+                    max = iteration + (num_latents + x)/2 ) - 1
 
         }else if( length( unlist(latent_descendants) > 0) ){
 
           new_x_coords <- min( coordinates$x[ names(coordinates$x) %in% unlist(latent_descendants) ]
           ) + runif(n = 1,
                     min = ( num_latents/num_vars ),
-                    max = iteration + (num_latents + x) )
+                    max = iteration + (num_latents + x) ) + 1
 
         }else{
 
           new_x_coords <- x - runif(n = 1,
                                     min = ( num_latents/num_vars ),
-                                    max = iteration + (num_latents + x) )
+                                    max = iteration + (num_latents + x) ) - 1
 
         }
 
@@ -1259,8 +1302,6 @@ generate_grouped_coordinates <- function(dag, grouped_nodes, existing_coords){
   return(coords_list)
 
 }
-
-
 
 
 #' dataframe output from a dagitty object

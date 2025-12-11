@@ -11,7 +11,7 @@ copy_nodes(
   new_node_type = "post_treatment",
   temporal_reference_node = NA,
   num_repeats = NA,
-  coords_spec = 1
+  coords_spec = c(lambda = 1, threshold = 1)
 )
 }
 \arguments{

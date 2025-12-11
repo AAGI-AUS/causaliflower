@@ -11,7 +11,7 @@ add_nodes(
   type = "full",
   temporal_reference_node = NA,
   print_edges = TRUE,
-  coords_spec = 1
+  coords_spec = c(lambda = 1, threshold = 1)
 )
 }
 \arguments{

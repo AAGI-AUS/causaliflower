@@ -3,7 +3,7 @@
 #'
 #' get_edges() filters a dagitty object and returns a data frame with edges for specified node roles.
 #'
-#' @importFrom data.table as.data.table
+#' @importFrom data.table data.table
 #' @param dag A dagitty object.
 #' @param selected_nodes Nodes to return edges. Defaults to NULL, or can be a character or vector combination of any of the following: c("outcome", "treatment", "confounder", "mediator", "mediator_outcome_confounder", "instrumental", "proxy", "competing_exposure", "collider", "latent", "observed"))
 #' @param output_structure Outputted data can be a "data.table", "data.frame", or "list".
@@ -101,7 +101,7 @@ get_edges <- function(dag,
 
 #' dagitty nodes grouped by role
 #'
-#' @importFrom data.table as.data.table
+#' @importFrom data.table data.table
 #' @param dag A dagitty object.
 #' @param multiple_roles Defaults to FALSE (one role per node). If set to TRUE, multiple roles can be returned for some nodes (e.g. latent mediator variable).
 #' @return Nested list of nodes and node relationships
@@ -180,7 +180,7 @@ get_roles <- function(dag, multiple_roles = FALSE){
 #'
 #' assess_edges() provides ways to assess connected edges based on causal criteria and/or user inputs.
 #'
-#' @importFrom data.table as.data.table is.data.table
+#' @importFrom data.table as.data.table is.data.table data.table
 #' @importFrom dagitty edges
 #' @param dag A dagitty object. Must include exposure and outcome nodes.
 #' @param edges_to_keep A vector of directed arrows to be kept between (non-treatment and non-outcome) variables, e.g. c("Z1 -> Z2", "Z2 -> Z3"), c("y", "n", "y"), or c(TRUE, FALSE, TRUE).
@@ -325,7 +325,7 @@ assess_edges <- function(dag, edges_to_keep = NA, assess_causal_criteria = FALSE
 #'
 #' keep_edges() removes edges based on user inputs.
 #'
-#' @importFrom data.table as.data.table is.data.table
+#' @importFrom data.table as.data.table is.data.table data.table
 #' @importFrom dagitty edges exposures outcomes latents coordinates dagitty isAcyclic
 #' @param dag A saturated graph dagitty object. Exposure and outcome must be indicated, and optionally can include assigned coordinates.
 #' @param edges_to_keep A vector of directed arrows to be kept between (non-treatment and non-outcome) variables, e.g. c("Z1 -> Z2", "Z2 -> Z3"), c("y", "n", "y"), or c(TRUE, FALSE, TRUE).

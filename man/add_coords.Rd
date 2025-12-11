@@ -2,7 +2,7 @@
 % Please edit documentation in R/ggdagitty.R
 \name{add_coords}
 \alias{add_coords}
-\title{Add coordinates to a dagitty object}
+\title{Generate all new coordinates}
 \usage{
 add_coords(
   dag,
@@ -21,7 +21,7 @@ add_coords(
 dagitty object with coordinates.
 }
 \description{
-Add coordinates to a dagitty object
+Generate all new coordinates
 }
 \examples{
 dag <- add_coords(dag, coords_spec = 3) # update dagitty object node coordinates

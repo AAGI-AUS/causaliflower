@@ -4,16 +4,14 @@
 \alias{merge_graphs}
 \title{Merge two dagitty objects}
 \usage{
-merge_graphs(dag, new_dag, temporal_reference_node = NA, coords_spec = 0.1)
+merge_graphs(dag, new_dag, coords_spec = c(lambda = 1, threshold = 1))
 }
 \arguments{
 \item{dag}{First dagitty object.}
 
 \item{new_dag}{Second dagitty object, added to the first.}
 
-\item{temporal_reference_node}{Supply an alternative reference, or simply leave blank. Default settings use treatment as the temporal point of reference for adding new (post-treatment) nodes, but if other node types are specified it can be useful to specify the existing node name.}
-
-\item{coords_spec}{Set of parameters for generating coordinates. Adjust node placement with lambda, a higher value increases volatility and results in more extreme DAG structures.}
+\item{coords_spec}{Parameters used for generating coordinates. Adjust node placement with lambda; a higher value increases volatility and results in more extreme DAG structures. Threshold controls the closeness of nodes.}
 }
 \value{
 A dagitty object

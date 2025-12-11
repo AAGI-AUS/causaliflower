@@ -3,28 +3,19 @@
 #'
 #' get_latent_vec() is a helper function for buildGraph().
 #'
-#' @importFrom dplyr bind_cols
+#' @importFrom data.table data.table
 #' @param instrumental_variables Inputted list or vector of instrumental variables.
 #' @returns A vector of latent variable names.
 #' @noRd
 get_latent_vec <- function(latent_variables){
-
+  .datatable.aware <- TRUE
   if( length(unlist(latent_variables)) > length(latent_variables) ){
-    latent_variables_list <- list()
-    latent_variables_list <- lapply( 1:length(latent_variables), function(x){
 
-      latent_variables_list[[x]] <- as.data.frame( latent_variables[[x]])[1]
-
-    } )
-
-
-    latent_variables_df <- dplyr::bind_cols( latent_variables_list )
-    latent_vec <- as.vector( unlist(latent_variables_df) )
+    latent_vec <- unlist( do.call(cbind, latent_variables)[1,] )
 
   }else{
 
     latent_vec <- as.vector( unlist( lapply( latent_variables, function(x) if( identical( x, character(0) ) ) NA_character_ else x ) ) )
-
 
   }
 
@@ -34,13 +25,13 @@ get_latent_vec <- function(latent_variables){
 
 #' extract_instrumental_variables() is a helper to instrumental_variables()
 #'
-#' @importFrom dagitty exposures outcomes latents parents children
-#' @importFrom data.table as.data.table
+#' @importFrom dagitty parents children
+#' @importFrom data.table data.table
 #' @param dag A dagitty object.
 #' @returns Vector of instrumental variable names.
 #' @noRd
 extract_instrumental_variables <- function(dag, treatments, outcomes, latent_vars, colliders, treatment_parents, treatment_children, mediator_parents, latent_children, outcome_children, outcome_parents){
-
+  .datatable.aware <- TRUE
   nodes_trt_to_y <- nodes_between_treatment_and_outcome(dag, treatments, outcomes)
 
   nodes_trt_to_y_parents <- dagitty::parents(dag, nodes_trt_to_y)
@@ -121,12 +112,13 @@ extract_instrumental_variables <- function(dag, treatments, outcomes, latent_var
 #'
 #' extract_node_roles() is a helper function for get_edges().
 #'
-#' @importFrom data.table as.data.table
+#' @importFrom data.table as.data.table data.table
 #' @importFrom dagitty edges exposures outcomes latents coordinates dagitty
 #' @param dag A dagitty object.
 #' @returns Data table of edges containing roles for each ancestor and descendant nodes.
 #' @noRd
 extract_unique_node_roles <- function(dag){
+  .datatable.aware <- TRUE
 
   edges_dagitty <- data.table::as.data.table(dagitty::edges(dag))[,1:3]
 
@@ -308,12 +300,13 @@ extract_unique_node_roles <- function(dag){
 #'
 #' extract_node_roles() is a helper function for get_edges().
 #'
-#' @importFrom data.table as.data.table
+#' @importFrom data.table as.data.table data.table
 #' @importFrom dagitty edges exposures outcomes latents coordinates dagitty
 #' @param dag A dagitty object.
 #' @returns Data table of edges containing roles for each ancestor and descendant nodes.
 #' @noRd
 extract_node_roles <- function(dag){
+  .datatable.aware <- TRUE
 
   edges_dagitty <- data.table::as.data.table(dagitty::edges(dag))[,1:3]
 
@@ -478,11 +471,12 @@ extract_node_roles <- function(dag){
 
 #' Edges to longer format
 #'
-#' @importFrom data.table as.data.table
+#' @importFrom data.table as.data.table data.table
 #' @param edges Data table of edges, created using extract_node_roles().
 #' @returns Data table of edges in longer format.
 #' @noRd
 edges_longer <- function(edges){
+  .datatable.aware <- TRUE
 
   edges$id <- 1:nrow(edges)
 
@@ -517,8 +511,7 @@ edges_longer <- function(edges){
 #'
 #' find_missing_edges() is a helper function for get_edges().
 #'
-#' @importFrom data.table as.data.table
-#' @param dplyr anti_join semi_join bind_rows
+#' @importFrom data.table as.data.table data.table setDT setkey
 #' @param edges_ancestors Data table of edges containing ancestor node roles.
 #' @param edges_descendants Data table of edges containing descendant node roles.
 #' @returns A data table containing ancestor edges.
@@ -529,29 +522,30 @@ find_missing_edges <- function(edges_ancestors, edges_descendants){
   # this was written when I had an issue with latent variables being ignored, unsure if it has been fixed.
   # ideally this would be replaced with R core functions, or removed if no longer necessary
 
-  missing_ancestors <- dplyr::anti_join(edges_descendants, edges_ancestors, by = c("v" = "v"))
-  common_ancestors <- dplyr::semi_join(edges_descendants, edges_ancestors, by = c("v" = "v"))
+  missing_ancestors <- data.table::setDT(edges_descendants)[!edges_ancestors, on = "v"]
 
-  combined_ancestors <- rbind(edges_ancestors[,1:3], common_ancestors[,1:3])
+  data.table::setkey(edges_descendants,v)
+  common_ancestors <- unique(edges_descendants[edges_ancestors,which=TRUE,allow.cartesian=TRUE])
+  common_ancestors <- unique(edges_descendants[common_ancestors])
 
-  missing_latent_edges <- dplyr::anti_join(edges_ancestors, common_ancestors, by = c("v", "e", "w"))
+  #combined_ancestors <- rbind(edges_ancestors[,1:3], common_ancestors[,1:3])
 
-  dplyr::anti_join(edges_ancestors, edges_descendants, by = c("w" = "w"))
+  missing_latent_edges <- data.table::setDT(edges_ancestors)[!common_ancestors, on = c("v", "e", "w")]
 
-  missing_latent_rows <- NULL
+  if( nrow(missing_latent_edges) > 0 ){
 
-  if( nrow(missing_ancestors) > 0 ){
-
-    missing_latent_rows <- lapply( 1:nrow(missing_ancestors), function(x){
-      missing_row <- missing_ancestors[x, ]
-      missing_row[,"value"][missing_row[, 1] %in% latent_vars] <- "latent"
-      missing_row <- as.data.frame(missing_row)
+    missing_latent_rows <- lapply( 1:nrow(missing_latent_edges), function(x){
+      missing_row <- missing_latent_edges[x, ]
+      missing_row[,"role_descendant"][missing_row[, 1] %in% latent_vars] <- "latent"
+      missing_row <- data.table::as.data.table(missing_row)
 
     })
 
+    missing_latent_rows <- do.call(rbind, missing_latent_rows)
+    names(missing_latent_rows) <- c("v", "e", "w", "role_ancestor")
+    missing_latent_rows <- missing_latent_rows[ missing_latent_rows$role_ancestor == "latent", ]
+    edges_ancestors <- rbind(edges_ancestors, missing_latent_rows)
   }
-
-  edges_ancestors <- na.omit( dplyr::bind_rows(edges_ancestors, missing_latent_rows) )
 
   return(edges_ancestors)
 
@@ -559,15 +553,15 @@ find_missing_edges <- function(edges_ancestors, edges_descendants){
 
 #' node names in path from treatment to outcome
 #'
-#' @importFrom dplyr bind_rows
 #' @importFrom ggdag dag_paths
+#' @importFrom data.table as.data.table data.table
 #' @param dag A dagitty object
 #' @param treatments A vector of treatment node names
 #' @param outcomes A vector of outcome node names
 #' @returns Vector of nodes in path from treatment to outcome
 #' @noRd
 nodes_between_treatment_and_outcome <- function(dag, treatments, outcomes){
-
+  .datatable.aware <- TRUE
   nodes <- c()
 
   if( length(treatments) > 0 & length(outcomes) > 0 ){
@@ -587,7 +581,7 @@ nodes_between_treatment_and_outcome <- function(dag, treatments, outcomes){
 
     })
 
-    paths_trt_to_y <- dplyr::bind_rows(paths_trt_to_y)
+    paths_trt_to_y <- data.table::as.data.table( do.call( rbind, unlist(paths_trt_to_y, recursive = FALSE) ) )
 
     nodes <- as.vector(unique(paths_trt_to_y$name))
 
@@ -613,6 +607,7 @@ nodes_between_treatment_and_outcome <- function(dag, treatments, outcomes){
 #' @returns A vector of new node names.
 #' @noRd
 create_new_node_names <- function(existing_nodes, new_node_type, num_repeats){
+  .datatable.aware <- TRUE
 
   seq_repeats <- seq(num_repeats)
 
@@ -653,6 +648,7 @@ create_new_node_names <- function(existing_nodes, new_node_type, num_repeats){
 #' @returns A data frame of edges connecting new nodes to their reference nodes, and each subsequent time point to the next.
 #' @noRd
 connect_new_and_existing_nodes <- function(new_node_names, existing_node_names){
+  .datatable.aware <- TRUE
 
   new_node_names_vec <- as.character(unlist(new_node_names, use.names = FALSE))
 
@@ -664,7 +660,7 @@ connect_new_and_existing_nodes <- function(new_node_names, existing_node_names){
 
   }) )
 
-  new_nodes_df <- as.data.table( do.call( rbind, new_nodes_list ) )
+  new_nodes_df <- data.table::as.data.table( do.call( rbind, new_nodes_list ) )
 
   num_new_nodes <- length(new_node_names_vec)
 
@@ -682,7 +678,7 @@ connect_new_and_existing_nodes <- function(new_node_names, existing_node_names){
 
     if( !all( is.null(unlist(new_nodes_list)) ) ){
 
-      new_nodes_list <-  as.data.table( do.call( rbind, unlist(new_nodes_list, recursive = FALSE) ) )
+      new_nodes_list <-  data.table::as.data.table( do.call( rbind, unlist(new_nodes_list, recursive = FALSE) ) )
     }
 
     new_nodes_df <- rbind(new_nodes_df, new_nodes_list)
@@ -698,7 +694,7 @@ connect_new_and_existing_nodes <- function(new_node_names, existing_node_names){
 
     if( !all( is.null(unlist(new_nodes_list)) ) ){
 
-      new_nodes_list <-  as.data.table( do.call( rbind, new_nodes_list) )
+      new_nodes_list <-  data.table::as.data.table( do.call( rbind, new_nodes_list) )
 
       new_nodes_list[] <- lapply(new_nodes_list, as.character)
     }
@@ -722,7 +718,7 @@ connect_new_and_existing_nodes <- function(new_node_names, existing_node_names){
 #' @returns A list of edges connecting new nodes to their parent nodes, at time point.
 #' @noRd
 connect_new_nodes_to_parent_new_nodes <- function(new_node_names, existing_node_names, new_node_parents_in_existing_nodes){ # needs checking single new_node_name input
-
+  .datatable.aware <- TRUE
   # check if more than one reference node
   if( length(existing_node_names) > 1 ){
 
@@ -763,7 +759,7 @@ connect_new_nodes_to_parent_new_nodes <- function(new_node_names, existing_node_
 
     if( !all( is.null(unlist(new_nodes_list)) ) ){
 
-      new_nodes_list <-  as.data.table( do.call( rbind, unlist(new_nodes_list, recursive = FALSE) ) )
+      new_nodes_list <-  data.table::as.data.table( do.call( rbind, unlist(new_nodes_list, recursive = FALSE) ) )
     }
 
     new_nodes_list[] <- lapply(new_nodes_list, as.character)
@@ -794,7 +790,7 @@ connect_new_nodes_to_parent_new_nodes <- function(new_node_names, existing_node_
 
     if( !all( is.null(unlist(new_nodes_list)) ) ){
 
-      new_nodes_list <-  as.data.table( do.call( rbind, new_nodes_list) )
+      new_nodes_list <-  data.table::as.data.table( do.call( rbind, new_nodes_list) )
 
       new_nodes_list[] <- lapply(new_nodes_list, as.character)
     }
@@ -815,7 +811,7 @@ connect_new_nodes_to_parent_new_nodes <- function(new_node_names, existing_node_
 #' @returns A list of edges connecting new nodes to their parent nodes, at time point.
 #' @noRd
 connect_post_treatment_node_parents <- function(new_node_names, existing_node_names, new_node_parents){
-
+  .datatable.aware <- TRUE
   if( length(existing_node_names) > 1 ){
     # new nodes parents
     new_nodes_list <- suppressWarnings(
@@ -854,7 +850,7 @@ connect_post_treatment_node_parents <- function(new_node_names, existing_node_na
 
     if( !all( is.null(unlist(new_nodes_list)) ) ){
 
-      new_nodes_list <-  as.data.table( do.call( rbind, unlist(new_nodes_list, recursive = FALSE) ) )
+      new_nodes_list <-  data.table::as.data.table( do.call( rbind, unlist(new_nodes_list, recursive = FALSE) ) )
     }
 
     new_nodes_list[] <- lapply(new_nodes_list, as.character)
@@ -905,7 +901,7 @@ connect_post_treatment_node_parents <- function(new_node_names, existing_node_na
 
     if( !all( is.null(unlist(new_nodes_list) ) ) ){
 
-      new_nodes_list <-  as.data.table( do.call( rbind, unlist(new_nodes_list, recursive = FALSE) ) )
+      new_nodes_list <-  data.table::as.data.table( do.call( rbind, unlist(new_nodes_list, recursive = FALSE) ) )
 
       new_nodes_list[] <- lapply(new_nodes_list, as.character)
 
@@ -929,7 +925,7 @@ connect_post_treatment_node_parents <- function(new_node_names, existing_node_na
 #' @returns A list of edges connecting new nodes to their child nodes, at time point.
 #' @noRd
 connect_post_treatment_node_children <- function(new_node_names, existing_node_names, new_node_children){
-
+  .datatable.aware <- TRUE
 
   if( length(existing_node_names) > 1 ){
 
@@ -969,7 +965,7 @@ connect_post_treatment_node_children <- function(new_node_names, existing_node_n
 
     if( !all( is.null(unlist(new_nodes_list)) ) ){
 
-      new_nodes_list <-  as.data.table( do.call( rbind, unlist(new_nodes_list, recursive = FALSE) ) )
+      new_nodes_list <-  data.table::as.data.table( do.call( rbind, unlist(new_nodes_list, recursive = FALSE) ) )
     }
 
     new_nodes_list[] <- lapply(new_nodes_list, as.character)
@@ -1020,7 +1016,7 @@ connect_post_treatment_node_children <- function(new_node_names, existing_node_n
    #}else
     if( !all( is.null(unlist(new_nodes_list) ) ) ){
 
-      new_nodes_list <-  as.data.table( do.call( rbind, unlist(new_nodes_list, recursive = FALSE) ) )
+      new_nodes_list <-  data.table::as.data.table( do.call( rbind, unlist(new_nodes_list, recursive = FALSE) ) )
 
       new_nodes_list[] <- lapply(new_nodes_list, as.character)
 
@@ -1101,7 +1097,7 @@ add_nodes_helper <- function(dag,
       }) )
 
       confounder_list <- Filter(Negate(anyNA), unlist(confounder_list, recursive = FALSE))
-      confounder_unlist <- as.data.table( do.call( rbind, unlist(confounder_list, recursive = FALSE) ) )
+      confounder_unlist <- data.table::as.data.table( do.call( rbind, unlist(confounder_list, recursive = FALSE) ) )
 
       new_edges <- rbind(new_edges, confounder_unlist)
 
@@ -1117,7 +1113,7 @@ add_nodes_helper <- function(dag,
       }) )
 
       confounder_list <- Filter(Negate(anyNA), unlist(confounder_list, recursive = FALSE))
-      confounder_unlist <- as.data.table( do.call( rbind, unlist(confounder_list, recursive = FALSE) ) )
+      confounder_unlist <- data.table::as.data.table( do.call( rbind, unlist(confounder_list, recursive = FALSE) ) )
 
       new_edges <- rbind(new_edges, confounder_unlist)
 
@@ -1139,7 +1135,7 @@ add_nodes_helper <- function(dag,
       }) )
 
       first_list <- Filter(Negate(anyNA), first_list)
-      first_unlist <- as.data.table( do.call( rbind, unlist(first_list, recursive = FALSE) ) )
+      first_unlist <- data.table::as.data.table( do.call( rbind, unlist(first_list, recursive = FALSE) ) )
 
       new_edges <- rbind(new_edges, first_unlist)
 
@@ -1159,7 +1155,7 @@ add_nodes_helper <- function(dag,
       }) )
 
       last_list <- Filter(Negate(anyNA), last_list)
-      last_unlist <- as.data.table( do.call( rbind, unlist(last_list, recursive = FALSE) ) )
+      last_unlist <- data.table::as.data.table( do.call( rbind, unlist(last_list, recursive = FALSE) ) )
 
       new_edges <- rbind(new_edges, last_unlist)
 
@@ -1193,7 +1189,7 @@ add_nodes_helper <- function(dag,
       }) )
 
       treatment_list <- Filter(Negate(anyNA), unlist(treatment_list, recursive = FALSE))
-      treatment_unlist <- as.data.table( do.call( rbind, unlist(treatment_list, recursive = FALSE) ) )
+      treatment_unlist <- data.table::as.data.table( do.call( rbind, unlist(treatment_list, recursive = FALSE) ) )
 
       new_edges <- rbind(new_edges, treatment_unlist)
 
@@ -1210,7 +1206,7 @@ add_nodes_helper <- function(dag,
       }) )
 
       treatment_list <- Filter(Negate(anyNA), unlist(treatment_list, recursive = FALSE))
-      treatment_unlist <- as.data.table( do.call( rbind, unlist(treatment_list, recursive = FALSE) ) )
+      treatment_unlist <- data.table::as.data.table( do.call( rbind, unlist(treatment_list, recursive = FALSE) ) )
 
       new_edges <- rbind(new_edges, treatment_unlist)
 
@@ -1231,7 +1227,7 @@ add_nodes_helper <- function(dag,
       }) )
 
       first_list <- Filter(Negate(anyNA), first_list)
-      first_unlist <- as.data.table( do.call( rbind, unlist(first_list, recursive = FALSE) ) )
+      first_unlist <- data.table::as.data.table( do.call( rbind, unlist(first_list, recursive = FALSE) ) )
 
       new_edges <- rbind(new_edges, first_unlist)
 
@@ -1251,7 +1247,7 @@ add_nodes_helper <- function(dag,
       }) )
 
       last_list <- Filter(Negate(anyNA), last_list)
-      last_unlist <- as.data.table( do.call( rbind, unlist(last_list, recursive = FALSE) ) )
+      last_unlist <- data.table::as.data.table( do.call( rbind, unlist(last_list, recursive = FALSE) ) )
 
       new_edges <- rbind(new_edges, last_unlist)
 
@@ -1294,7 +1290,7 @@ add_nodes_helper <- function(dag,
       }) )
 
       mediator_list <- Filter(Negate(anyNA), unlist(mediator_list, recursive = FALSE))
-      mediator_unlist <- as.data.table( do.call( rbind, unlist(mediator_list, recursive = FALSE) ) )
+      mediator_unlist <- data.table::as.data.table( do.call( rbind, unlist(mediator_list, recursive = FALSE) ) )
 
       new_edges <- rbind(new_edges, mediator_unlist)
 
@@ -1310,7 +1306,7 @@ add_nodes_helper <- function(dag,
       }) )
 
       mediator_list <- Filter(Negate(anyNA), unlist(mediator_list, recursive = FALSE))
-      mediator_unlist <- as.data.table( do.call( rbind, unlist(mediator_list, recursive = FALSE) ) )
+      mediator_unlist <- data.table::as.data.table( do.call( rbind, unlist(mediator_list, recursive = FALSE) ) )
 
       new_edges <- rbind(new_edges, mediator_unlist)
 
@@ -1331,7 +1327,7 @@ add_nodes_helper <- function(dag,
       }) )
 
       first_list <- Filter(Negate(anyNA), first_list)
-      first_unlist <- as.data.table( do.call( rbind, unlist(first_list, recursive = FALSE) ) )
+      first_unlist <- data.table::as.data.table( do.call( rbind, unlist(first_list, recursive = FALSE) ) )
 
       new_edges <- rbind(new_edges, first_unlist)
 
@@ -1351,7 +1347,7 @@ add_nodes_helper <- function(dag,
       }) )
 
       last_list <- Filter(Negate(anyNA), last_list)
-      last_unlist <- as.data.table( do.call( rbind, unlist(last_list, recursive = FALSE) ) )
+      last_unlist <- data.table::as.data.table( do.call( rbind, unlist(last_list, recursive = FALSE) ) )
 
       new_edges <- rbind(new_edges, last_unlist)
 
@@ -1406,7 +1402,7 @@ add_nodes_helper <- function(dag,
     }) )
 
     treatment_list <- Filter(Negate(anyNA), unlist(treatment_list, recursive = FALSE))
-    treatment_unlist <- as.data.table( do.call( rbind, unlist(treatment_list, recursive = FALSE) ) )
+    treatment_unlist <- data.table::as.data.table( do.call( rbind, unlist(treatment_list, recursive = FALSE) ) )
 
     new_edges <- rbind(new_edges, treatment_unlist)
 

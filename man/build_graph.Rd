@@ -5,7 +5,7 @@
 \title{Build dagitty objects}
 \usage{
 build_graph(
-  type = c("full", "saturated", "ordered"),
+  type = c("full", "saturated", "ordered", "none"),
   variables,
   treatments = NA,
   outcomes = NA,

@@ -61,7 +61,7 @@
 #' ggdagitty(dag)
 #'
 #' @export
-build_graph <- function(type = c("full", "saturated", "ordered"),
+build_graph <- function(type = c("full", "saturated", "ordered", "none"),
                        variables,
                        treatments = NA,
                        outcomes = NA,
@@ -238,8 +238,7 @@ build_graph <- function(type = c("full", "saturated", "ordered"),
 #' @importFrom dagitty dagitty edges exposures outcomes latents coordinates
 #' @param dag First dagitty object.
 #' @param new_dag Second dagitty object, added to the first.
-#' @param temporal_reference_node Supply an alternative reference, or simply leave blank. Default settings use treatment as the temporal point of reference for adding new (post-treatment) nodes, but if other node types are specified it can be useful to specify the existing node name.
-#' @param coords_spec Set of parameters for generating coordinates. Adjust node placement with lambda, a higher value increases volatility and results in more extreme DAG structures.
+#' @param coords_spec Parameters used for generating coordinates. Adjust node placement with lambda; a higher value increases volatility and results in more extreme DAG structures. Threshold controls the closeness of nodes.
 #' @returns A dagitty object
 #' @examples
 #' merged_dag <- merge_graphs(dag, new_dag)
@@ -247,8 +246,7 @@ build_graph <- function(type = c("full", "saturated", "ordered"),
 #' @export
 merge_graphs <- function(dag,
                          new_dag,
-                         temporal_reference_node = NA,
-                         coords_spec = 0.1
+                         coords_spec = c(lambda = 1, threshold = 1)
 ){
   .datatable.aware <- TRUE
 
@@ -264,7 +262,14 @@ merge_graphs <- function(dag,
   new_node_names <- names(new_dag) # extract new dag node names
 
   existing_node_names <-  new_node_names[ new_node_names %in% node_names ] # saves duplicate node names
+  existing_node_coords_y <- coordinates$y[ names(coordinates$y)  %in% existing_node_names] # saves duplicate node names
+  existing_node_names <- names( existing_node_coords_y[ order(existing_node_coords_y) ] ) # existing dag node names in ascending y-coords order
+
   new_node_names <- new_node_names[ !new_node_names %in% node_names ] # remove duplicate node names
+
+  coordinates_new_dag <- dagitty::coordinates(new_dag) # extract new dag coordinates
+  new_node_coords_y <- coordinates_new_dag$y[ names(coordinates_new_dag$y)  %in% new_node_names] # saves duplicate node names
+  new_node_names <- names( new_node_coords_y[ order(new_node_coords_y) ] ) # existing dag node names in ascending y-coords order
 
   node_names <- c(node_names, new_node_names) # combine both dag node names
 
@@ -294,6 +299,7 @@ merge_graphs <- function(dag,
                                   paste(node_names, collapse=" "))
   }
 
+
   num_edges <- nrow(edges)
 
   if( num_edges != 0 ){
@@ -306,6 +312,7 @@ merge_graphs <- function(dag,
 
   }
 
+
   dag <- paste("dag {", paste(node_name_and_coords_vec, collapse=""), paste(edges, collapse=" "), "}", sep = " ")
 
   dag <- dagitty::dagitty(dag)
@@ -316,21 +323,13 @@ merge_graphs <- function(dag,
 
   }
 
-  nodes_ordered <- sort( unlist( dagitty::topologicalOrdering(new_dag) ) ) # ggdag estimated temporal order of new nodes
-  temporal_reference_node <- names( nodes_ordered[1] ) # first node is selected as the temporal reference node
-
-  existing_node_names <- names( nodes_ordered[ names(nodes_ordered) %in% existing_node_names ] ) # existing node names in temporal order
-  new_node_names <- names( nodes_ordered[ names(nodes_ordered) %in% new_node_names ] ) # new node names in temporal order
-
-  new_coordinates <- add_merged_node_coordinates(dag = dag,
-                                                 existing_node_names = existing_node_names,
-                                                 new_node_names = new_node_names,
-                                                 temporal_reference_node = temporal_reference_node,
-                                                 coordinates = coordinates,
-                                                 coords_spec = coords_spec[ complete.cases(coords_spec) ] )
+  coordinates <- node_coords(dag = dag,
+                             new_node_names = new_node_names,
+                             coordinates = coordinates,
+                             coords_spec = coords_spec[ complete.cases(coords_spec) ] )
 
 
-  dagitty::coordinates(dag) <- new_coordinates
+  dagitty::coordinates(dag) <- coordinates
 
 
   return(dag)
@@ -361,8 +360,9 @@ copy_nodes <- function(dag,
                       new_node_type = "post_treatment",
                       temporal_reference_node = NA,
                       num_repeats = NA,
-                      coords_spec = 1
+                      coords_spec = c(lambda = 1, threshold = 1)
                      ){
+  ###### NOTE: this was written before add_nodes() and saturate_nodes(), as such needs to be updated (following a similar logic as the other node-adding funcs)
   .datatable.aware <- TRUE
   edges <- as.data.frame( dagitty::edges(dag) )[, c("v", "e", "w")] # get dag edges
   node_names <- names(dag) # extract dag node names
@@ -435,7 +435,7 @@ add_nodes <- function(dag,
                       type = "full",
                       temporal_reference_node = NA,
                       print_edges = TRUE,
-                      coords_spec = 1
+                      coords_spec = c(lambda = 1, threshold = 1)
 ){
   .datatable.aware <- TRUE
 
@@ -461,9 +461,8 @@ add_nodes <- function(dag,
     outcomes <- dagitty::outcomes(dag)  # outcome
     latent_vec <- dagitty::latents(dag)  # latent variables
 
-  }else{
+  }else{ # node role inputted
 
-    ## call helper function to draw new node edges etc.
     output_list <- add_nodes_helper(dag, new_nodes, node_role, type, temporal_reference_node)
 
     temporal_reference_node <- output_list$temporal_reference_node
@@ -475,10 +474,19 @@ add_nodes <- function(dag,
 
   }
 
+  ## pre-process before merging
+  new_edges <- new_edges[ complete.cases(new_edges), ] # remove NAs
+
+  ## merge new and existing dag edges
   edges <- merge(edges, new_edges,
                  by = c("ancestor", "edge", "descendant"),
                  all = TRUE) # combine both dag edges
 
+  edges <- unique(edges) # remove duplicate new_edges
+
+  edges <- edges[edges$ancestor != edges$descendant, ] # remove new_edges with identical ancestor and descendant node names
+
+  ## create node names and coordinates vector for dagitty object
   exclude_names <- c(treatments, outcomes, latent_vec) # create excluded_names
 
   node_names <- dag_node_names[ !dag_node_names %in% exclude_names ] # remove excluded_names from existing node names
@@ -509,12 +517,6 @@ add_nodes <- function(dag,
                                   paste(node_names, collapse=" "))
   }
 
-  edges <- unique(edges) # remove duplicate edges
-
-  edges <- edges[edges$ancestor != edges$descendant, ] # remove edges with identical ancestor and descendant node names
-
-  edges <- edges[ complete.cases(edges), ] # remove NAs
-
   num_edges <- nrow(edges)
 
   if( num_edges != 0 ){
@@ -535,6 +537,16 @@ add_nodes <- function(dag,
 
     dagitty::coordinates(dag) <- coordinates
 
+  }else{
+
+    dag <- add_coords(dag, coords_spec = coords_spec)
+
+  }
+
+  if( all( !complete.cases(existing_node_names) ) ){
+
+    existing_node_names <- names( coordinates$y[ order(coordinates$y)] ) # existing dag node names in ascending y-coords order
+
   }
 
   if( any( !complete.cases(temporal_reference_node) ) ){
@@ -543,12 +555,10 @@ add_nodes <- function(dag,
 
   }
 
-  new_coordinates <- add_merged_node_coordinates(dag = dag,
-                                                 existing_node_names = existing_node_names,
-                                                 new_node_names = new_nodes,
-                                                 temporal_reference_node = temporal_reference_node,
-                                                 coordinates = coordinates,
-                                                 coords_spec = coords_spec[ complete.cases(coords_spec) ] )
+  new_coordinates <- node_coords(dag = dag,
+                                 new_node_names = new_nodes,
+                                 coordinates = coordinates,
+                                 coords_spec = coords_spec[ complete.cases(coords_spec) ] )
 
   dagitty::coordinates(dag) <- new_coordinates
 
@@ -626,13 +636,19 @@ saturate_nodes <- function(dag,
 
   }
 
+  ## pre-process before merging
+  new_edges <- new_edges[ complete.cases(new_edges), ] # remove NAs
 
-  new_edges <- new_edges[!edges, on = c("ancestor", "edge", "descendant")]
-
+  ## merge new and existing dag edges
   edges <- merge(edges, new_edges,
                  by = c("ancestor", "edge", "descendant"),
                  all = TRUE) # combine both dag edges
 
+  edges <- unique(edges) # remove duplicate new_edges
+
+  edges <- edges[edges$ancestor != edges$descendant, ] # remove new_edges with identical ancestor and descendant node names
+
+  ## create node names and coordinates vector for dagitty object
   exclude_names <- c(treatments, outcomes, latent_vec) # create excluded_names
 
   node_names <- dag_node_names[ !dag_node_names %in% exclude_names ] # remove excluded_names from existing node names
@@ -661,11 +677,6 @@ saturate_nodes <- function(dag,
                                   paste(node_names, collapse=" "))
   }
 
-  edges <- unique(edges) # remove duplicate edges
-
-  edges <- edges[edges$ancestor != edges$descendant, ] # remove edges with identical ancestor and descendant node names
-
-  edges <- edges[ complete.cases(edges), ] # remove NAs
 
   num_edges <- nrow(edges)
 
@@ -798,15 +809,10 @@ create_new_node_graph <- function(dag,
 
   new_node_names <- as.vector(unlist(new_node_names))
 
-  coordinates <- new_node_coordinates(dag,
-                                      existing_node_names,
-                                      new_node_names,
-                                      existing_node_type,
-                                      num_repeats,
-                                      num_ref_nodes,
-                                      temporal_reference_node,
-                                      coordinates,
-                                      coords_spec = coords_spec[ complete.cases(coords_spec) ] )
+  coordinates <- node_coords(dag = dag,
+                             new_node_names = new_node_names,
+                             coordinates = coordinates,
+                             coords_spec = coords_spec[ complete.cases(coords_spec) ] )
 
 
   dagitty::coordinates(dag) <- coordinates
@@ -894,22 +900,12 @@ merge_dagitty <- function(dag,
 
   }
 
-  nodes_ordered <- sort( unlist( dagitty::topologicalOrdering(new_dag) ) ) # ggdag estimated temporal order of new nodes
-  temporal_reference_node <- names( nodes_ordered[1] ) # first node is selected as the temporal reference node
-
-  existing_node_names <- names( nodes_ordered[ names(nodes_ordered) %in% existing_node_names ] ) # existing node names in temporal order
-  new_node_names <- names( nodes_ordered[ names(nodes_ordered) %in% new_node_names ] ) # new node names in temporal order
-
-  new_coordinates <- add_merged_node_coordinates(dag = dag,
-                                      existing_node_names = existing_node_names,
-                                      new_node_names = new_node_names,
-                                      temporal_reference_node = temporal_reference_node,
-                                      coordinates = coordinates,
-                                      coords_spec = coords_spec[ complete.cases(coords_spec) ] )
-
+  new_coordinates <- node_coords(dag = dag,
+                                 new_node_names = new_node_names,
+                                 coordinates = coordinates,
+                                 coords_spec = coords_spec[ complete.cases(coords_spec) ] )
 
   dagitty::coordinates(dag) <- new_coordinates
-
 
   return(dag)
 
