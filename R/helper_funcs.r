@@ -1,3 +1,46 @@
+#' node names in path from treatment to outcome
+#'
+#' @importFrom ggdag dag_paths
+#' @importFrom data.table as.data.table data.table
+#' @param dag A dagitty object
+#' @param treatments A vector of treatment node names
+#' @param outcomes A vector of outcome node names
+#' @returns Vector of nodes in path from treatment to outcome
+#' @noRd
+get_nodes_between_treatment_and_outcome <- function(dag, treatments, outcomes){
+  .datatable.aware <- TRUE
+  nodes <- c()
+
+  if( length(treatments) > 0 & length(outcomes) > 0 ){
+
+    paths_trt_to_y <- lapply(1:length(treatments), function(x){
+
+      paths_trt_to_y <- lapply(1:length(outcomes), function(y){
+
+        paths_trt_to_y <- na.omit(ggdag::dag_paths(dag,
+                                                   from = treatments[x],
+                                                   to = outcomes[y],
+                                                   directed = TRUE,
+                                                   paths_only = TRUE)[["data"]])
+
+        #paths_trt_to_y <- paths_trt_to_y[!grepl(treatments[x], paths_trt_to_y$to),]
+      })
+
+    })
+
+    paths_trt_to_y <- data.table::as.data.table( do.call( rbind, unlist(paths_trt_to_y, recursive = FALSE) ) )
+
+    nodes <- as.vector(unique(paths_trt_to_y$name))
+
+    nodes <- unique( c(nodes, as.vector(na.omit(unique(paths_trt_to_y$to)))) )
+
+    nodes <- nodes[ !nodes %in% treatments]
+
+  }
+
+  return(nodes)
+
+}
 
 #' Get latent variable names from list
 #'
@@ -23,6 +66,7 @@ get_latent_vec <- function(latent_variables){
 
 }
 
+
 #' extract_instrumental_variables() is a helper to instrumental_variables()
 #'
 #' @importFrom dagitty parents children
@@ -32,7 +76,7 @@ get_latent_vec <- function(latent_variables){
 #' @noRd
 extract_instrumental_variables <- function(dag, treatments, outcomes, latent_vars, colliders, treatment_parents, treatment_children, mediator_parents, latent_children, outcome_children, outcome_parents){
   .datatable.aware <- TRUE
-  nodes_trt_to_y <- nodes_between_treatment_and_outcome(dag, treatments, outcomes)
+  nodes_trt_to_y <- get_nodes_between_treatment_and_outcome(dag, treatments, outcomes)
 
   nodes_trt_to_y_parents <- dagitty::parents(dag, nodes_trt_to_y)
 
@@ -108,6 +152,7 @@ extract_instrumental_variables <- function(dag, treatments, outcomes, latent_var
 
 }
 
+
 #' Extract node roles
 #'
 #' extract_node_roles() is a helper function for get_edges().
@@ -137,13 +182,13 @@ extract_unique_node_roles <- function(dag){
   treatment_parents <- dagitty::parents(dag, treatments)
   confounders <- treatment_parents[treatment_parents %in% dagitty::parents(dag, outcomes) &
                                      !treatment_parents %in% treatments &
-                                     !treatment_parents %in% latent_vars]
+                                     !treatment_parents %in% latent_vars ]
 
   # mediators - first parse (includes mediator-outcome confounders)
   outcome_parents <- dagitty::parents(dag, outcomes)
   treatment_children <- dagitty::children(dag, treatments)
 
-  nodes_trt_to_y <- nodes_between_treatment_and_outcome(dag, treatments, outcomes)
+  nodes_trt_to_y <- get_nodes_between_treatment_and_outcome(dag, treatments, outcomes)
 
   mediators <- outcome_parents[ ( outcome_parents %in% treatment_children | outcome_parents %in% nodes_trt_to_y ) &
                                 !outcome_parents %in% treatments &
@@ -296,6 +341,7 @@ extract_unique_node_roles <- function(dag){
 
 }
 
+
 #' Extract node roles
 #'
 #' extract_node_roles() is a helper function for get_edges().
@@ -323,25 +369,20 @@ extract_node_roles <- function(dag){
 
   # confounders
   treatment_parents <- dagitty::parents(dag, treatments)
-  confounders <- treatment_parents[treatment_parents %in% dagitty::parents(dag, outcomes) &
-                                     !treatment_parents %in% treatments &
-                                     !treatment_parents %in% latent_vars]
+  confounders <- treatment_parents[treatment_parents %in% dagitty::parents(dag, outcomes) ]
 
   # mediators - first parse (includes mediator-outcome confounders)
   outcome_parents <- dagitty::parents(dag, outcomes)
   treatment_children <- dagitty::children(dag, treatments)
 
-  nodes_trt_to_y <- nodes_between_treatment_and_outcome(dag, treatments, outcomes)
+  nodes_trt_to_y <- get_nodes_between_treatment_and_outcome(dag, treatments, outcomes)
 
-  mediators <- outcome_parents[ ( outcome_parents %in% treatment_children | outcome_parents %in% nodes_trt_to_y ) &
-                                  !outcome_parents %in% treatments &
-                                  !outcome_parents %in% outcomes &
-                                  !outcome_parents %in% confounders ]
+  mediators <- outcome_parents[ ( outcome_parents %in% treatment_children | outcome_parents %in% nodes_trt_to_y ) ]
 
   # mediator-outcome confounders
   mediator_parents <- dagitty::parents(dag, mediators) # filter to include only parents of mediator variables
   moc <- mediator_parents[mediator_parents %in% outcome_parents] # include only nodes connected to both mediators and outcome (M <- MOC -> Y)
-  moc <- moc[ !moc %in% c(treatments, confounders) & # remove treatment and confounder nodes
+  moc <- moc[ !moc %in% confounders & # remove treatment and confounder nodes
                 !moc %in% treatment_parents ] # double check by removing parents of treatment
 
   # competing exposure
@@ -368,8 +409,7 @@ extract_node_roles <- function(dag){
   # collider
   outcome_children <- dagitty::children(dag, outcomes)
 
-  colliders <- outcome_children[ outcome_children %in% treatment_children &
-                                   !outcome_children %in% outcomes ]
+  colliders <- outcome_children[ outcome_children %in% treatment_children ]
 
   # instrumental variables
   instrumental_vars <- extract_instrumental_variables(dag,
@@ -507,6 +547,89 @@ edges_longer <- function(edges){
 
 }
 
+
+#' Long format node roles
+#'
+#' @importFrom data.table as.data.table is.data.table
+#' @param dag dagitty object
+#' @return Nested list of nodes and node relationships
+#' @noRd
+roles_longer <- function(dag){
+  .datatable.aware <- TRUE
+
+  edges_wide <- extract_node_roles(dag) # extract node roles from daggity object (wide format)
+
+  ## ancestor node edges to list ##
+  edges_ancestors <- edges_wide[,1:14]
+  edges_ancestors <- na.omit( reshape(edges_ancestors, varying = list(4:14), idvar = "id",
+                                      v.names = "role", direction = "long")[,c("v", "e", "w", "role", "id")] )
+  edges_ancestors <- edges_ancestors[order(edges_ancestors$id), c(1,3,4)]
+  names(edges_ancestors)[1:2] <- c("ancestor", "descendant")
+
+  edges_ancestors$role_node_id <- "ancestor"
+
+  ## descendant node edges to list ##
+  edges_descendants <- edges_wide[,c(1:3,15:25)]
+  edges_descendants <- na.omit( reshape(edges_descendants, varying = list(4:14), idvar = "id",
+                                        v.names = "role", direction = "long")[,c("v", "e", "w", "role", "id")] )
+  edges_descendants <- edges_descendants[order(edges_descendants$id), c(1,3,4)]
+  names(edges_descendants)[1:2] <- c("ancestor", "descendant")
+
+  edges_descendants$role_node_id <- "descendant"
+
+  edges_long <- rbind(edges_ancestors, edges_descendants)
+
+  ## pivot long format
+
+  edges_long <- reshape(edges_long,
+                        idvar = c("ancestor", "descendant", "role"),
+                        timevar = "role_node_id",
+                        direction = "wide",
+                        v.names = "role")
+
+
+
+  return(edges_long)
+
+}
+
+
+#' Extract ancestor node edges
+#'
+#' ancestor_edges() is a dagitty wrapper function that returns a list of node names and edges in a dagitty object.
+#'
+#' @importFrom dagitty edges
+#' @param dag A dagitty object.
+#' @returns Named list of edges.
+#' @noRd
+ancestor_edges <- function(dag){
+  .datatable.aware <- TRUE
+
+  edges <- data.table::as.data.table(dagitty::edges(dag))[,1:3]
+  edges <- edges[, c("v", "e", "w")]
+
+  ## group by nodes
+  unique_ancestors <- unique( edges[,"v"] )
+  num_unique_ancestors <- nrow(unique_ancestors)
+
+
+  edges_list <- list()
+
+  # edges_to_assess grouped by each unique node in a list
+  edges_list <- suppressWarnings( lapply(1:num_unique_ancestors, function(x){
+
+    edges[ unlist(edges[,"v"]) %in% unlist(unique_ancestors[x]), ]
+
+
+  }) )
+
+  names(edges_list) <- unlist(unique_ancestors)
+
+  return(edges_list)
+
+}
+
+
 #' Find missing latent edges
 #'
 #' find_missing_edges() is a helper function for get_edges().
@@ -551,482 +674,110 @@ find_missing_edges <- function(edges_ancestors, edges_descendants){
 
 }
 
-#' node names in path from treatment to outcome
+
+#' Adds nodes to dagitty objects
 #'
-#' @importFrom ggdag dag_paths
-#' @importFrom data.table as.data.table data.table
-#' @param dag A dagitty object
-#' @param treatments A vector of treatment node names
-#' @param outcomes A vector of outcome node names
-#' @returns Vector of nodes in path from treatment to outcome
-#' @noRd
-nodes_between_treatment_and_outcome <- function(dag, treatments, outcomes){
-  .datatable.aware <- TRUE
-  nodes <- c()
-
-  if( length(treatments) > 0 & length(outcomes) > 0 ){
-
-    paths_trt_to_y <- lapply(1:length(treatments), function(x){
-
-      paths_trt_to_y <- lapply(1:length(outcomes), function(y){
-
-        paths_trt_to_y <- na.omit(ggdag::dag_paths(dag,
-                                                   from = treatments[x],
-                                                   to = outcomes[y],
-                                                   directed = TRUE,
-                                                   paths_only = TRUE)[["data"]])
-
-        #paths_trt_to_y <- paths_trt_to_y[!grepl(treatments[x], paths_trt_to_y$to),]
-      })
-
-    })
-
-    paths_trt_to_y <- data.table::as.data.table( do.call( rbind, unlist(paths_trt_to_y, recursive = FALSE) ) )
-
-    nodes <- as.vector(unique(paths_trt_to_y$name))
-
-    nodes <- unique( c(nodes, as.vector(na.omit(unique(paths_trt_to_y$to)))) )
-
-    nodes <- nodes[ !nodes %in% treatments]
-
-  }
-
-  return(nodes)
-
-}
-
-
-#' Add nodes to a dagitty object
+#' copy_nodes_helper() is a helper function for copy_nodes(). It adds new nodes to a dagitty object by referencing existing nodes.
 #'
-#' create_new_node_names() is a helper function for addNodes(). It uses existing nodes to create new node names for specified repeats/time points.
-#'
-#' @importFrom data.table as.data.table
+#' @param dag A dagitty object. Must include exposure and outcome nodes.
 #' @param existing_nodes Vector of existing node names, used as a reference for the new graph nodes, e.g., c("Z1", "Z2", "Z3").
+#' @param existing_node_type A suffix added to each of the reference node names, e.g. "pre_treatment", or "t0".
 #' @param new_node_type A suffix added to each of the new node names, e.g. "post_treatment", or "t" (a number is added for each repeat if num_repeats is specified)
+#' @param temporal_reference_node Supply an alternative reference, or simply leave blank. Default settings use treatment as the temporal point of reference for adding new (post-treatment) nodes, but if other node types are specified it can be useful to specify the existing node name.
 #' @param num_repeats Number of additional copies of nodes, such as time points. Each repeat number is included at the end of new node names (new_new_t1, new_node_t2, etc.).
-#' @returns A vector of new node names.
+#' @param coords_spec Set of parameters for generating coordinates. Adjust node placement with lambda, a higher value increases volatility and results in more extreme DAG structures.
+#' @returns A dagitty object.
 #' @noRd
-create_new_node_names <- function(existing_nodes, new_node_type, num_repeats){
-  .datatable.aware <- TRUE
+copy_nodes_helper <- function(dag,
+                                  edges,
+                                  node_names,
+                                  treatments,
+                                  outcomes,
+                                  latent_vec,
+                                  coordinates,
+                                  existing_nodes,
+                                  existing_node_type,
+                                  new_node_type,
+                                  temporal_reference_node,
+                                  num_repeats,
+                                  coords_spec
+){
 
-  seq_repeats <- seq(num_repeats)
+  # create new node names
+  new_node_names <- create_names_copy_nodes_helper(existing_nodes, new_node_type, num_repeats)
+  new_node_names <- as.data.frame(new_node_names) # convert to data frame (called here instead of in the function to keep a consistent output, will possibly move it in later)
 
-  new_node_names <- NULL
+  # update reference node names based on inputted existing_node_type
+  existing_node_names <- paste0(existing_nodes, "_", existing_node_type)
 
-  if( length( existing_nodes ) > 0 ){
+  # replace reference nodes in the dag with their new names (coordinates too)
+  num_ref_nodes <- length(existing_nodes)
 
-    if( length( seq_repeats ) == 1 ){
+  exclude_names <- c(treatments, outcomes, latent_vec)
 
-      new_node_names <- paste0(existing_nodes, "_", new_node_type)
+  node_names <- node_names[!node_names %in% exclude_names]
 
+  for(i in 1:num_ref_nodes){ # this will be rewritten without a for-loop
 
-    }else{
+    latent_vec <- sapply(   latent_vec, function(x)
+      replace( x, x %in% existing_nodes[i], existing_node_names[i] ) )
 
-      new_node_names <- sapply(1:length(seq_repeats), function(x){
+    treatments <- sapply(   treatments, function(x)
+      replace( x, x %in% existing_nodes[i], existing_node_names[i] ) )
 
-        new_node_names <- paste0(existing_nodes, "_", new_node_type, seq_repeats[x])
+    outcomes <- sapply(   outcomes, function(x)
+      replace( x, x %in% existing_nodes[i], existing_node_names[i] ) )
 
-      })
+    node_names <- sapply(   node_names, function(x)
+      replace( x, x %in% existing_nodes[i], existing_node_names[i] ) )
 
-    }
+    edges["v"] <- sapply(   as.vector(edges["v"]), function(x)
+      replace( x, x %in% existing_nodes[i], existing_node_names[i] ) )
+
+    edges["w"] <- sapply( as.vector(edges["w"]), function(x)
+      replace( x, x %in% existing_nodes[i], existing_node_names[i] ) )
+
+    names(coordinates[["x"]]) <- sapply(   names(coordinates[["x"]]), function(x)
+      replace( x, x %in% existing_nodes[i], existing_node_names[i] ) )
+
+    names(coordinates[["y"]]) <- sapply(   names(coordinates[["y"]]), function(x)
+      replace( x, x %in% existing_nodes[i], existing_node_names[i] ) )
 
   }
 
-  return(new_node_names)
+  dag <- construct_graph(edges, node_names, treatments, outcomes, latent_vec)
+
+  # draw edges for all new nodes (includes connecting parent and children nodes, reference nodes to new nodes, and consecutive new nodes)
+  new_node_df <- draw_edges_for_copy_nodes_helper(dag, new_node_names, existing_node_names, existing_node_type, new_node_type, temporal_reference_node, num_repeats)
 
 
-}
+  edges <- rbind(edges, new_node_df)
+  edges[] <- lapply(edges, as.character)
+
+  dag <- construct_graph(edges, node_names, treatments, outcomes, latent_vec)
 
 
-#' Connect new nodes to their reference nodes
-#'
-#' connect_new_and_existing_nodes() is a helper function for draw_new_node_edges() and addNodes().
-#'
-#' @importFrom data.table as.data.table
-#' @param new_node_names Inputted vector of node names to be added to the graph.
-#' @param existing_node_names Inputted vector of node names, used as a reference for the new graph nodes.
-#' @returns A data frame of edges connecting new nodes to their reference nodes, and each subsequent time point to the next.
-#' @noRd
-connect_new_and_existing_nodes <- function(new_node_names, existing_node_names){
-  .datatable.aware <- TRUE
+  if(all(!is.na(unlist(coordinates)))){
 
-  new_node_names_vec <- as.character(unlist(new_node_names, use.names = FALSE))
-
-  num_ref_nodes <- length(existing_node_names)
-
-  new_nodes_list <- suppressWarnings( lapply(1:num_ref_nodes, function(x){
-
-    new_nodes_list <- list( v = existing_node_names[x], e = "->", w = new_node_names_vec[x] )
-
-  }) )
-
-  new_nodes_df <- data.table::as.data.table( do.call( rbind, new_nodes_list ) )
-
-  num_new_nodes <- length(new_node_names_vec)
-
-  if( num_new_nodes > num_ref_nodes & length(new_node_names) > 1 ){
-
-    new_nodes_list <- suppressWarnings( lapply(1:( nrow(new_node_names) - 1 ), function(x){
-
-      new_nodes_list <- lapply( 1:nrow(new_node_names), function(y){
-
-        new_nodes_list <- list( v = new_node_names[y, x], e = "->", w = new_node_names[y, (x+1)] )
-
-      })
-
-    }) )
-
-    if( !all( is.null(unlist(new_nodes_list)) ) ){
-
-      new_nodes_list <-  data.table::as.data.table( do.call( rbind, unlist(new_nodes_list, recursive = FALSE) ) )
-    }
-
-    new_nodes_df <- rbind(new_nodes_df, new_nodes_list)
-
-  }else if( length(new_node_names) > 1 ){
-
-    new_nodes_list <- suppressWarnings( lapply( 1:( nrow(new_node_names) - 1 ), function(y){
-
-      new_nodes_list <- list( v = new_node_names[y,], e = "->", w = new_node_names[y + 1,] )
-
-      })
-    )
-
-    if( !all( is.null(unlist(new_nodes_list)) ) ){
-
-      new_nodes_list <-  data.table::as.data.table( do.call( rbind, new_nodes_list) )
-
-      new_nodes_list[] <- lapply(new_nodes_list, as.character)
-    }
-
-    new_nodes_df <- rbind(new_nodes_df, new_nodes_list)
+    dagitty::coordinates(dag) <- coordinates
 
   }
 
-  return(new_nodes_df)
+
+  new_node_names <- as.vector(unlist(new_node_names))
+
+  coordinates <- renew_coords(dag = dag,
+                                 new_node_names = new_node_names,
+                                 coordinates = coordinates,
+                                 coords_spec = coords_spec[ complete.cases(coords_spec) ] )
+
+
+  dagitty::coordinates(dag) <- coordinates
+
+  return(dag)
 
 }
 
-
-#' Connect new nodes to parents
-#'
-#' connect_new_nodes_to_parent_new_nodes() is a helper function for draw_new_node_edges() and addNodes().
-#'
-#' @importFrom data.table as.data.table
-#' @param new_node_names Inputted vector of node names to be added to the graph.
-#' @param new_node_parents_in_existing_nodes Inputted vector of new node parent names in the supplied reference nodes.
-#' @returns A list of edges connecting new nodes to their parent nodes, at time point.
-#' @noRd
-connect_new_nodes_to_parent_new_nodes <- function(new_node_names, existing_node_names, new_node_parents_in_existing_nodes){ # needs checking single new_node_name input
-  .datatable.aware <- TRUE
-  # check if more than one reference node
-  if( length(existing_node_names) > 1 ){
-
-    # connect new node to parent nodes (also included in reference nodes)
-    new_nodes_list <- suppressWarnings(
-
-      lapply(1:( length(new_node_names) ), function(t){ # t = each time point
-
-        new_nodes_list <- lapply( 1:nrow(new_node_names), function(y){ # y = each reference (new) node e.g. Z1_a, Z2_a, Z3_a
-
-          if( length( unlist(new_node_parents_in_existing_nodes[[y]]) ) > 0){
-
-            new_nodes_list <- lapply( 1:length( unlist(new_node_parents_in_existing_nodes[[y]]) ), function(x){ # x = each parent node
-
-              if( length( unlist(new_node_parents_in_existing_nodes[[y]][[x]]) ) > 0 ){
-
-                if( length( unlist(new_node_parents_in_existing_nodes[[y]][[x]]) ) > 1){
-
-                  new_nodes_list <- list( v =  new_node_parents_in_existing_nodes[[y]][[x,t]], e = "->", w = new_node_names[y, t] )
-
-                }else{
-
-                  new_nodes_list <- list( v =  new_node_parents_in_existing_nodes[[y]][[x]], e = "->", w = new_node_names[y, t] )
-
-                }
-              }
-
-            })
-
-          }
-        })
-
-      })
-    )
-
-
-    new_nodes_list <- do.call( rbind, new_nodes_list )
-
-    if( !all( is.null(unlist(new_nodes_list)) ) ){
-
-      new_nodes_list <-  data.table::as.data.table( do.call( rbind, unlist(new_nodes_list, recursive = FALSE) ) )
-    }
-
-    new_nodes_list[] <- lapply(new_nodes_list, as.character)
-
-
-  }else{
-
-    new_nodes_list <- suppressWarnings(
-
-      lapply(1:( nrow(new_node_names) ), function(t){ # t = each time point
-
-        if( length( unlist(new_node_parents_in_existing_nodes) ) > 0 ){
-
-            new_nodes_list <- lapply( 1:length( unlist(new_node_parents_in_existing_nodes[[t]]) ), function(x){ # x = each parent node
-
-              if( length( unlist(new_node_parents_in_existing_nodes[[t]][[x]]) ) > 0 ){
-
-                  new_nodes_list <- list( v =  new_node_parents_in_existing_nodes[[t]][[x]], e = "->", w = new_node_names[t,] )
-
-              }
-
-            } )
-
-        }
-
-      } )
-    )
-
-    if( !all( is.null(unlist(new_nodes_list)) ) ){
-
-      new_nodes_list <-  data.table::as.data.table( do.call( rbind, new_nodes_list) )
-
-      new_nodes_list[] <- lapply(new_nodes_list, as.character)
-    }
-
-  }
-
-  return(new_nodes_list)
-}
-
-
-#' Connect new nodes to parents
-#'
-#' connect_post_treatment_node_parents() is a helper function for draw_new_node_edges() and addNodes().
-#'
-#' @importFrom data.table as.data.table
-#' @param new_node_names Inputted vector of node names to be added to the graph.
-#' @param new_node_parents Inputted vector of new node parent names.
-#' @returns A list of edges connecting new nodes to their parent nodes, at time point.
-#' @noRd
-connect_post_treatment_node_parents <- function(new_node_names, existing_node_names, new_node_parents){
-  .datatable.aware <- TRUE
-  if( length(existing_node_names) > 1 ){
-    # new nodes parents
-    new_nodes_list <- suppressWarnings(
-
-      lapply(1:( length(new_node_names) ), function(t){ # t = each time point
-
-        new_nodes_list <- lapply( 1:nrow(new_node_names), function(y){ # y = each reference (new) node e.g. Z1_a, Z2_a, Z3_a
-
-          if( length( unlist(new_node_parents[[y]]) ) > 0){
-
-            new_nodes_list <- lapply( 1:length( unlist(new_node_parents[[y]]) ), function(x){ # x = each parent node
-
-
-              if( length( unlist(new_node_parents[[y]][[x]]) ) > 0 ){
-
-                new_nodes_list <- list( v =  new_node_parents[[y]][[x]], e = "->", w = new_node_names[y, t] )
-
-              }else{
-
-                new_nodes_list <- list( v =  new_node_parents[[y]], e = "->", w = new_node_names[y, t] )
-
-
-              }
-
-
-            })
-
-          }
-
-
-        })
-
-      }) )
-
-    new_nodes_list <- do.call( rbind, new_nodes_list )
-
-    if( !all( is.null(unlist(new_nodes_list)) ) ){
-
-      new_nodes_list <-  data.table::as.data.table( do.call( rbind, unlist(new_nodes_list, recursive = FALSE) ) )
-    }
-
-    new_nodes_list[] <- lapply(new_nodes_list, as.character)
-
-  }else{
-
-    # new nodes parents
-    new_nodes_list <- suppressWarnings(
-
-      lapply(1:( nrow(new_node_names) ), function(t){ # t = each time point
-
-          if( length( unlist(new_node_parents) ) > 0 ){
-
-            new_nodes_list <- lapply( 1:length( new_node_parents ), function(y){ # x = each parent node
-
-              if( length( unlist(new_node_parents[[y]]) ) > 0 ){
-
-                new_nodes_list <- lapply( 1:length( unlist(new_node_parents[[y]]) ), function(x){ # x = each parent node
-
-                  if( length( unlist(new_node_parents[[y]][[x]]) ) > 0 ){
-
-                    new_nodes_list <- list( v =  new_node_parents[[y]][[x]], e = "->", w = new_node_names[t,] )
-
-                  }else{
-
-                    new_nodes_list <- list( v =  new_node_parents[[y]], e = "->", w = new_node_names[t,] )
-
-
-                  }
-
-                })
-
-
-              }
-
-            })
-
-          }
-
-      }) )
-
-    new_nodes_list <- do.call( rbind, new_nodes_list )
-
-    #if( !all( is.null( unlist(new_nodes_list) ) ) & length( unlist(new_node_parents) ) > 1 ){
-    #  new_nodes_list <-  as.data.table( do.call( rbind, new_nodes_list) )
-    #  new_nodes_list[] <- lapply(new_nodes_list, as.character)
-    #}else
-
-    if( !all( is.null(unlist(new_nodes_list) ) ) ){
-
-      new_nodes_list <-  data.table::as.data.table( do.call( rbind, unlist(new_nodes_list, recursive = FALSE) ) )
-
-      new_nodes_list[] <- lapply(new_nodes_list, as.character)
-
-
-    }
-
-
-  }
-
-  return(new_nodes_list)
-}
-
-
-#' Connect new nodes to children
-#'
-#' connect_post_treatment_node_children() is a helper function for draw_new_node_edges() and addNodes().
-#'
-#' @importFrom data.table as.data.table
-#' @param new_node_names Inputted vector of node names to be added to the graph.
-#' @param new_node_children Inputted vector of new nodes' children.
-#' @returns A list of edges connecting new nodes to their child nodes, at time point.
-#' @noRd
-connect_post_treatment_node_children <- function(new_node_names, existing_node_names, new_node_children){
-  .datatable.aware <- TRUE
-
-  if( length(existing_node_names) > 1 ){
-
-    # new nodes children
-    new_nodes_list <- suppressWarnings(
-
-      lapply(1:( length(new_node_names) ), function(t){ # t = each time point
-
-        new_nodes_list <- lapply( 1:nrow(new_node_names), function(y){ # y = each reference (new) node e.g. Z1_a, Z2_a, Z3_a
-
-          if( length( unlist(new_node_children[[y]]) ) > 0){
-
-            new_nodes_list <- lapply( 1:length( unlist(new_node_children[[y]]) ), function(x){ # x = each children node
-
-
-              if( length( unlist(new_node_children[[y]][[x]]) ) > 0 ){
-
-                new_nodes_list <- list( v = new_node_names[y, t], e = "->", w = new_node_children[[y]][[x]] )
-
-              }else{
-
-                new_nodes_list <- list( v =  new_node_names[y, t], e = "->", w =  new_node_children[[y]])
-
-
-              }
-
-            })
-
-          }
-
-
-        })
-
-      }) )
-
-    new_nodes_list <- do.call( rbind, new_nodes_list )
-
-    if( !all( is.null(unlist(new_nodes_list)) ) ){
-
-      new_nodes_list <-  data.table::as.data.table( do.call( rbind, unlist(new_nodes_list, recursive = FALSE) ) )
-    }
-
-    new_nodes_list[] <- lapply(new_nodes_list, as.character)
-
-  }else{
-
-    # new nodes children
-    new_nodes_list <- suppressWarnings(
-
-      lapply(1:( nrow(new_node_names) ), function(t){ # t = each time point
-
-        if( length( unlist(new_node_children) ) > 0 ){
-
-          new_nodes_list <- lapply( 1:length( new_node_children ), function(y){ # y = each child node
-
-            if( length( unlist(new_node_children[[y]]) ) > 0 ){
-
-              new_nodes_list <- lapply( 1:length( unlist(new_node_children[[y]]) ), function(x){ # x = each child node
-
-                if( length( unlist(new_node_children[[y]][[x]]) ) > 0 ){
-
-                  new_nodes_list <- list( v = new_node_names[t,], e = "->", w = new_node_children[[y]][[x]])
-
-                }else{
-
-                  new_nodes_list <- list( v = new_node_names[t,], e = "->", w = new_node_children[[y]])
-
-
-                }
-
-              })
-
-
-            }
-
-          })
-
-        }
-
-      }) )
-
-    new_nodes_list <- do.call( rbind, new_nodes_list )
-
-    #if( !all( is.null( unlist(new_nodes_list) ) ) & length( unlist(new_node_children) ) > 1 ){
-    #  new_nodes_list <-  as.data.table( unlist( do.call( rbind, new_nodes_list), recursive = FALSE ) )
-    #  new_nodes_list[] <- lapply(new_nodes_list, as.character)
-
-   #}else
-    if( !all( is.null(unlist(new_nodes_list) ) ) ){
-
-      new_nodes_list <-  data.table::as.data.table( do.call( rbind, unlist(new_nodes_list, recursive = FALSE) ) )
-
-      new_nodes_list[] <- lapply(new_nodes_list, as.character)
-
-    }
-
-
-  }
-
-  return(new_nodes_list)
-}
 
 #' Connect new nodes
 #'
@@ -1034,14 +785,14 @@ connect_post_treatment_node_children <- function(new_node_names, existing_node_n
 #' @importFrom data.table as.data.table is.data.table
 #' @importFrom dagitty topologicalOrdering
 #' @param dag A dagitty object. Must include exposure and outcome nodes.
-#' @param new_nodes A suffix added to each of the new node names, e.g. "post_treatment", or "t" (a number is added for each repeat if num_repeats is specified)
+#' @param nodes A suffix added to each of the new node names, e.g. "post_treatment", or "t" (a number is added for each repeat if num_repeats is specified)
 #' @param node_role Role assigned to new nodes, from any of the following: c("confounder", "treatment", "outcome", "mediator", "mediator_outcome_confounder", "instrumental", "competing_exposure", "collider", "latent", "observed").
-#' @param type Type of graph generated. Defaults to 'full' (fully connected graph) with arrows drawn between confounders (both directions) and from confounders to mediators. If type ='saturated', a similar saturated graph is produced except confounders are not connected to mediators, featuring bi-directional arrows between each of the confounders (follows the ESC-DAGs Mapping Stage in Ferguson et al. (2020)). When type = 'first' or 'last', inputted new_nodes are ordered first or last if a confounder, mediator, or treatment node_role is selected.
+#' @param type Type of graph generated. Defaults to 'full' (fully connected graph) with arrows drawn between confounders (both directions) and from confounders to mediators. If type ='saturated', a similar saturated graph is produced except confounders are not connected to mediators, featuring bi-directional arrows between each of the confounders (follows the ESC-DAGs Mapping Stage in Ferguson et al. (2020)). When type = 'first' or 'last', inputted nodes are ordered first or last if a confounder, mediator, or treatment node_role is selected.
 #' @param temporal_reference_node Supply an alternative reference, or simply leave blank. Default settings uses dagitty::topologicalOrdering() and selects the first of the inputted node_role (e.g., first confounder) as the temporal point of reference. If type = 'last', the last node is used.
 #' @returns output_list containing temporal_reference_node, existing_node_names, and a data frame of new_edges.
 #' @noRd
 add_nodes_helper <- function(dag,
-                             new_nodes,
+                             nodes,
                              node_role,
                              type,
                              temporal_reference_node = NA
@@ -1069,13 +820,13 @@ add_nodes_helper <- function(dag,
     stop("add_nodes() currently only supports single node_role character inputs.")
 
   }else if( node_role %in% "confounder" ){
-    confounder_occurrance <- as.numeric(order(match(new_nodes, new_nodes)))
+    confounder_occurrance <- as.numeric(order(match(nodes, nodes)))
 
     ## confounder edges ##
     new_edges <- draw_confounder_edges(type,
                                        outcomes,
                                        treatments,
-                                       confounder_vec = new_nodes, # new nodes as confounder
+                                       confounder_vec = nodes, # new nodes as confounder
                                        m_o_confounder_vec,
                                        mediator_vec,
                                        latent_vec,
@@ -1086,11 +837,11 @@ add_nodes_helper <- function(dag,
 
       confounder_list <- list()
 
-      confounder_list <- suppressWarnings( lapply(1:length(new_nodes), function(x){
+      confounder_list <- suppressWarnings( lapply(1:length(nodes), function(x){
 
         confounder_list[x] <- lapply(1:length(confounder_vec), function(y){
 
-          list( c( ancestor = new_nodes[x], edge = "->", descendant = confounder_vec[y]) )
+          list( c( ancestor = nodes[x], edge = "->", descendant = confounder_vec[y]) )
 
         })
 
@@ -1104,9 +855,9 @@ add_nodes_helper <- function(dag,
 
       confounder_list <- suppressWarnings( lapply(1:length(confounder_vec), function(x){
 
-        confounder_list[x] <- lapply(1:length(new_nodes), function(y){
+        confounder_list[x] <- lapply(1:length(nodes), function(y){
 
-          list( c( ancestor = confounder_vec[x], edge = "->", descendant = new_nodes[y]) )
+          list( c( ancestor = confounder_vec[x], edge = "->", descendant = nodes[y]) )
 
         })
 
@@ -1127,9 +878,9 @@ add_nodes_helper <- function(dag,
 
       first_list <- list()
 
-      first_list <- suppressWarnings( lapply(1:length(new_nodes), function(x){
+      first_list <- suppressWarnings( lapply(1:length(nodes), function(x){
 
-        first_list[x] <- list( c( ancestor = new_nodes[x], edge = "->", descendant = first_var) )
+        first_list[x] <- list( c( ancestor = nodes[x], edge = "->", descendant = first_var) )
 
 
       }) )
@@ -1148,9 +899,9 @@ add_nodes_helper <- function(dag,
 
       last_list <- list()
 
-      last_list <- suppressWarnings( lapply(1:length(new_nodes), function(x){
+      last_list <- suppressWarnings( lapply(1:length(nodes), function(x){
 
-        last_list[x] <- list( c( ancestor = last_var, edge = "->", descendant = new_nodes[x]) )
+        last_list[x] <- list( c( ancestor = last_var, edge = "->", descendant = nodes[x]) )
 
       }) )
 
@@ -1168,7 +919,7 @@ add_nodes_helper <- function(dag,
     ## treatment edges ##
     new_edges <- draw_treatment_edges(type,
                                       outcomes,
-                                      treatments = new_nodes, # new nodes as treatment
+                                      treatments = nodes, # new nodes as treatment
                                       confounder_vec,
                                       mediator_vec,
                                       collider_vec)
@@ -1180,9 +931,9 @@ add_nodes_helper <- function(dag,
 
       treatment_list <- suppressWarnings( lapply(1:length(treatments), function(x){
 
-        treatment_list[x] <- lapply(1:length(new_nodes), function(y){
+        treatment_list[x] <- lapply(1:length(nodes), function(y){
 
-          list( c( ancestor = treatments[x], edge = "->", descendant = new_nodes[y]) )
+          list( c( ancestor = treatments[x], edge = "->", descendant = nodes[y]) )
 
         })
 
@@ -1195,11 +946,11 @@ add_nodes_helper <- function(dag,
 
 
 
-      treatment_list <- suppressWarnings( lapply(1:length(new_nodes), function(x){
+      treatment_list <- suppressWarnings( lapply(1:length(nodes), function(x){
 
         treatment_list[x] <- lapply(1:length(treatments), function(y){
 
-          list( c( ancestor = new_nodes[x], edge = "->", descendant = treatments[y]) )
+          list( c( ancestor = nodes[x], edge = "->", descendant = treatments[y]) )
 
         })
 
@@ -1219,9 +970,9 @@ add_nodes_helper <- function(dag,
 
       first_list <- list()
 
-      first_list <- suppressWarnings( lapply(1:length(new_nodes), function(x){
+      first_list <- suppressWarnings( lapply(1:length(nodes), function(x){
 
-        first_list[x] <- list( c( ancestor = new_nodes[x], edge = "->", descendant = first_var) )
+        first_list[x] <- list( c( ancestor = nodes[x], edge = "->", descendant = first_var) )
 
 
       }) )
@@ -1240,9 +991,9 @@ add_nodes_helper <- function(dag,
 
       last_list <- list()
 
-      last_list <- suppressWarnings( lapply(1:length(new_nodes), function(x){
+      last_list <- suppressWarnings( lapply(1:length(nodes), function(x){
 
-        last_list[x] <- list( c( ancestor = last_var, edge = "->", descendant = new_nodes[x]) )
+        last_list[x] <- list( c( ancestor = last_var, edge = "->", descendant = nodes[x]) )
 
       }) )
 
@@ -1255,16 +1006,16 @@ add_nodes_helper <- function(dag,
     }
 
 
-    treatments <- c(treatments, new_nodes)
+    treatments <- c(treatments, nodes)
 
     existing_node_names <- names( nodes_ordered[ names(nodes_ordered) %in% treatments ] ) # existing node names in temporal order
 
   }else if( node_role %in% "outcome" ){
     ## outcome edges ##
-    new_edges <- draw_outcome_edges(type, outcomes = new_nodes, # new nodes as outcome
+    new_edges <- draw_outcome_edges(type, outcomes = nodes, # new nodes as outcome
                                     collider_vec)
 
-    outcomes  <- c(outcome, new_nodes)
+    outcomes  <- c(outcome, nodes)
 
     existing_node_names <- names( nodes_ordered[ names(nodes_ordered) %in% outcomes ] ) # existing node names in temporal order
 
@@ -1272,18 +1023,18 @@ add_nodes_helper <- function(dag,
     ## mediator edges ##
     new_edges <- draw_mediator_edges(type,
                                      outcomes,
-                                     mediator_vec = new_nodes, # new nodes as mediator
+                                     mediator_vec = nodes, # new nodes as mediator
                                      latent_vec)
 
     if(type == "full"){
 
       mediator_list <- list()
 
-      mediator_list <- suppressWarnings( lapply(1:length(new_nodes), function(x){
+      mediator_list <- suppressWarnings( lapply(1:length(nodes), function(x){
 
         mediator_list[x] <- lapply(1:length(mediator_vec), function(y){
 
-          list( c( ancestor = new_nodes[x], edge = "->", descendant = mediator_vec[y]) )
+          list( c( ancestor = nodes[x], edge = "->", descendant = mediator_vec[y]) )
 
         })
 
@@ -1295,11 +1046,11 @@ add_nodes_helper <- function(dag,
       new_edges <- rbind(new_edges, mediator_unlist)
 
 
-      mediator_list <- suppressWarnings( lapply(1:length(new_nodes), function(x){
+      mediator_list <- suppressWarnings( lapply(1:length(nodes), function(x){
 
-        mediator_list[x] <- lapply(1:length(new_nodes), function(y){
+        mediator_list[x] <- lapply(1:length(nodes), function(y){
 
-          list( c( ancestor = mediator_vec[x], edge = "->", descendant = new_nodes[y]) )
+          list( c( ancestor = mediator_vec[x], edge = "->", descendant = nodes[y]) )
 
         })
 
@@ -1319,9 +1070,9 @@ add_nodes_helper <- function(dag,
 
       first_list <- list()
 
-      first_list <- suppressWarnings( lapply(1:length(new_nodes), function(x){
+      first_list <- suppressWarnings( lapply(1:length(nodes), function(x){
 
-        first_list[x] <- list( c( ancestor = new_nodes[x], edge = "->", descendant = first_var) )
+        first_list[x] <- list( c( ancestor = nodes[x], edge = "->", descendant = first_var) )
 
 
       }) )
@@ -1340,9 +1091,9 @@ add_nodes_helper <- function(dag,
 
       last_list <- list()
 
-      last_list <- suppressWarnings( lapply(1:length(new_nodes), function(x){
+      last_list <- suppressWarnings( lapply(1:length(nodes), function(x){
 
-        last_list[x] <- list( c( ancestor = last_var, edge = "->", descendant = new_nodes[x]) )
+        last_list[x] <- list( c( ancestor = last_var, edge = "->", descendant = nodes[x]) )
 
       }) )
 
@@ -1362,7 +1113,7 @@ add_nodes_helper <- function(dag,
                                 treatments,
                                 outcomes,
                                 confounder_vec,
-                                m_o_confounder_vec = new_nodes, # new nodes as mediator_outcome_confounder
+                                m_o_confounder_vec = nodes, # new nodes as mediator_outcome_confounder
                                 mediator_vec,
                                 latent_vec)
 
@@ -1370,7 +1121,7 @@ add_nodes_helper <- function(dag,
 
   }else if( node_role %in% "instrumental" ){
     ## instrumental_variables edges ##
-    new_edges <- draw_iv_edges(instrumental_variables = new_nodes, # new nodes as instrumental
+    new_edges <- draw_iv_edges(instrumental_variables = nodes, # new nodes as instrumental
                                treatments)
 
     existing_node_names <- names( nodes_ordered[ names(nodes_ordered) %in% instrumental_variables ] ) # existing node names in temporal order
@@ -1378,7 +1129,7 @@ add_nodes_helper <- function(dag,
   }else if( node_role %in% "competing_exposure" ){
     ## competing_exposure edges ##
     new_edges <- draw_competing_exposure_edges(outcomes,
-                                               competing_exposure_vec = new_nodes) # new nodes as competing_exposure
+                                               competing_exposure_vec = nodes) # new nodes as competing_exposure
 
     existing_node_names <- names( nodes_ordered[ names(nodes_ordered) %in% competing_exposure_vec ] ) # existing node names in temporal order
 
@@ -1386,16 +1137,16 @@ add_nodes_helper <- function(dag,
     ## outcome edges ##
     new_edges <- draw_outcome_edges(type,
                                     outcomes,
-                                    collider_vec = new_nodes) # new nodes as collider
+                                    collider_vec = nodes) # new nodes as collider
 
     # connect colliders
     treatment_list <- list()
 
     treatment_list <- suppressWarnings( lapply(1:length(treatments), function(x){
 
-      treatment_list[x] <- lapply(1:length(new_nodes), function(y){
+      treatment_list[x] <- lapply(1:length(nodes), function(y){
 
-        list( c( ancestor = treatments[x], edge = "->", descendant = new_nodes[y]) )
+        list( c( ancestor = treatments[x], edge = "->", descendant = nodes[y]) )
 
       })
 
@@ -1410,15 +1161,15 @@ add_nodes_helper <- function(dag,
 
   }else if( node_role %in% "latent" ){
     ## latent_variables edges ##
-    new_edges <- draw_latent_edges(latent_variables = new_nodes) # new nodes as latent
+    new_edges <- draw_latent_edges(latent_variables = nodes) # new nodes as latent
 
     existing_node_names <- names( nodes_ordered[ names(nodes_ordered) %in% latent_vec ] ) # existing node names in temporal order
 
-    latent_vec <- c(latent_vec, new_nodes)
+    latent_vec <- c(latent_vec, nodes)
 
   }else if( node_role %in% "observed" ){
     ## connect observed to ancestors and descendants ##
-    new_edges <- draw_observed_edges(observed = new_nodes, # new nodes as observed
+    new_edges <- draw_observed_edges(observed = nodes, # new nodes as observed
                                      existing_dag = dag)
 
     existing_node_names <- names( nodes_ordered[ names(nodes_ordered) %in% observed ] ) # existing node names in temporal order
@@ -1440,6 +1191,65 @@ add_nodes_helper <- function(dag,
 return(output_list)
 
 }
+
+
+
+
+#' Fully connect new nodes to others
+#'
+#' saturate_nodes_helper() is a helper function for saturate_nodes() that connects new and existing nodes, drawing edges in both directions.
+#'
+#' @importFrom data.table as.data.table
+#' @param dag An existing dagitty object.
+#' @param nodes A vector of new nodes.
+#' @noRd
+saturate_nodes_helper <- function(dag, nodes, dag_node_names, type){
+  .datatable.aware <- TRUE
+
+  ## get node names
+  node_names <- dag_node_names
+
+  ## get initial dag roles
+  dag_roles <- get_roles(dag)
+
+  outcomes  <- dag_roles$outcome
+  treatments <- dag_roles$treatment
+  confounder_vec <- dag_roles$confounder
+  m_o_confounder_vec <- dag_roles$mediator_outcome_confounder
+  mediator_vec <- dag_roles$mediator
+  instrumental_variables <- dag_roles$instrumental
+  competing_exposure_vec <- dag_roles$competing_exposure
+  latent_vec <- dag_roles$latent
+  latent_variables <- latent_vec
+  collider_vec <- dag_roles$collider
+  observed <- dag_roles$observed
+
+  confounder_occurrance <- as.numeric(order(match(nodes, nodes)))
+
+  ## get variable names ##
+  observed_node_names <- unique( as.vector( c(confounder_vec, m_o_confounder_vec, mediator_vec, competing_exposure_vec, collider_vec, instrumental_variables) ) )
+  observed_node_names <- Filter(Negate(anyNA), observed_node_names)
+
+  edges <- draw_edges(observed_node_names = observed_node_names,
+                      type = type,
+                      outcomes = outcomes,
+                      treatments = treatments,
+                      confounder_vec = confounder_vec,
+                      m_o_confounder_vec = m_o_confounder_vec,
+                      mediator_vec = mediator_vec,
+                      instrumental_variables = instrumental_variables,
+                      competing_exposure_vec = competing_exposure_vec,
+                      latent_vec = latent_vec,
+                      latent_variables = latent_variables,
+                      collider_vec = collider_vec,
+                      observed = observed,
+                      confounder_occurrance = confounder_occurrance,
+                      existing_dag = dag)
+
+  return( edges )
+
+}
+
 
 
 #' @importFrom data.table as.data.table
@@ -1478,5 +1288,722 @@ print_edges_helper <- function(new_edges){
 
 
   return(new_edges_list)
+}
+
+
+
+#' merge dags
+#'
+#' copy_nodes_helper() is a helper function for add_nodes() and merge_graph a daggity object using edges input.
+#'
+#' @importFrom data.table as.data.table is.data.table
+#' @importFrom dagitty dagitty
+#' @param edges A data frame of edges.
+#' @returns A dagitty object
+#' @noRd
+copy_nodes_helper <- function(dag,
+                                   edges,
+                                   node_names,
+                                   new_dag,
+                                   treatments,
+                                   outcomes,
+                                   latent_vec,
+                                   coordinates,
+                                   coords_spec
+){
+  .datatable.aware <- TRUE
+
+  new_edges <- as.data.frame( # get edges, node names from new daggity object (inputted as existing_nodes)
+    dagitty::edges(new_dag) )[, c("v", "e", "w")]
+
+  new_node_names <- names(new_dag) # extract new dag node names
+  existing_node_names <-  new_node_names[ new_node_names %in% node_names ] # saves duplicate node names
+  new_node_names <- new_node_names[ !new_node_names %in% node_names ] # remove duplicate node names
+
+  node_names <- c(node_names, new_node_names) # combine both dag node names
+
+  edges <- rbind(edges, new_edges) # combine both dag edges
+
+  node_name_and_coords_vec <- c()
+
+  if( length(latent_vec) > 0 ){ ########### simplify this section ##############
+
+    if( all(complete.cases(latent_vec)) ) {
+
+      node_name_and_coords_vec <- c(paste(treatments, " [exposure] ", sep=""),
+                                    paste(outcomes, " [outcome] ", sep=""),
+                                    paste(latent_vec, " [latent] ", sep=""),
+                                    paste(node_names, collapse=" "))
+
+    }else{
+      node_name_and_coords_vec <- c(paste(treatments, " [exposure] ", sep=""),
+                                    paste(outcomes, " [outcome] ", sep=""),
+                                    paste(node_names, collapse=" "))
+    }
+
+  }else{
+
+    node_name_and_coords_vec <- c(paste(treatments, " [exposure] ", sep=""),
+                                  paste(outcomes, " [outcome] ", sep=""),
+                                  paste(node_names, collapse=" "))
+  }
+
+  num_edges <- nrow(edges)
+
+  if( num_edges != 0 ){
+
+    edges <- suppressWarnings( sapply(1:num_edges, function(x){
+
+      edges <- paste( edges[x,], collapse=" ")
+
+    }) )
+
+  }
+
+  dag <- paste("dag {", paste(node_name_and_coords_vec, collapse=""), paste(edges, collapse=" "), "}", sep = " ")
+
+  dag <- dagitty::dagitty(dag)
+
+  if(all(!is.na(unlist(coordinates)))){
+
+    dagitty::coordinates(dag) <- coordinates
+
+  }
+
+  new_coordinates <- renew_coords(dag = dag,
+                                     new_node_names = new_node_names,
+                                     coordinates = coordinates,
+                                     coords_spec = coords_spec[ complete.cases(coords_spec) ] )
+
+  dagitty::coordinates(dag) <- new_coordinates
+
+  return(dag)
+
+}
+
+
+#' Rebuild dag
+#'
+#' rebuild_dag() rebuilds a dag using a dagitty object and data frame of edges input.
+#'
+#' @importFrom data.table as.data.table is.data.table
+#' @importFrom dagitty edges exposures outcomes latents coordinates dagitty isAcyclic
+#' @param dag A dagitty object.
+#' @param edges A vector of edges.
+#' @returns A dagitty object
+#' @noRd
+rebuild_dag <- function(dag,
+                        edges
+){
+  .datatable.aware <- TRUE
+
+  latent_vec <- dagitty::latents(dag)
+  treatments <- dagitty::exposures(dag)
+  outcomes <- dagitty::outcomes(dag)
+
+  coordinates <- dagitty::coordinates(dag)
+
+  exclude_names <- c(treatments, outcomes, latent_vec)
+
+  node_names <- unique(edges[,"v"])
+  node_names <- node_names[,1][! unlist( node_names[,1] ) %in% exclude_names]
+
+  # construct dag
+  dag <- construct_graph(edges, unlist(node_names), treatments, outcomes, latent_vec)
+
+
+  if(all(!is.na(unlist(coordinates)))){
+    dagitty::coordinates(dag) <- coordinates
+  }
+
+  return(dag)
+
+}
+
+
+#' construct dag
+#'
+#' construct_graph() constructs a daggity object using edges input.
+#'
+#' @importFrom data.table as.data.table is.data.table
+#' @importFrom dagitty dagitty
+#' @param edges A data frame of edges.
+#' @returns A dagitty object
+#' @noRd
+construct_graph <- function(edges,
+                            node_names,
+                            treatments,
+                            outcomes,
+                            latent_vec
+){
+  .datatable.aware <- TRUE
+
+  node_name_and_coords_vec <- c()
+
+  if( length(latent_vec) > 0 ){ ########### simplify this section ##############
+
+    if( all(complete.cases(latent_vec)) ) {
+      node_name_and_coords_vec <- c(paste(treatments, " [exposure] ", sep=""),
+                                    paste(outcomes, " [outcome] ", sep=""),
+                                    paste(latent_vec, " [latent] ", sep=""),
+                                    paste(node_names, collapse=" "))
+    }else{
+      node_name_and_coords_vec <- c(paste(treatments, " [exposure] ", sep=""),
+                                    paste(outcomes, " [outcome] ", sep=""),
+                                    paste(node_names, collapse=" "))
+    }
+
+  }else{
+    node_name_and_coords_vec <- c(paste(treatments, " [exposure] ", sep=""),
+                                  paste(outcomes, " [outcome] ", sep=""),
+                                  paste(node_names, collapse=" "))
+  }
+
+  num_edges <- nrow(edges)
+
+  if( num_edges != 0 ){
+
+    edges <- suppressWarnings( sapply(1:num_edges, function(x){
+
+      edges <- paste( edges[x,], collapse=" ")
+
+    }) )
+
+  }
+
+  dag <- paste("dag {", paste(node_name_and_coords_vec, collapse=""), paste(edges, collapse=" "), "}", sep = " ")
+
+  dag <- dagitty::dagitty(dag)
+
+
+  return(dag)
+
+}
+
+
+#' Adds coordinates to nodes in a merged dagitty object
+#'
+#' merged_node_coords_helper() is a helper function for renew_coords().
+#'
+#' @importFrom dagitty exposures outcomes coordinates latents
+#' @param dag A dagitty object. Must include exposure and outcome nodes.
+#' @param new_node_name_vec Inputted vector of new node names added to the graph.
+#' @param num_nodes Number of new nodes.
+#' @param coordinates_x Existing x-coordinates.
+#' @param coordinates_y Existing y-coordinates.
+#' @param treatments Treatment/exposures in the supplied dag.
+#' @param outcomes Outcomes in the supplied dag.
+#' @param post_treatment Indicates whether the coordinates of new nodes should be informed by treatment coordinates.
+#' @param post_outcome Similarly, outcome coordinates can be used to inform new node coordinates.
+#' @param num_vars Total number of variables in the dag.
+#' @param lambda Parameter used to generate coordinates. Adjust node placement with lambda; a higher value increases volatility and results in more extreme DAG structures.
+#' @param threshold Parameter used to generate coordinates. Threshold controls the closeness of nodes.
+#' @return Named list of new coordinates.
+#' @noRd
+merged_node_coords_helper <- function(dag,
+                                      new_node_name_vec,
+                                      num_nodes,
+                                      coordinates_x,
+                                      coordinates_y,
+                                      treatments = NA,
+                                      outcomes,
+                                      post_treatment = FALSE,
+                                      post_outcome = FALSE,
+                                      num_vars,
+                                      lambda,
+                                      threshold
+){
+  .datatable.aware <- TRUE
+
+  existing_node_names <- names(coordinates_x)
+  existing_node_names_not_outcome <- existing_node_names[ !existing_node_names %in% outcomes ]
+
+  nodes_parents <- lapply(1:num_nodes, function(x){   # get new node name parents
+    nodes_parents <- dagitty::parents(dag, new_node_name_vec[x])
+  })
+
+  nodes_children <- lapply( 1:num_nodes, function(x){  # get new node name children
+    nodes_children <- dagitty::children(dag, new_node_name_vec[x])
+  })
+
+  if( post_treatment == FALSE & all( complete.cases(treatments) ) ){
+
+    existing_node_names_not_outcome <- existing_node_names_not_outcome[ !existing_node_names_not_outcome %in% treatments ]
+
+  }
+
+  if( post_outcome == FALSE ){
+
+    nodes_parents <- lapply(1:num_nodes, function(x){ # get new node name parents in existing nodes (found in both dags prior to merge)
+      nodes_parents <- existing_node_names_not_outcome[ existing_node_names_not_outcome %in% nodes_parents[[x]] ]
+    })
+
+    nodes_children <- lapply(1:num_nodes, function(x){ # get new node name parents in existing nodes (found in both dags prior to merge)
+      nodes_children <- existing_node_names_not_outcome[ existing_node_names_not_outcome %in% nodes_children[[x]] ]
+    })
+
+  }
+
+  ## separate x and y coordinates, node names, num nodes
+  new_node_name_vec_y <- new_node_name_vec
+  num_nodes_y <- num_nodes
+  nodes_parents_y <- nodes_parents
+  nodes_children_y <- nodes_children
+
+  new_node_name_vec_x <- new_node_name_vec
+  num_nodes_x <- num_nodes
+  nodes_parents_x <- nodes_parents
+  nodes_children_x <- nodes_children
+
+  existing_coordinates_x <- coordinates_x[ !names(coordinates_x) %in% new_node_name_vec ]
+  existing_coordinates_y <- coordinates_y[ !names(coordinates_y) %in% new_node_name_vec ]
+
+
+  quality_check <- FALSE
+  iteration <- 1
+
+  while(quality_check == FALSE){
+
+    iteration <- iteration + ( num_nodes*lambda )
+
+    ## get difference between min-max coords
+    diff_y_coords <-  abs( min( existing_coordinates_y ) - max( existing_coordinates_y ) )
+    diff_x_coords <-  abs( min( existing_coordinates_x ) - max( existing_coordinates_x ) )
+
+
+    if( num_nodes_y > 0){
+      ## y coordinates ##
+
+      new_y_coords <- sapply(1:num_nodes_y, function(x){
+
+        if( length( nodes_parents_y[[x]] ) > 0 ){
+
+
+          new_y_coords <- max( existing_coordinates_y[ names(existing_coordinates_y) %in% nodes_parents_y[[x]] ]
+          ) + x*iteration + ( diff_y_coords/num_vars )*num_nodes*(x/num_nodes) + runif(n = 1,
+                                                                                       min = iteration*lambda,
+                                                                                       max = iteration + ( num_nodes*lambda)/2 )
+
+        }else if( length( nodes_children_y[[x]] ) > 0 ) {
+
+          new_y_coords <- min( existing_coordinates_y[ names(existing_coordinates_y) %in% nodes_children_y[[x]] ]
+          ) - x*iteration - ( diff_y_coords/num_vars )*num_nodes*(x/num_nodes) - runif(n = 1,
+                                                                                       min = iteration*lambda,
+                                                                                       max = iteration + ( num_nodes*lambda )/2 )
+
+        }else if( length( unlist(nodes_parents_y) ) > 0 ){
+
+          new_y_coords <- min( existing_coordinates_y[ names(existing_coordinates_y) %in% unlist(nodes_parents_y) ]
+          ) + x*iteration + ( diff_y_coords/num_vars )*num_nodes*(x/num_nodes) + runif(n = 1,
+                                                                                       min = iteration*lambda,
+                                                                                       max = iteration + ( num_nodes*lambda )/2 )
+
+        }else if( length( unlist(nodes_children_y) ) > 0 ){
+
+          new_y_coords <- min( existing_coordinates_y[ names(existing_coordinates_y) %in% unlist(nodes_children_y) ]
+          ) - x*iteration - ( diff_y_coords/num_vars )*num_nodes*(x/num_nodes) - runif(n = 1,
+                                                                                       min = iteration*lambda,
+                                                                                       max = iteration + ( num_nodes*lambda )/2 )
+
+        }else{
+
+          new_y_coords <- x + x*iteration + ( diff_y_coords/num_vars )*num_nodes*(x/num_nodes) + runif(n = 1,
+                                                                                                       min = iteration*lambda,
+                                                                                                       max = iteration + ( num_nodes*lambda )/2 )
+        }
+
+      })
+
+      names(new_y_coords) <- new_node_name_vec_y
+
+    }
+
+    if( num_nodes_x > 0){
+      ## x coordinates ##
+      new_x_coords <- sapply(1:num_nodes_x, function(x){
+
+        if( length( nodes_children_x[[x]] ) > 0 ) {
+
+          new_x_coords <- min( existing_coordinates_x[ names(existing_coordinates_x) %in% nodes_children_x[[x]] ]
+          ) - x*iteration - ( diff_x_coords/num_vars )*num_nodes + diff_x_coords*(x/diff_x_coords) - runif(n = 1,
+                                                                                                           min = iteration*lambda,
+                                                                                                           max = iteration + ( num_nodes*lambda*10 )/2 )
+
+        }else if( length( nodes_parents_x[[x]] ) > 0 ){
+
+          new_x_coords <- min( existing_coordinates_x[ names(existing_coordinates_x) %in% nodes_parents_x[[x]] ]
+          ) + x*iteration + ( diff_x_coords/num_vars )*num_nodes*(x/num_nodes) + runif(n = 1,
+                                                                                       min = iteration*lambda,
+                                                                                       max = iteration + ( num_nodes*lambda*10 )/2 )
+
+        }else if( length( unlist(nodes_children_x) ) > 0 ){
+
+          new_x_coords <- min( existing_coordinates_x[ names(existing_coordinates_x) %in% unlist(nodes_children_x) ]
+          ) - x*iteration - ( diff_x_coords/num_vars )*num_nodes + diff_x_coords*(x/diff_x_coords) - runif(n = 1,
+                                                                                                           min = iteration*lambda,
+                                                                                                           max = iteration + ( num_nodes*lambda*10 )/2 )
+
+        }else if( length( unlist(nodes_parents_x) ) > 0 ){
+
+          new_x_coords <- max( existing_coordinates_x[ names(existing_coordinates_x) %in% unlist(nodes_parents_x) ]
+          ) + x*iteration + diff_x_coords*(x/diff_x_coords) + runif(n = 1,
+                                                                    min = iteration*lambda,
+                                                                    max = iteration + ( num_nodes*lambda*10 )/2 )
+        }else{
+
+          new_x_coords <- x + x*iteration + diff_x_coords*(x/diff_x_coords) - runif(n = 1,
+                                                                                    min = iteration*lambda,
+                                                                                    max = iteration + ( num_nodes*lambda*10 )/2 )
+        }
+        new_x_coords
+
+      })
+
+      names(new_x_coords) <- new_node_name_vec_x
+    }
+
+    new_coordinates <- quality_check_merged_node_coords_helper(new_node_name_vec_x = new_node_name_vec_x,
+                                                               new_node_name_vec_y = new_node_name_vec_y,
+                                                               num_nodes_x = num_nodes_x,
+                                                               num_nodes_y = num_nodes_y,
+                                                               new_x_coords = new_x_coords,
+                                                               new_y_coords = new_y_coords,
+                                                               existing_coordinates_x = existing_coordinates_x,
+                                                               existing_coordinates_y = existing_coordinates_y,
+                                                               threshold = threshold)
+
+    ## initialise new variables ##
+    # y-coords
+    existing_coordinates_y <-  new_coordinates$y
+
+    nodes_children_y <- nodes_children_y[ !new_node_name_vec_y %in% names(existing_coordinates_y) ]
+    nodes_parents_y <- nodes_parents_y[ !new_node_name_vec_y %in% names(existing_coordinates_y) ]
+
+    new_node_name_vec_y <- new_node_name_vec_y[ !new_node_name_vec_y %in% names(existing_coordinates_y)]
+    num_nodes_y <- length(new_node_name_vec_y)
+
+    # x-coords
+    existing_coordinates_x <- new_coordinates$x
+
+    nodes_children_x <- nodes_children_x[ !new_node_name_vec_x %in% names(existing_coordinates_x) ]
+    nodes_parents_x <- nodes_parents_x[ !new_node_name_vec_x %in% names(existing_coordinates_x) ]
+
+    new_node_name_vec_x <- new_node_name_vec_x[ !new_node_name_vec_x %in% names(existing_coordinates_x) ]
+    num_nodes_x <- length(new_node_name_vec_x)
+
+    if( num_nodes_y + num_nodes_x == 0 ){
+
+      quality_check <- TRUE
+
+    }
+
+  }
+
+  coordinates <- list(x = existing_coordinates_x[!duplicated(names(existing_coordinates_x))], y = existing_coordinates_y[!duplicated(existing_coordinates_y)] )
+
+  return(coordinates)
+
+}
+
+
+#' Returns highest x or y coordinates for a group of nodes
+#'
+#' @importFrom dagitty parents
+#' @param dag A dagittyy object.
+#' @param group_node_names Node group of interest.
+#' @param num_group_nodes Number of nodes in group of interest.
+#' @param coordinates_x_or_y Named vector of either x or y coordinates.
+#' @param coord_names Names corrresponding to coordinates_x_or_y input.
+#' @return Maximum parent coordinates for a group of nodes.
+#' @noRd
+parent_node_max_coords <- function(dag, group_node_names, num_group_nodes, coordinates_x_or_y, coord_names){
+
+  group_parents <- lapply(1:num_group_nodes, function(x){   # get new node name parents
+    group_parents <- dagitty::parents(dag, group_node_names[x])
+  })
+
+  group_parent_max_coord <- max( coordinates_x_or_y[ coord_names # highest x or y coordinates for a group of nodes
+                                                     %in% unlist(group_parents) ], na.rm = TRUE )
+
+  return(group_parent_max_coord)
+
+}
+
+
+#' Creates latent node coordinates for add_latent_coordinates()
+#'
+#' latent_new_coordinates_helper() is a helper function for renew_coords().
+#'
+#' @importFrom dagitty exposures outcomes coordinates latents
+#' @param dag dagitty object
+#' @param latent_variables vector of latent variable nodes.
+#' @param existing_coordinates list of coordinates from a dagitty object.
+#' @param lambda coordinates tuning parameter.
+#' @return dagitty objecty with coordinates.
+#' @noRd
+latent_new_coordinates_helper <- function(dag, latent_variables, coordinates, lambda=2){
+  #latent_variables <- get_latent_vec(latent_variables) # used for debugging
+  # coordinates <- existing_coords# used for debugging
+  if( all( complete.cases( unlist(latent_variables) ) ) ){
+
+    num_latents <- length(latent_variables)
+
+    num_vars <- length(names(dag))
+
+    latent_descendants <- lapply(1:num_latents, function(x){
+
+      latent_descendants <- dagitty::children(dag, latent_variables[x])
+
+    })
+
+    latent_parents <- lapply(1:num_latents, function(x){
+
+      latent_parents <- dagitty::parents(dag, latent_variables[x])
+
+    })
+
+    latent_descendants <- latent_descendants[[1]][ ! latent_descendants[[1]] %in% latent_parents[[1]]]
+
+
+  }else{
+
+    if( all( complete.cases(latent_variables) ) ){
+
+      warning("NA's present in latent variables (ignore if latent variables were not supplied)")
+
+    }
+
+    return(coordinates)
+
+  }
+
+  quality_check <- FALSE
+
+  iteration <- 0
+
+  lambda <- lambda/num_vars
+
+  while(quality_check == FALSE){
+
+    iteration <- iteration + 1*lambda
+
+    ## y coordinates ##
+    new_y_coords <- sapply(1:num_latents, function(x){
+
+      if( length( latent_descendants[[x]] ) > 0 ) {
+
+        new_y_coords <- min( coordinates$y[ names(coordinates$y) %in% latent_descendants[[x]] ]
+        ) - runif(n = 1,
+                  min = ( num_latents),
+                  max = iteration + (num_latents + x) )*lambda - 1
+
+      }else if( length( unlist(latent_descendants) > 0) ){
+
+        new_y_coords <- min( coordinates$y[ names(coordinates$y) %in% unlist(latent_descendants) ]
+        ) - runif(n = 1,
+                  min = ( num_latents ),
+                  max = iteration + (num_latents + x) )*lambda - 1
+
+      }else if( length( unlist(latent_parents) ) > 0 ){
+
+        new_y_coords <- min( coordinates$y[ names(coordinates$y) %in% unlist(latent_parents) ]
+        ) + runif(n = 1,
+                  min = ( num_latents ),
+                  max = iteration + (num_latents + x) )*lambda + 1
+
+      }else{
+
+        new_y_coords <- x - runif(n = 1,
+                                  min = ( num_latents/num_vars ),
+                                  max = iteration + (num_latents + x) )*lambda
+
+      }
+
+    })
+
+    ## x coordinates ##
+    new_x_coords <- sapply(1:num_latents, function(x){
+
+      if( length( latent_descendants[[x]] ) > 0 ) {
+
+        new_node_x_coords <- min( coordinates$x[ names(coordinates$x) %in% latent_descendants[[x]] ]
+        ) - runif(n = 1,
+                  min = ( num_latents/num_vars ),
+                  max = iteration + (num_latents + x)/2 ) - 1
+
+      }else if( length( unlist(latent_descendants) > 0) ){
+
+        new_x_coords <- min( coordinates$x[ names(coordinates$x) %in% unlist(latent_descendants) ]
+        ) + runif(n = 1,
+                  min = ( num_latents/num_vars ),
+                  max = iteration + (num_latents + x) ) + 1
+
+      }else{
+
+        new_x_coords <- x - runif(n = 1,
+                                  min = ( num_latents/num_vars ),
+                                  max = iteration + (num_latents + x) ) - 1
+
+      }
+
+    })
+
+    new_coordinates <- list(x = new_x_coords, y = new_y_coords)
+
+    quality_check <- quality_check_new_coordinates_helper(dag,
+                                                          grouped_nodes = latent_variables,
+                                                          num_nodes = num_latents,
+                                                          new_coordinates = new_coordinates,
+                                                          existing_coords = coordinates)
+
+  }
+
+  names(new_coordinates$x) <- latent_variables
+  names(new_coordinates$y) <- latent_variables
+
+  coordinates <- list(x = c(coordinates$x, new_coordinates$x), y = c(coordinates$y, new_coordinates$y))
+
+  return(coordinates)
+
+}
+
+
+#' Creates coordinates for obserbed nodes.
+#'
+#' observed_new_coordinates_helper()
+#'
+#' @importFrom dagitty exposures outcomes coordinates latents
+#' @param dag dagitty object
+#' @param latent_variables vector of latent variable nodes.
+#' @param existing_coordinates list of coordinates from a dagitty object.
+#' @return dagitty objecty with coordinates.
+#' @noRd
+observed_new_coordinates_helper <- function(dag, observed, existing_coords){
+
+  if( !all(is.na(observed)) ){
+    num_nodes <- length(observed)
+
+    num_vars <- length(names(dag))
+
+    nodes_descendants <- lapply(1:num_nodes, function(x){
+
+      nodes_descendants <- dagitty::children(dag, observed[x])
+
+    })
+
+    if( length(unlist(nodes_descendants)) < (num_nodes*2) ){
+
+      nodes_parents <- lapply(1:num_nodes, function(x){
+
+        nodes_parents <- dagitty::parents(dag, observed[x])
+
+      })
+
+      nodes_descendants <- lapply(1:num_nodes, function(x){
+
+        nodes_descendants <- c(unlist(nodes_parents[x]), unlist(nodes_descendants[x]))
+
+      })
+
+    }
+
+
+    quality_check <- FALSE
+
+    iteration <- 0
+
+    while(quality_check == FALSE){
+
+      iteration <- iteration + 1
+
+      new_group_coords <- lapply(1:num_nodes, function(x){
+
+        nodes_descendants_coords_x <- (
+          mean( tidyr::replace_na(is.na(existing_coords$x[ names(existing_coords$x) %in% nodes_descendants[[x]] ]), 0))
+
+          - runif(n = 1, min = ( 0.1*iteration )*( num_vars/num_nodes ),
+                  max = ( ( 0.2*iteration )*( num_vars/num_nodes ) ) ) ** (2*(0.1*iteration))
+
+          - (2*( 1 / x )) - ( (0.2*iteration)*( num_vars ) )
+        )
+
+        nodes_descendants_coords_y <- (
+          mean( tidyr::replace_na(is.na(existing_coords$y[ names(existing_coords$y) %in% nodes_descendants[[x]] ] ), 0))
+
+          - runif(n = 1, min = ( 0.01*iteration )*( num_vars/num_nodes ),
+                  max = ( ( 0.1*iteration )*( num_vars/num_nodes ) ) ) ** (2*(0.1*iteration))
+
+          - (2*( 1 / x )) - ( (0.2*iteration)*( num_vars ) )
+        )
+
+        new_group_coords <- list(x = unlist(nodes_descendants_coords_x), y = unlist(nodes_descendants_coords_y))
+
+      })
+
+      # bind rows into a data frame (columns are still classed as lists)
+      new_coordinates <- as.data.frame( do.call( rbind, new_group_coords ) )
+
+
+      ## unlist and replace NaN ##
+
+      # x coordinates
+      unlisted_coords_x <- unlist( new_coordinates$x )
+
+      unlisted_coords_x <- sapply(  unlisted_coords_x, function(x){
+        replace( x, x == "NaN" , num_vars + runif(1, min=1, max = (num_vars/2) ) )
+      } )
+
+      # y coordinates
+      unlisted_coords_y <- unlist( new_coordinates$y )
+
+      unlisted_coords_y <- sapply(  unlisted_coords_y, function(x){
+        replace( x, x == "NaN" , num_vars + runif(1, min=1, max = (num_vars/2) ) )
+      } )
+
+
+
+      ## internal check against other generated latent coords ##
+
+      if( !all( unlisted_coords_x >= 0 ) ){
+
+        unlisted_coords_x <- lapply(1:length(unlisted_coords_x), function(x){
+
+          unlisted_coords_x[x] <- sqrt( unlist( unlisted_coords_x[x] )**2 )/2
+
+        })
+
+        unlisted_coords_x <- unlist(unlisted_coords_x)
+      }
+
+      if( !all( unlisted_coords_y >= 0 ) ){
+
+        unlisted_coords_y <- lapply(1:length(unlisted_coords_y), function(x){
+
+          unlisted_coords_y[x] <- sqrt( unlist( unlisted_coords_y[x] )**2 )/2
+
+        })
+
+        unlisted_coords_y <- unlist(unlisted_coords_y)
+
+      }
+
+      new_coordinates <- list(x = unlisted_coords_x, y = unlisted_coords_y)
+
+      quality_check <- quality_check_new_coordinates_helper(dag, observed, num_nodes, new_coordinates, existing_coords)
+
+    }
+    names(new_coordinates$x) <- observed
+    names(new_coordinates$y) <- observed
+
+    coords_list <- list(x = c( na.omit(existing_coords$x), new_coordinates$x), y = c( na.omit(existing_coords$y), new_coordinates$y))
+
+  }else{
+
+    coords_list <- existing_coords
+  }
+
+
+  return(coords_list)
+
 }
 

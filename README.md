@@ -1,8 +1,8 @@
 # causaliflower
 
-The causaliflower package provides simple ways of working with causal graphs in R.
+The causaliflower package provides functions for working with causal graph objects in R.
 
-It makes use of existing functions for analysing and visualising directed acylic graphs (DAGs), including 'dagitty' and 'ggdag'. 
+It extends 'dagitty' and 'ggdag' for analysing and visualising directed acylic graphs (DAGs) to provide repeatable workflows to simplify the process of building a DAG from prior knowledge.
 
 
 ## Overview
@@ -11,15 +11,15 @@ It makes use of existing functions for analysing and visualising directed acylic
 
 >Causality + cauliflower = 'causaliflower' (working title!)
 
-The central focus of causaliflower is to provide open-source software for building causal graphs and analysing their structures in a cohesive workflow.
+The aim of causaliflower is to enable repeatable workflows for building and analysing causal graphs in R.
 
-The code below gives an idea, however an introductory vignette provided on release will include more in-depth examples.
-
-
-### In This Version of causaliflower
+Example code is included below, however an upcoming vignette will provide a more in-depth guide to some of the functions in this package.
 
 
-- build a directed (hopefully acyclic) graph from scratch with flexible inputs (as few or many as needed).
+### In This Version
+
+
+- Build a dagitty object, inputting node roles (if known):
 
 ```R
 
@@ -28,7 +28,7 @@ dag <- build_graph(type = 'ordered', variables, treatments, outcomes) # required
 ```
 
 
-- draw edges between nodes in a dagitty objectto create a saturated or fully connected graph
+- Saturate dagitty object nodes, up to a fully connected graph:
 
 ```R
 saturated_graph <- build_graph(type = c('full', 'saturated'), # choose a type
@@ -36,7 +36,7 @@ saturated_graph <- build_graph(type = c('full', 'saturated'), # choose a type
 ```
 
 
-- assess the implied causal relationships using causal criteria (deciding which edges to keep)
+- Assess implied causal relationships to remove edges using a set of causal criteria:
 
 ```R
 edges <- assess_edges(saturated_graph, edges_to_keep = dag) 
@@ -48,53 +48,39 @@ dag <- keep_edges(saturated_graph, edges_to_keep)
 ```
 
 
-- update graph with new coordinates 
+- Add or update node coordinates:
 
 ```R
 dag <- add_coords(dag) # also called in build_graph()
 ```
 
 
-- merge two dagitty objects
+- Join two dagitty objects, keeping the coordinates of the first:
 
 ```R
 new_dag <- build_graph(type = 'ordered', variables, treatments, outcomes, # required inputs
                        mediators, latent_variables, instrumental_variables, # more inputs
                        coords_spec = 2) # higher spec increases volatility in node placement
             
-new_dag <- merge_graphs(dag, new_dag)
+new_dag <- join_graphs(dag, new_dag)
 ```
 
 
-- simplify graph using markov properties (removes unnecessary edges)
-
-```R
-markov_dag <- markov_graph(dag) # simple algorithm, may produce some unexpected results
-```
-
-
-- obtain minimally sufficient adjustment sets (returns smallest 5 sets by default)
+- Output minimal sufficient adjustment sets (returns smallest 5 sets by default):
 
 ```R
 minimal_sets(dag, effect = "direct")
 ```
 
 
-- display dagitty graphs using ggdag (causaliflower presets)
+- Display dagitty objects using ggdag (wrapper function with custom causaliflower presets):
 
 ```R
-ggdagitty(new_dag)
+plot_dagitty(new_dag)
 ```
 
 
-- copy existing nodes to new nodes at different time-points
-
-```R
-copy_nodes(dag, existing_nodes)
-```
-
-
-- add nodes, or the saturate connection of existing nodes (grouped by role, e.g., add confounder/treatment/outcome nodes)
+- Add nodes to an existing graph:
 
 ```R
 add_nodes(dag, new_nodes)
@@ -103,32 +89,43 @@ saturate_nodes(dag, new_nodes)
 ```
 
 
-- functions for extracting edges and node roles in a dagitty object    
+
+- Create copies of nodes, e.g. occurring at different time-points:
+
+```R
+copy_nodes(dag, existing_nodes)
+```
+
+
+- Functions to get edges and node structure information from a dagitty object:
 
 ```R
 get_edges(dag)
+
 get_roles(dag)  
 
-node_roles(dag)
-node_structure(dag)
+get_roles(dag)
+
+get_structure(dag)
 ```
 
 
-- other dag utility functions
+- Other utility functions:
 
 ```R
-variables(dag)  
 colliders(dag)  
+
 competing_exposures(dag) 
+
 mediator_outcome_confounders(dag) 
+
 confounders(dag)  
+
 mediators(dag)  
+
 instrumental_variables(dag) 
+
 proxies(dag)
 ```
 
-
-In the near future, causaliflower will be made public so that anyone interested in causal analysis in R can use the code in this package.
-
-If you have any questions or suggestions, please get in touch and/or contribute to the development of causaliflower.
-
+If you have any questions, suggestions, or would like to contribute, please let me know!

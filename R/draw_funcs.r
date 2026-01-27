@@ -20,7 +20,8 @@
 #' @param existing_dag An existing dagitty object may be supplied.
 #' @returns Data frame of edges.
 #' @noRd
-draw_edges <- function(type,
+draw_edges <- function(observed_node_names,
+                       type,
                        outcomes,
                        treatments,
                        confounder_vec,
@@ -34,6 +35,7 @@ draw_edges <- function(type,
                        observed,
                        confounder_occurrance,
                        existing_dag = NA){
+
   .datatable.aware <- TRUE
   ## outcome edges ##
   outcome_df <- draw_outcome_edges(type, outcomes, collider_vec)
@@ -80,7 +82,8 @@ draw_edges <- function(type,
                                    treatments = treatments)
 
   ## latent_variables edges ##
-  latent_df <- draw_latent_edges(latent_variables,
+  latent_df <- draw_latent_edges(observed_node_names,
+                                 latent_variables,
                                  type,
                                  outcomes,
                                  treatments,
@@ -128,11 +131,11 @@ draw_outcome_edges <- function(type,
                                collider_vec
                                ){
 
+  outcome_list <- c()
 
   # connect colliders
   if( all( complete.cases(collider_vec) ) ){
     ## outcome edges ##
-    outcome_list <- c()
 
     outcome_list <- suppressWarnings( lapply(1:length(outcomes), function(x){
 
@@ -148,12 +151,59 @@ draw_outcome_edges <- function(type,
 
     outcome_df <- as.data.table( do.call( rbind, unlist(outcome_list, recursive = FALSE) ) )
 
-    return(outcome_df)
+  }else{
+
+    outcome_df <- NULL
+
+  }
+
+
+    # connect all confounders (fully connected or saturated graph type)
+  if( length(outcomes) > 1 ){
+
+    if( type == "full" ){
+
+      outcome_list <- suppressWarnings( lapply(1:length(outcomes), function(x){
+
+        outcome_list[x] <- lapply(1:length(outcomes), function(y){
+
+          list( c( ancestor = outcomes[x], edge = "->", descendant = outcomes[y]) )
+
+        })
+
+      }) )
+
+      outcome_list <- Filter(Negate(anyNA), unlist(outcome_list, recursive = FALSE))
+      outcome_unlist <- as.data.table( do.call( rbind, unlist(outcome_list, recursive = FALSE) ) )
+
+      outcome_df <- rbind(outcome_df, outcome_unlist)
+
+    }else if( type == "saturated" ){
+
+      outcome_occurrance <- as.numeric(order(match(outcomes, outcomes)))
+
+      outcome_list <- suppressWarnings(lapply(1:length(outcomes), function(x){
+
+        outcome_list[x] <- lapply(1:length(outcomes), function(y){
+
+          list( c( ancestor = outcomes[x], edge = "->", descendant = outcomes[y], ancestor_order = outcome_occurrance[x], descendant_order = outcome_occurrance[y] ) )
+
+        })
+
+      }))
+
+      outcome_list <- Filter(Negate(anyNA), unlist(outcome_list, recursive = FALSE))
+      outcome_order_df <- as.data.table( do.call( rbind, unlist(outcome_list, recursive = FALSE) ) )
+
+      outcome_order_df <- outcome_order_df[,c(1:3)][!outcome_order_df$ancestor_order > outcome_order_df$descendant_order, ] # remove rows where temporal logic is not followed
+      outcome_df <- rbind(outcome_df, outcome_order_df)
+
+    }
 
 
   }
 
-  return( data.frame(NULL) )
+    return(outcome_df)
 
 
 }
@@ -230,24 +280,49 @@ draw_treatment_edges <- function(type,
   treatment_df <- rbind(treatment_df, treatment_unlist)
 
   # connect all confounders (fully connected or saturated graph type)
-  if( type == "full" ){
+  if( length(treatments) > 1 ){
 
-    treatment_list <- suppressWarnings( lapply(1:length(treatments), function(x){
+    if( type == "full" & length(treatments) > 1 ){
 
-      treatment_list[x] <- lapply(1:length(treatments), function(y){
+      treatment_list <- suppressWarnings( lapply(1:length(treatments), function(x){
 
-        list( c( ancestor = treatments[x], edge = "->", descendant = treatments[y]) )
+        treatment_list[x] <- lapply(1:length(treatments), function(y){
 
-      })
+          list( c( ancestor = treatments[x], edge = "->", descendant = treatments[y]) )
 
-    }) )
+        })
 
-    treatment_list <- Filter(Negate(anyNA), unlist(treatment_list, recursive = FALSE))
-    treatment_unlist <- as.data.table( do.call( rbind, unlist(treatment_list, recursive = FALSE) ) )
+      }) )
 
-    treatment_df <- rbind(treatment_df, treatment_unlist)
+      treatment_list <- Filter(Negate(anyNA), unlist(treatment_list, recursive = FALSE))
+      treatment_unlist <- as.data.table( do.call( rbind, unlist(treatment_list, recursive = FALSE) ) )
+
+      treatment_df <- rbind(treatment_df, treatment_unlist)
+
+    }else if( type == "saturated" ){
+
+      treatment_occurrance <- as.numeric(order(match(treatments, treatments)))
+
+      treatment_list <- suppressWarnings(lapply(1:length(treatments), function(x){
+
+        treatment_list[x] <- lapply(1:length(treatments), function(y){
+
+          list( c( ancestor = treatments[x], edge = "->", descendant = treatments[y], ancestor_order = treatment_occurrance[x], descendant_order = treatment_occurrance[y] ) )
+
+        })
+
+      }))
+
+      treatment_list <- Filter(Negate(anyNA), unlist(treatment_list, recursive = FALSE))
+      treatment_order_df <- as.data.table( do.call( rbind, unlist(treatment_list, recursive = FALSE) ) )
+
+      treatment_order_df <- treatment_order_df[,c(1:3)][!treatment_order_df$ancestor_order > treatment_order_df$descendant_order, ] # remove rows where temporal logic is not followed
+      treatment_df <- rbind(treatment_df, treatment_order_df)
+
+    }
 
   }
+
 
   return(treatment_df)
 }
@@ -315,7 +390,7 @@ draw_confounder_edges <- function(type,
 
 
     # connect all confounders (fully connected or saturated graph type)
-    if( type == "full" | type == "saturated" ){
+    if( type == "full" ){
       confounder_list <- suppressWarnings( lapply(1:length(confounder_vec), function(x){
 
         confounder_list[x] <- lapply(1:length(confounder_vec), function(y){
@@ -331,9 +406,6 @@ draw_confounder_edges <- function(type,
 
       confounder_df <- rbind(confounder_df, confounder_unlist)
 
-
-      # connect confounders to mediators, confounders to mediator-outcome confounders, and confounders to latents if the inputted dag type is "full"
-      if( type == "full" ){
 
         confounder_list <- suppressWarnings( lapply(1:length(confounder_vec), function(x){
 
@@ -384,9 +456,10 @@ draw_confounder_edges <- function(type,
 
         confounder_df <- rbind(confounder_df, confounder_unlist)
 
-      }
 
-    }else if( type == "ordered" ){
+    }
+
+    if( type == "ordered" | type == "saturated" ){
 
       confounder_list <- suppressWarnings(lapply(1:length(confounder_vec), function(x){
 
@@ -800,7 +873,8 @@ draw_iv_edges <- function(type, instrumental_variables, treatments){
 #' @param mediator_vec Character or vector of mediator variable names.
 #' @returns A data frame of latent variable edges.
 #' @noRd
-draw_latent_edges <- function(latent_variables,
+draw_latent_edges <- function(observed_node_names,
+                              latent_variables,
                               type,
                               outcomes,
                               treatments,
@@ -808,6 +882,7 @@ draw_latent_edges <- function(latent_variables,
                               m_o_confounder_vec,
                               mediator_vec
                               ){
+
 
   if( all( complete.cases( unlist(latent_variables) ) ) ){
 
@@ -965,6 +1040,8 @@ draw_latent_edges <- function(latent_variables,
       latent_df <- unique(latent_df) # remove duplicate edges
       latent_df <- latent_df[latent_df$ancestor != latent_df$descendant, ] # remove edges with identical ancestor and descendant node names
 
+      latent_df <- latent_df[ !unlist(latent_df[,"ancestor"]) %in% observed_node_names ] # remove latent edges containing ancestor nodes with other roles
+
       return(latent_df)
 
     }
@@ -976,9 +1053,12 @@ draw_latent_edges <- function(latent_variables,
 }
 
 
-#' Draw new node edges
+
+#' draws edges for copy_nodes_helper()
 #'
-#' draw_new_node_edges() is a helper function for addNodes().
+#' draw_edges_for_copy_nodes() is called by copy_nodes() through copy_nodes_helper().
+#'
+#' It connects nodes by calling 'second helper' functions for each case.
 #'
 #' @importFrom data.table as.data.table
 #' @param dag A dagitty object. Must include exposure and outcome nodes.
@@ -990,7 +1070,7 @@ draw_latent_edges <- function(latent_variables,
 #' @param num_repeats Number of additional copies of nodes, such as time points. Each repeat number is included at the end of new node names (new_new_t1, new_node_t2, etc.).
 #' @returns A data frame of instrumental variable edges.
 #' @noRd
-draw_new_node_edges <- function(dag, new_node_names, existing_node_names, existing_node_type, new_node_type, temporal_reference_node, num_repeats){
+draw_edges_for_copy_nodes_helper <- function(dag, new_node_names, existing_node_names, existing_node_type, new_node_type, temporal_reference_node, num_repeats){
 
   ## connect reference & new nodes ##
 
@@ -1052,8 +1132,8 @@ draw_new_node_edges <- function(dag, new_node_names, existing_node_names, existi
     new_node_children <- lapply(1:length(existing_node_names), function(x){
 
       new_node_children <- existing_node_children[[x]][ !existing_node_children[[x]] %in% treatments &
-                                                 !existing_node_children[[x]] %in% existing_node_names[[x]] &
-                                                 !existing_node_children[[x]] %in% treatment_parents ]
+                                                          !existing_node_children[[x]] %in% existing_node_names[[x]] &
+                                                          !existing_node_children[[x]] %in% treatment_parents ]
 
     })
 
@@ -1119,56 +1199,6 @@ draw_new_node_edges <- function(dag, new_node_names, existing_node_names, existi
 
 
   return(new_nodes_df)
-
-}
-
-#' Fully connect new nodes to others
-#'
-#' connect_all_nodes_to_new() is a helper function for saturate_nodes() that draws edges between new and existing nodes, in both directions.
-#'
-#' @importFrom data.table as.data.table
-#' @param dag An existing dagitty object.
-#' @param new_nodes A vector of new nodes.
-#' @noRd
-connect_all_nodes_to_new <- function(dag, new_nodes){
-  .datatable.aware <- TRUE
-
-  ## get node names
-  node_names <- names( dag )
-
-  ## new_nodes as ancestors
-  node_list <- c()
-
-  node_list <- suppressWarnings( lapply(1:length(new_nodes), function(x){
-
-    node_list[x] <- lapply(1:length(node_names), function(y){
-
-      list( c( ancestor = new_nodes[x], edge = "->", descendant = node_names[y]) )
-
-    })
-
-  }) )
-
-  node_list <- Filter(Negate(anyNA), unlist(node_list, recursive = FALSE))
-  edges <- as.data.table( do.call( rbind, unlist(node_list, recursive = FALSE) ) )
-
-  ## new_nodes as descendants
-  node_list <- suppressWarnings( lapply(1:length(node_names), function(x){
-
-    node_list[x] <- lapply(1:length(new_nodes), function(y){
-
-      list( c( ancestor = node_names[x], edge = "->", descendant = new_nodes[y]) )
-
-    })
-
-  }) )
-
-  node_list <- Filter(Negate(anyNA), unlist(node_list, recursive = FALSE))
-  node_unlist <- as.data.table( do.call( rbind, unlist(node_list, recursive = FALSE) ) )
-
-  edges <- rbind(edges, node_unlist)
-
-  return( edges )
 
 }
 
