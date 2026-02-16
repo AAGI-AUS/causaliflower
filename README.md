@@ -1,9 +1,6 @@
 # causaliflower
 
-The causaliflower package provides functions for working with causal graph objects in R.
-
-It extends 'dagitty' and 'ggdag' for analysing and visualising directed acylic graphs (DAGs) to provide repeatable workflows to simplify the process of building a DAG from prior knowledge.
-
+The causaliflower package aims to support causal analysis in R. It extends 'dagitty' and 'ggdag' functions for analysing and visualising directed acylic graphs (DAGs) to enable building and assessing causal DAGs using expert knowledge.
 
 ## Overview
 
@@ -11,9 +8,9 @@ It extends 'dagitty' and 'ggdag' for analysing and visualising directed acylic g
 
 >Causality + cauliflower = 'causaliflower' (working title!)
 
-The aim of causaliflower is to enable repeatable workflows for building and analysing causal graphs in R.
+The goal of this package is to provide functions for reproducible causal analytical workflows in R.
 
-Example code is included below, however an upcoming vignette will provide a more in-depth guide to some of the functions in this package.
+Some examples are included below, however an in-depth tutorial will be provided in an upcoming vignette.
 
 
 ### In This Version
@@ -86,14 +83,6 @@ plot_dagitty(new_dag)
 add_nodes(dag, new_nodes)
 
 saturate_nodes(dag, new_nodes)
-```
-
-
-
-- Create copies of nodes, e.g. occurring at different time-points:
-
-```R
-copy_nodes(dag, existing_nodes)
 ```
 
 

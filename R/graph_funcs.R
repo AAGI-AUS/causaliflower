@@ -2,7 +2,6 @@
 #'
 #' build_graph() produces a dagitty graph object from inputted parameters (e.g. treatments, outcome, confounders).
 #'
-#' @importFrom dplyr bind_cols bind_rows
 #' @importFrom dagitty is.dagitty children coordinates
 #' @param type Type of connected graph (e.g. "full", "saturated", "ordered", "none"). Defaults to 'full' (fully connected graph) with arrows drawn between confounders (both directions) and from confounders to mediators. If type ='saturated', a similar saturated graph is produced except confounders are not connected to mediators, featuring bi-directional arrows between each of the confounders (follows the ESC-DAGs Mapping Stage in Ferguson et al. (2020)). When type = 'ordered', the order of supplied confounders and mediators determines the order that each node occurs, therefore directed arrows are to be connected in one direction from confounders and mediators to other confounders and mediators, respectively. This builds a saturated DAG with temporal, uni-directional arrows, based on Tennnant et al. (2021).
 #' @param variables Dagitty object, or vector of variable names, e.g. "Z" or c("Z1", "Z2", "Z3"). If variable names are inputted the order determines the assigned coordinates. A list can also be supplied. Variables inputted are treated as confounders. If type = "ordered", confounders located in the same list will be assigned similar coordinates.
@@ -139,33 +138,15 @@ build_graph <- function(variables = NA,
 
     collider_vec <- as.vector( unlist( lapply( colliders, function(x) if( identical( x, character(0) ) ) NA_character_ else x ) ) )
 
+    confounder_vec <- as.vector( unlist(variables) )
+    confounder_occurrance <- as.numeric(order(match(confounder_vec, confounder_vec)))
 
-    if( length(unlist(variables)) > length(variables) ){     # create confounder_vec & confounder_occurance
-      confounders_list <- list()
+    if( all( complete.cases(variables) ) & any( confounder_vec %in% m_o_confounder_vec ) ){ # if any mediator-outcome confounders are also inputted as confounders, execution is stopped
 
-      confounders_list <- lapply( 1:length(variables), function(x){
-
-        confounders_list[[x]] <- list( as.data.frame( variables[[x]]), rep(x, times = length(variables[[x]]) ) )
-        confounders_list <- dplyr::bind_cols(confounders_list[[x]][1], confounders_list[[x]][2])
-      })
-
-      confounders_df <- dplyr::bind_rows( confounders_list )
-      confounder_vec <- as.vector( unlist(confounders_df[1]) )
-      confounder_occurrance <- as.vector( unlist(confounders_df[2]) )
-
-    }else {
-
-      confounder_vec <- as.vector(variables)
-      confounder_occurrance <- as.numeric(order(match(confounder_vec, confounder_vec)))
-
-
-      if( all( complete.cases(variables) ) & any( confounder_vec %in% m_o_confounder_vec ) ){ # if any mediator-outcome confounders are also inputted as confounders, execution is stopped
-
-        stop("Node names inputted in the 'variables' parameter detected in 'mediator_outcome_confounder'. These inputs should be mutually exclusive. Please adjust inputs and try again.")
-
-      }
+      stop("Node names inputted in the 'variables' parameter detected in 'mediator_outcome_confounder'. These inputs should be mutually exclusive. Please adjust inputs and try again.")
 
     }
+
 
     observed <- NA
 

@@ -109,12 +109,6 @@ extract_instrumental_variables <- function(dag, treatments, outcomes, latent_var
 
   if(length(unname(as.vector(instrumental_vars[,1]))) > 0){
 
-
-    #instrumental_children <- dagitty::children(dag, unname(as.vector(instrumental_vars[,1]))[1])
-
-    # length(instrumental_children[instrumental_children %in% treatments]) > 1
-
-
     instrumental_children_multiple_treatments <- lapply( 1:length(unname(as.vector(instrumental_vars[,1]))), function(x){
 
       instrumental_children <- list( node = list( as.character(unname(instrumental_vars[,1]))[x], dagitty::children(dag, unname(as.vector(instrumental_vars[,1]))[x]) ) )
@@ -1999,8 +1993,10 @@ observed_new_coordinates_helper <- function(dag, observed, existing_coords){
 
       new_group_coords <- lapply(1:num_nodes, function(x){
 
-        nodes_descendants_coords_x <- (
-          mean( tidyr::replace_na(is.na(existing_coords$x[ names(existing_coords$x) %in% nodes_descendants[[x]] ]), 0))
+        nodes_descendants_coords_x <- ( mean(
+          replace( existing_coords$x[ names(existing_coords$x) %in% nodes_descendants[[x]] ],
+                   is.na( existing_coords$x[ names(existing_coords$x) %in% nodes_descendants[[x]] ] ),
+                   0) )
 
           - runif(n = 1, min = ( 0.1*iteration )*( num_vars/num_nodes ),
                   max = ( ( 0.2*iteration )*( num_vars/num_nodes ) ) ) ** (2*(0.1*iteration))
@@ -2008,8 +2004,10 @@ observed_new_coordinates_helper <- function(dag, observed, existing_coords){
           - (2*( 1 / x )) - ( (0.2*iteration)*( num_vars ) )
         )
 
-        nodes_descendants_coords_y <- (
-          mean( tidyr::replace_na(is.na(existing_coords$y[ names(existing_coords$y) %in% nodes_descendants[[x]] ] ), 0))
+        nodes_descendants_coords_y <- ( mean(
+          replace( existing_coords$y[ names(existing_coords$y) %in% nodes_descendants[[x]] ],
+                   is.na(existing_coords$y[ names(existing_coords$y) %in% nodes_descendants[[x]] ] ),
+                   0) )
 
           - runif(n = 1, min = ( 0.01*iteration )*( num_vars/num_nodes ),
                   max = ( ( 0.1*iteration )*( num_vars/num_nodes ) ) ) ** (2*(0.1*iteration))
