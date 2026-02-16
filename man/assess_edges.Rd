@@ -4,14 +4,27 @@
 \alias{assess_edges}
 \title{Assess dagitty object edges}
 \usage{
-assess_edges(dag, edges_to_keep = NA, assess_causal_criteria = FALSE)
+assess_edges(
+  dag,
+  edges_to_assess = "all",
+  edges_to_keep = NA,
+  assess_causal_criteria = FALSE,
+  causal_criteria = ESCDAGs,
+  causal_criteria_answers = NULL
+)
 }
 \arguments{
 \item{dag}{A dagitty object. Must include exposure and outcome nodes.}
 
+\item{edges_to_assess}{Defaults to "all" edges, "bidirectional" includes only the edges where nodes are connected in both directions.}
+
 \item{edges_to_keep}{A vector of directed arrows to be kept between (non-treatment and non-outcome) variables, e.g. c("Z1 -> Z2", "Z2 -> Z3"), c("y", "n", "y"), or c(TRUE, FALSE, TRUE).}
 
 \item{assess_causal_criteria}{Defaults to FALSE. If TRUE, the user is guided through a sequence that assesses each pair of connected nodes using causal criteria. Based on the Evidence Synthesis for Constructing Directed Acyclic Graphs (ESC-DAGs) from Ferguson et al. (2020).}
+
+\item{causal_criteria}{= Default "ESCDAGs" (Ferguson et al., 2020) causal criteria considers temporality, face-validity, and recourse to theory. Other causal criteria can be supplied as a data.frame, see summary(ESCDAGs) for column names.}
+
+\item{causal_criteria_answers}{= NULL,}
 }
 \value{
 A list or vector of edges.

@@ -11,7 +11,7 @@ join_graphs(dag, new_dag, coords_spec = c(lambda = 0.1, threshold = 0.5))
 
 \item{new_dag}{Second dagitty object, added to the first.}
 
-\item{coords_spec}{Parameters used for generating coordinates. Adjust node placement with lambda; a higher value increases volatility and results in more extreme DAG structures. Threshold controls the closeness of nodes.}
+\item{coords_spec}{Adjust node placement with lambda; a higher value increases volatility and results in more extreme DAG structures. Threshold controls the closeness of nodes.}
 }
 \value{
 A dagitty object

@@ -165,9 +165,7 @@ extract_instrumental_variables <- function(dag, treatments, outcomes, latent_var
 extract_unique_node_roles <- function(dag){
   .datatable.aware <- TRUE
 
-  edges_dagitty <- data.table::as.data.table(dagitty::edges(dag))[,1:3]
-
-  edges <- edges_dagitty[, c("v", "e", "w")]
+  edges <- pdag_to_dag_edges(dag)
 
   # treatment
   treatments <- dagitty::exposures(dag)
@@ -354,9 +352,7 @@ extract_unique_node_roles <- function(dag){
 extract_node_roles <- function(dag){
   .datatable.aware <- TRUE
 
-  edges_dagitty <- data.table::as.data.table(dagitty::edges(dag))[,1:3]
-
-  edges <- edges_dagitty[, c("v", "e", "w")]
+  edges <- pdag_to_dag_edges(dag)
 
   # treatment
   treatments <- dagitty::exposures(dag)
@@ -605,8 +601,7 @@ roles_longer <- function(dag){
 ancestor_edges <- function(dag){
   .datatable.aware <- TRUE
 
-  edges <- data.table::as.data.table(dagitty::edges(dag))[,1:3]
-  edges <- edges[, c("v", "e", "w")]
+  edges <- pdag_to_dag_edges(dag)
 
   ## group by nodes
   unique_ancestors <- unique( edges[,"v"] )
@@ -671,110 +666,6 @@ find_missing_edges <- function(edges_ancestors, edges_descendants){
   }
 
   return(edges_ancestors)
-
-}
-
-
-#' Adds nodes to dagitty objects
-#'
-#' copy_nodes_helper() is a helper function for copy_nodes(). It adds new nodes to a dagitty object by referencing existing nodes.
-#'
-#' @param dag A dagitty object. Must include exposure and outcome nodes.
-#' @param existing_nodes Vector of existing node names, used as a reference for the new graph nodes, e.g., c("Z1", "Z2", "Z3").
-#' @param existing_node_type A suffix added to each of the reference node names, e.g. "pre_treatment", or "t0".
-#' @param new_node_type A suffix added to each of the new node names, e.g. "post_treatment", or "t" (a number is added for each repeat if num_repeats is specified)
-#' @param temporal_reference_node Supply an alternative reference, or simply leave blank. Default settings use treatment as the temporal point of reference for adding new (post-treatment) nodes, but if other node types are specified it can be useful to specify the existing node name.
-#' @param num_repeats Number of additional copies of nodes, such as time points. Each repeat number is included at the end of new node names (new_new_t1, new_node_t2, etc.).
-#' @param coords_spec Set of parameters for generating coordinates. Adjust node placement with lambda, a higher value increases volatility and results in more extreme DAG structures.
-#' @returns A dagitty object.
-#' @noRd
-copy_nodes_helper <- function(dag,
-                                  edges,
-                                  node_names,
-                                  treatments,
-                                  outcomes,
-                                  latent_vec,
-                                  coordinates,
-                                  existing_nodes,
-                                  existing_node_type,
-                                  new_node_type,
-                                  temporal_reference_node,
-                                  num_repeats,
-                                  coords_spec
-){
-
-  # create new node names
-  new_node_names <- create_names_copy_nodes_helper(existing_nodes, new_node_type, num_repeats)
-  new_node_names <- as.data.frame(new_node_names) # convert to data frame (called here instead of in the function to keep a consistent output, will possibly move it in later)
-
-  # update reference node names based on inputted existing_node_type
-  existing_node_names <- paste0(existing_nodes, "_", existing_node_type)
-
-  # replace reference nodes in the dag with their new names (coordinates too)
-  num_ref_nodes <- length(existing_nodes)
-
-  exclude_names <- c(treatments, outcomes, latent_vec)
-
-  node_names <- node_names[!node_names %in% exclude_names]
-
-  for(i in 1:num_ref_nodes){ # this will be rewritten without a for-loop
-
-    latent_vec <- sapply(   latent_vec, function(x)
-      replace( x, x %in% existing_nodes[i], existing_node_names[i] ) )
-
-    treatments <- sapply(   treatments, function(x)
-      replace( x, x %in% existing_nodes[i], existing_node_names[i] ) )
-
-    outcomes <- sapply(   outcomes, function(x)
-      replace( x, x %in% existing_nodes[i], existing_node_names[i] ) )
-
-    node_names <- sapply(   node_names, function(x)
-      replace( x, x %in% existing_nodes[i], existing_node_names[i] ) )
-
-    edges["v"] <- sapply(   as.vector(edges["v"]), function(x)
-      replace( x, x %in% existing_nodes[i], existing_node_names[i] ) )
-
-    edges["w"] <- sapply( as.vector(edges["w"]), function(x)
-      replace( x, x %in% existing_nodes[i], existing_node_names[i] ) )
-
-    names(coordinates[["x"]]) <- sapply(   names(coordinates[["x"]]), function(x)
-      replace( x, x %in% existing_nodes[i], existing_node_names[i] ) )
-
-    names(coordinates[["y"]]) <- sapply(   names(coordinates[["y"]]), function(x)
-      replace( x, x %in% existing_nodes[i], existing_node_names[i] ) )
-
-  }
-
-  dag <- construct_graph(edges, node_names, treatments, outcomes, latent_vec)
-
-  # draw edges for all new nodes (includes connecting parent and children nodes, reference nodes to new nodes, and consecutive new nodes)
-  new_node_df <- draw_edges_for_copy_nodes_helper(dag, new_node_names, existing_node_names, existing_node_type, new_node_type, temporal_reference_node, num_repeats)
-
-
-  edges <- rbind(edges, new_node_df)
-  edges[] <- lapply(edges, as.character)
-
-  dag <- construct_graph(edges, node_names, treatments, outcomes, latent_vec)
-
-
-  if(all(!is.na(unlist(coordinates)))){
-
-    dagitty::coordinates(dag) <- coordinates
-
-  }
-
-
-  new_node_names <- as.vector(unlist(new_node_names))
-
-  coordinates <- renew_coords(dag = dag,
-                                 new_node_names = new_node_names,
-                                 coordinates = coordinates,
-                                 coords_spec = coords_spec[ complete.cases(coords_spec) ] )
-
-
-  dagitty::coordinates(dag) <- coordinates
-
-  return(dag)
 
 }
 
@@ -1193,8 +1084,6 @@ return(output_list)
 }
 
 
-
-
 #' Fully connect new nodes to others
 #'
 #' saturate_nodes_helper() is a helper function for saturate_nodes() that connects new and existing nodes, drawing edges in both directions.
@@ -1251,7 +1140,6 @@ saturate_nodes_helper <- function(dag, nodes, dag_node_names, type){
 }
 
 
-
 #' @importFrom data.table as.data.table
 #' @param edges Data frame / data table of edges.
 #' @returns List of edges, grouped by each unique node.
@@ -1291,30 +1179,144 @@ print_edges_helper <- function(new_edges){
 }
 
 
+#' Adds nodes to dagitty objects
+#'
+#' copy_nodes_helper() is a helper function for copy_nodes(). It adds new nodes to a dagitty object by referencing existing nodes.
+#'
+#' @param dag A dagitty object. Must include exposure and outcome nodes.
+#' @param existing_nodes Vector of existing node names, used as a reference for the new graph nodes, e.g., c("Z1", "Z2", "Z3").
+#' @param existing_node_type A suffix added to each of the reference node names, e.g. "pre_treatment", or "t0".
+#' @param new_node_type A suffix added to each of the new node names, e.g. "post_treatment", or "t" (a number is added for each repeat if num_repeats is specified)
+#' @param temporal_reference_node Supply an alternative reference, or simply leave blank. Default settings use treatment as the temporal point of reference for adding new (post-treatment) nodes, but if other node types are specified it can be useful to specify the existing node name.
+#' @param num_repeats Number of additional copies of nodes, such as time points. Each repeat number is included at the end of new node names (new_new_t1, new_node_t2, etc.).
+#' @param coords_spec Adjust node placement with lambda, a higher value increases volatility and results in more extreme DAG structures.
+#' @returns A dagitty object.
+#' @noRd
+copy_nodes_helper <- function(dag,
+                              edges,
+                              node_names,
+                              treatments,
+                              outcomes,
+                              latent_vec,
+                              coordinates,
+                              existing_nodes,
+                              existing_node_type,
+                              new_node_type,
+                              temporal_reference_node,
+                              num_repeats,
+                              coords_spec
+){
+
+  # create new node names
+  new_node_names <- create_names_copy_nodes_helper(existing_nodes, new_node_type, num_repeats)
+  new_node_names <- as.data.frame(new_node_names) # convert to data frame (called here instead of in the function to keep a consistent output, will possibly move it in later)
+
+  # update reference node names based on inputted existing_node_type
+  existing_node_names <- paste0(existing_nodes, "_", existing_node_type)
+
+  # replace reference nodes in the dag with their new names (coordinates too)
+  num_ref_nodes <- length(existing_nodes)
+
+  exclude_names <- c(treatments, outcomes, latent_vec)
+
+  node_names <- node_names[!node_names %in% exclude_names]
+
+  for(i in 1:num_ref_nodes){ # this will be rewritten without a for-loop
+
+    latent_vec <- sapply(   latent_vec, function(x)
+      replace( x, x %in% existing_nodes[i], existing_node_names[i] ) )
+
+    treatments <- sapply(   treatments, function(x)
+      replace( x, x %in% existing_nodes[i], existing_node_names[i] ) )
+
+    outcomes <- sapply(   outcomes, function(x)
+      replace( x, x %in% existing_nodes[i], existing_node_names[i] ) )
+
+    node_names <- sapply(   node_names, function(x)
+      replace( x, x %in% existing_nodes[i], existing_node_names[i] ) )
+
+    edges[,"v"] <- sapply(   as.vector(edges[,"v"]), function(x)
+      replace( x, x %in% existing_nodes[i], existing_node_names[i] ) )
+
+    edges[,"w"] <- sapply( as.vector(edges[,"w"]), function(x)
+      replace( x, x %in% existing_nodes[i], existing_node_names[i] ) )
+
+    names(coordinates[["x"]]) <- sapply(   names(coordinates[["x"]]), function(x)
+      replace( x, x %in% existing_nodes[i], existing_node_names[i] ) )
+
+    names(coordinates[["y"]]) <- sapply(   names(coordinates[["y"]]), function(x)
+      replace( x, x %in% existing_nodes[i], existing_node_names[i] ) )
+
+  }
+
+  dag <- construct_graph(edges, node_names, treatments, outcomes, latent_vec)
+
+  # draw edges for all new nodes (includes connecting parent and children nodes, reference nodes to new nodes, and consecutive new nodes)
+  new_node_df <- draw_edges_for_copy_nodes_helper(dag, new_node_names, existing_node_names, existing_node_type, new_node_type, temporal_reference_node, num_repeats)
+
+
+  edges <- rbind(edges, new_node_df)
+  edges[] <- lapply(edges, as.character)
+
+  dag <- construct_graph(edges, node_names, treatments, outcomes, latent_vec)
+
+
+  if(all(!is.na(unlist(coordinates)))){
+
+    dagitty::coordinates(dag) <- coordinates
+
+  }
+
+
+  new_node_names <- as.vector(unlist(new_node_names))
+
+
+
+  tryCatch({
+    new_coordinates <- renew_coords(dag = dag,
+                                    new_node_names = new_node_names,
+                                    coordinates = coordinates,
+                                    coords_spec = coords_spec[ complete.cases(coords_spec) ] )
+
+    dagitty::coordinates(dag) <- new_coordinates
+
+  }, warning = function(w){
+    message(paste("Warning:", w, "\n Using alternative function to generate dag coordinates."))
+    dag <- add_coords(dag, coords_spec = coords_spec[ complete.cases(coords_spec) ] )
+    return(dag)
+
+  }, error = function(e){
+    message(paste("Error:", e, "\n Using alternative function to generate dag coordinates."))
+    dag <- add_coords(dag, coords_spec = coords_spec[ complete.cases(coords_spec) ] )
+    return(dag)
+
+  }, finally = return(dag)
+  )
+
+}
 
 #' merge dags
 #'
-#' copy_nodes_helper() is a helper function for add_nodes() and merge_graph a daggity object using edges input.
+#' copy_nodes_helper2() is a helper function for copy_nodes().
 #'
 #' @importFrom data.table as.data.table is.data.table
 #' @importFrom dagitty dagitty
 #' @param edges A data frame of edges.
 #' @returns A dagitty object
 #' @noRd
-copy_nodes_helper <- function(dag,
-                                   edges,
-                                   node_names,
-                                   new_dag,
-                                   treatments,
-                                   outcomes,
-                                   latent_vec,
-                                   coordinates,
-                                   coords_spec
-){
+copy_nodes_helper2 <- function(dag,
+                              edges,
+                              node_names,
+                              new_dag,
+                              treatments,
+                              outcomes,
+                              latent_vec,
+                              coordinates,
+                              coords_spec
+                              ){
   .datatable.aware <- TRUE
-
-  new_edges <- as.data.frame( # get edges, node names from new daggity object (inputted as existing_nodes)
-    dagitty::edges(new_dag) )[, c("v", "e", "w")]
+  # get edges, node names from new daggity object (inputted as existing_nodes)
+  new_edges <- pdag_to_dag_edges(new_dag)
 
   new_node_names <- names(new_dag) # extract new dag node names
   existing_node_names <-  new_node_names[ new_node_names %in% node_names ] # saves duplicate node names
@@ -1370,12 +1372,92 @@ copy_nodes_helper <- function(dag,
 
   }
 
-  new_coordinates <- renew_coords(dag = dag,
-                                     new_node_names = new_node_names,
-                                     coordinates = coordinates,
-                                     coords_spec = coords_spec[ complete.cases(coords_spec) ] )
 
-  dagitty::coordinates(dag) <- new_coordinates
+  tryCatch({
+    new_coordinates <- renew_coords(dag = dag,
+                                new_node_names = new_node_names,
+                                coordinates = coordinates,
+                                coords_spec = coords_spec[ complete.cases(coords_spec) ] )
+    dagitty::coordinates(dag) <- new_coordinates
+
+  }, warning = function(w){
+    message(paste("Warning:", w, "\n Using alternative function to generate dag coordinates."))
+    dag <- add_coords(dag, coords_spec = coords_spec[ complete.cases(coords_spec) ] )
+    return(dag)
+
+  }, error = function(e){
+    message(paste("Error:", e, "\n Using alternative function to generate dag coordinates."))
+    dag <- add_coords(dag, coords_spec = coords_spec[ complete.cases(coords_spec) ] )
+    return(dag)
+
+  }, finally = return(dag)
+  )
+
+}
+
+#' convert pdag edges to dag
+#'
+#' pdag_to_dag_edges()
+#'
+#' @importFrom data.table as.data.table
+#' @importFrom dagitty edges
+#' @param dag A dagitty object, must use dag{} instead of pdag{}.
+#' @returns A data frame of edges.
+#' @noRd
+pdag_to_dag_edges <- function(dag){
+
+  edges <- data.table::as.data.table(dagitty::edges(dag))[, c("v", "e", "w")]
+
+  # check if any bi-directional edges are "--" instead of "<->" (pdag)
+  if( any( edges$e == "--" | edges$e == "<->" ) ){
+
+    pdag_edges <- edges[ ( edges$e == "--" | edges$e == "<->"), ]
+    dag_edges <- edges[ !( edges$e == "--" | edges$e == "<->" ), ]
+
+    pdag_edges <- data.frame( v = c(pdag_edges$v, pdag_edges$w),
+                              e = "->",
+                              w = c(pdag_edges$w, pdag_edges$v) )
+
+    edges <- rbind(dag_edges, pdag_edges)
+
+    return(edges)
+
+  }
+
+  return(edges)
+
+}
+
+#' convert pdag to dag
+#'
+#' pdag_to_dag()
+#'
+#' @importFrom data.table as.data.table
+#' @importFrom dagitty edges
+#' @param dag A dagitty object, must use dag{} instead of pdag{}.
+#' @returns A data frame of edges.
+#' @noRd
+pdag_to_dag <- function(dag){
+
+  edges <- data.table::as.data.table(dagitty::edges(dag))[, c("v", "e", "w")]
+
+  # check if any bi-directional edges are "--" instead of "<->" (pdag)
+  if( any( edges$e == "--" | edges$e == "<->" ) ){
+
+    pdag_edges <- edges[ ( edges$e == "--" | edges$e == "<->"), ]
+    dag_edges <- edges[ !( edges$e == "--" | edges$e == "<->" ), ]
+
+    pdag_edges <- data.frame( v = c(pdag_edges$v, pdag_edges$w),
+                              e = "->",
+                              w = c(pdag_edges$w, pdag_edges$v) )
+
+    edges <- rbind(dag_edges, pdag_edges)
+
+    dag <- rebuild_dag(dag, edges)
+
+    return(dag)
+
+  }
 
   return(dag)
 
@@ -1435,7 +1517,7 @@ construct_graph <- function(edges,
                             treatments,
                             outcomes,
                             latent_vec
-){
+                            ){
   .datatable.aware <- TRUE
 
   node_name_and_coords_vec <- c()
@@ -1452,6 +1534,21 @@ construct_graph <- function(edges,
                                     paste(outcomes, " [outcome] ", sep=""),
                                     paste(node_names, collapse=" "))
     }
+
+  }else if( length(outcomes) + length(treatments) == 0 ){
+
+    node_name_and_coords_vec <-  paste(node_names, collapse=" ")
+
+
+  }else if( length(treatments) == 0 ){
+
+    node_name_and_coords_vec <- c(paste(outcomes, " [outcome] ", sep=""),
+                                  paste(node_names, collapse=" "))
+
+  }else if( length(outcomes) == 0 ){
+
+    node_name_and_coords_vec <- c(paste(treatments, " [exposure] ", sep=""),
+                                  paste(node_names, collapse=" "))
 
   }else{
     node_name_and_coords_vec <- c(paste(treatments, " [exposure] ", sep=""),
@@ -1561,6 +1658,14 @@ merged_node_coords_helper <- function(dag,
 
   quality_check <- FALSE
   iteration <- 1
+
+  time_limit <- num_nodes + num_nodes/lambda
+
+  setTimeLimit(cpu = time_limit, elapsed = time_limit, transient = TRUE)
+
+  on.exit( {
+    setTimeLimit(cpu = Inf, elapsed = Inf, transient = FALSE)
+    } )
 
   while(quality_check == FALSE){
 
@@ -1702,30 +1807,6 @@ merged_node_coords_helper <- function(dag,
   coordinates <- list(x = existing_coordinates_x[!duplicated(names(existing_coordinates_x))], y = existing_coordinates_y[!duplicated(existing_coordinates_y)] )
 
   return(coordinates)
-
-}
-
-
-#' Returns highest x or y coordinates for a group of nodes
-#'
-#' @importFrom dagitty parents
-#' @param dag A dagittyy object.
-#' @param group_node_names Node group of interest.
-#' @param num_group_nodes Number of nodes in group of interest.
-#' @param coordinates_x_or_y Named vector of either x or y coordinates.
-#' @param coord_names Names corrresponding to coordinates_x_or_y input.
-#' @return Maximum parent coordinates for a group of nodes.
-#' @noRd
-parent_node_max_coords <- function(dag, group_node_names, num_group_nodes, coordinates_x_or_y, coord_names){
-
-  group_parents <- lapply(1:num_group_nodes, function(x){   # get new node name parents
-    group_parents <- dagitty::parents(dag, group_node_names[x])
-  })
-
-  group_parent_max_coord <- max( coordinates_x_or_y[ coord_names # highest x or y coordinates for a group of nodes
-                                                     %in% unlist(group_parents) ], na.rm = TRUE )
-
-  return(group_parent_max_coord)
 
 }
 
@@ -2006,4 +2087,106 @@ observed_new_coordinates_helper <- function(dag, observed, existing_coords){
   return(coords_list)
 
 }
+
+
+
+
+#' Returns highest x or y coordinates for a group of nodes
+#'
+#' @importFrom dagitty parents
+#' @param dag A dagittyy object.
+#' @param group_node_names Node group of interest.
+#' @param num_group_nodes Number of nodes in group of interest.
+#' @param coordinates_x_or_y Named vector of either x or y coordinates.
+#' @param coord_names Names corrresponding to coordinates_x_or_y input.
+#' @return Maximum parent coordinates for a group of nodes.
+#' @noRd
+parent_node_max_coords <- function(dag, group_node_names, num_group_nodes, coordinates_x_or_y, coord_names){
+
+  group_parents <- lapply(1:num_group_nodes, function(x){   # get new node name parents
+    group_parents <- dagitty::parents(dag, group_node_names[x])
+  })
+
+  if( length( unlist(group_parents) ) > 0 ){
+
+    group_parent_max_coord <- max( coordinates_x_or_y[ coord_names # highest x or y coordinates for a group of nodes
+                                                       %in% unlist(group_parents) ], na.rm = TRUE )
+
+  }else{
+
+    group_parent_max_coord <- 0
+
+  }
+
+  return(group_parent_max_coord)
+
+}
+
+
+
+#' dataframe output from a dagitty object
+#'
+#'Generates a table similar to calling ggdag::tidy_dagitty on a ggdag::dagify object
+#'The benefit of this function is that it automatically identifies exposure, outcome, confounder, observed and latent variables inputted from dagitty.net, whereas ggdag::tidy_dagitty only does this for ggdag::dagify objects.
+#'Output can be used with ggdag to create better looking DAGs from dagitty.net code.
+#'
+#' @importFrom ggdag tidy_dagitty
+#' @param dag dagitty object
+#' @param labels vector of labels for nodes in dagitty object
+#' @return dag_df DAG as a dataframe for use with ggdag to create better looking DAGs
+#' @noRd
+tidy_ggdagitty <- function(dag, labels = NULL){
+  # Cleaning the dags and turning it into a data frame.
+  dag_df <- data.frame(ggdag::tidy_dagitty(dag))
+
+  # flip y axis for ggplot
+  dag_df$y <- dag_df$y*-1
+  dag_df$yend <- dag_df$yend*-1
+
+  if( is.null(labels) ){
+
+    return(dag_df)
+
+  }
+
+  dag_df <- add_labels(dag, dag_df, labels)
+
+  return(dag_df)
+}
+
+
+#' add labels to a dag dataframe
+#'
+#'Generates a table similar to calling ggdag::tidy_dagitty on a ggdag::dagify() object
+#'The benefit of this function is that it automatically identifies exposure, outcome, confounder, observed and latent variables inputted from dagitty.net, whereas ggdag::tidy_dagitty only does this for ggdag::dagify objects.
+#'Output can be used with ggdag to create better looking DAGs from dagitty.net code.
+#'
+#' @param dag dagitty object
+#' @param dag_df a dag object converted to data frame using the ggdag::tidy_dagitty() function, or similar.
+#' @param labels vector of labels for nodes in dagify object
+#' @return dagify DAG as a dataframe for use with ggdag to create better looking DAGs
+#' @noRd
+add_labels <- function(dag, dag_df, labels){
+  .datatable.aware <- TRUE
+
+  # Labeling variables
+
+  dag_df$label <- sapply( seq_along( dag_df$name ),
+                          function(x) if( dag_df$name[x] %in% attr(labels, "names")) attr(labels[ dag_df$name[x] ], "names") )
+
+  node_roles <- get_roles(dag)
+
+  dag_df$role <- sapply( seq_along(dag_df$name), function(x){
+
+    as.vector( unlist( sapply( seq_along(node_roles),
+                               function(n) if( dag_df$name[x] %in% node_roles[[n]] ) names(node_roles[n]) ) ) )
+  } )
+
+  dag_df$role <- lapply(dag_df$role, function(x) if( is.null(x)) NA else x)
+
+  dag_df$role <- unlist(dag_df$role)
+
+  return(dag_df)
+}
+
 

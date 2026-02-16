@@ -4,16 +4,12 @@
 \alias{add_coords}
 \title{Generate new dag coordinates}
 \usage{
-add_coords(
-  dag,
-  coords_spec = c(lambda = 0, lambda_max = NA, iterations = NA),
-  confounders = NULL
-)
+add_coords(dag, coords_spec = 0, confounders = NULL)
 }
 \arguments{
 \item{dag}{Dagitty object, with at least a treatment and outcome set. Nodes are automatically placed in the following categories: treatment, outcome, confounder, mediator, latent variable, mediator-outcome-confounder, or instrumental variable.}
 
-\item{coords_spec}{Set of parameters for generating coordinates. Adjust node placement with lambda, a higher value increases volatility and results in more extreme DAG structures. Setting 'lambda_max' generates a DAG at each lambda value between lambda and lambda_max (only used if iterations is supplied). Iterations controls number of repeats for each lambda value (returns the first lambda value if NULL).}
+\item{coords_spec}{Adjusts node placement, a higher value increases volatility and results in more extreme DAG structures.}
 
 \item{confounders}{Vector of confounders in order of occurrence.}
 }
@@ -25,6 +21,7 @@ Generate new dag coordinates
 }
 \examples{
 dag <- add_coords(dag, coords_spec = 3) # update dagitty object node coordinates
+
 plot_dagitty(dag) # check coordinates
 
 }

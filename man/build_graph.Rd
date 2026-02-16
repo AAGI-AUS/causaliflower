@@ -5,7 +5,7 @@
 \title{Build dagitty objects}
 \usage{
 build_graph(
-  variables,
+  variables = NA,
   treatments = NA,
   outcomes = NA,
   mediators = NA,
@@ -15,7 +15,7 @@ build_graph(
   competing_exposures = NA,
   colliders = NA,
   type = "full",
-  coords_spec = c(lambda = 0, lambda_max = NA, iterations = NA)
+  coords_spec = 0
 )
 }
 \arguments{

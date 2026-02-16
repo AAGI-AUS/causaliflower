@@ -1,16 +1,192 @@
+
+# plot_dagitty()
+#' ggdag plot from a dagitty object
+#'
+#'Generates a ggdag plot from a dagitty object, adding coordinates and node labels using initials (capital letters).
+#'Essentially a wrapper for dagitty and ggdag plotting functions with added features.
+#'
+#' @importFrom dagitty coordinates
+#' @importFrom ggplot2 ggplot scale_shape_manual scale_size_manual scale_colour_manual labs guides guide_legend theme
+#' @importFrom ggdag geom_dag_edges geom_dag_text geom_dag_label_repel geom_dag_point theme_dag
+#' @importFrom ggraph circle
+#' @param dag A dagitty object
+#' @param coords_spec Adjusts node placement, a higher value increases volatility and results in more extreme DAG structures.
+#' @param labels A vector of labels for nodes in dagitty object
+#' @param label_type Defaults to using the node names of the inputted dag, or 'initials' if specified. Labels are only assigned by plot_dagitty() if nodes are not already labelled, using a 'ggdag::dag_label()' wrapper..
+#' @param label_placement Labels are placed in a text box adjacent each node by default, or can be placed inside each node using 'label_node'. It is recommended to also specify label_type = 'initials' where label_placement = 'label_node' is used.
+#' @return ggdag plot
+#' @examples
+#' plot_dagitty(dag)
+#'
+#' plot_dagitty(dag, coords_spec = 3) # increasing spec for more variation in node placement
+#'
+#' @export
+plot_dagitty <- function(dag,
+                         coords_spec =  0,
+                         labels = NULL,
+                         label_type = "name",
+                         label_placement = "label_repel"){
+
+  dag <- pdag_to_dag(dag)
+
+  if( any( is.na(dagitty::coordinates(dag)) ) ){
+
+    dag <- add_coords(dag, coords_spec = coords_spec)
+
+  }
+
+  # aesthetics for ggdag legend
+  col <- c("outcome"="deepskyblue",
+           "treatment"="darkolivegreen3",
+           "confounder"="coral2",
+           "mediator"="darkorchid1",
+           "mediator_outcome_confounder"="magenta4",
+           "instrumental"="deeppink1",
+           "proxy"="darkorange",
+           "competing_exposure"="darkseagreen4",
+           "collider"="darkred",
+           "latent"="grey",
+           "observed"="#222222")
+
+  shape <- c("outcome"=19,
+             "treatment"=19,
+             "confounder"=19,
+             "mediator"=19,
+             "mediator_outcome_confounder"=19,
+             "instrumental"=19,
+             "proxy"=19,
+             "collider"=19,
+             "competing_exposure"=19,
+             "latent"=1,
+             "observed"=19)
+
+  # variable for legend order
+  order_col <- c("outcome",
+                 "treatment",
+                 "confounder",
+                 "mediator",
+                 "mediator_outcome_confounder",
+                 "instrumental",
+                 "proxy",
+                 "competing_exposure",
+                 "collider",
+                 "latent",
+                 "observed")
+
+  if( is.null(labels) ){
+
+    if(label_type == "name"){
+
+      labels <- as.data.frame(unique(suppressWarnings(ggdag::dag_label(dag)$data["name"])))
+      labels <- as.vector(labels$name)
+      names(labels) <- labels
+
+    }else if(label_type == "initials"){
+
+
+      labels <- get_labels(dag)
+
+
+    }else{
+
+      stop("Invalid label_type input. Please use 'initials' or the default 'name'.")
+
+    }
+
+  }else if(!is.null(labels) & length(labels) != length(names(dag))){
+
+    stop("The length of supplied labels does not equal the number of nodes in the graph. Please check labels and try again.")
+
+  }
+
+
+  dag_df <- tidy_ggdagitty(dag, labels)
+
+  dag_df_complete_cases <- dag_df[complete.cases(dag_df[, "role"]), ]
+
+  if( nrow(dag_df) > nrow(dag_df_complete_cases) ){
+    message("Nodes without arrows removed and not displayed in the plotted graph.")
+    dag_df <- dag_df_complete_cases
+  }
+
+  dag_df[sapply(dag_df, is.character)] <- lapply( dag_df[sapply(dag_df, is.character)], as.factor )
+
+
+  if(label_placement == "label_repel"){
+
+
+    ggdag <- ggplot2::ggplot(data = dag_df, ggplot2::aes(x = x, y = y, xend = xend, yend = yend, color=role, shape = role, fill = role)) +
+      ggdag::geom_dag_edges(start_cap = ggraph::circle(5, 'mm'),
+                            end_cap = ggraph::circle(5, 'mm')) +
+      ggdag::geom_dag_point(size=10) +
+      ggdag::geom_dag_label_repel(ggplot2::aes(label = label), colour = "white", alpha = 0.7, show.legend = FALSE) +
+      ggplot2::scale_colour_manual(values = col,
+                                   name = "Group",
+                                   breaks = order_col) +
+      ggplot2::scale_shape_manual(values = shape,
+                                  name = "Group",
+                                  breaks = order_col) +
+      ggplot2::scale_fill_manual(values = col,
+                                 name = "Group",
+                                 breaks = order_col
+      ) +
+      ggdag::theme_dag() +
+      ggplot2::labs(x = "", y="") +
+      ggplot2::guides(color = ggplot2::guide_legend(override.aes = list(size = 8))) +
+      ggplot2::theme(
+        legend.title = ggplot2::element_blank(),
+        # title = element_text(size = 16),
+        #legend.text = ggplot2::element_text(size = 6),               # Increase the legend text size
+      )
+
+    return(ggdag)
+
+  }else if(label_type == "label_node"){
+
+
+    ggdag <- ggplot2::ggplot(data = dag_df, ggplot2::aes(x = x, y = y, xend = xend, yend = yend, color=role, shape = role)) +
+      ggdag::geom_dag_edges(start_cap = ggraph::circle(5, 'mm'),
+                            end_cap = ggraph::circle(5, 'mm')) +
+      ggdag::geom_dag_point(size=10) +
+      ggdag::geom_dag_text(data = subset(dag_df, !duplicated(dag_df$label)), ggplot2::aes(label = label), colour = "grey10", size = 3) +
+      ggplot2::scale_colour_manual(values = col,
+                                   name = "Group",
+                                   breaks = order_col) +
+      ggplot2::scale_shape_manual(values = shape,
+                                  name = "Group",
+                                  breaks = order_col) +
+      ggdag::theme_dag() +
+      ggplot2::labs(x = "", y="") +
+      ggplot2::guides(color = ggplot2::guide_legend(override.aes = list(size = 8))) +
+      ggplot2::theme(
+        legend.title = ggplot2::element_blank(),
+        #legend.text = ggplot2::element_text(size = 6),               # Increase the legend text size
+      )
+
+    return(ggdag)
+
+  }else{
+
+    stop("The label_placement input is invalid. Please use either 'label_node' or 'label_repel'.")
+  }
+
+}
+
+
 #' Generate new dag coordinates
 #'
 #' @param dag Dagitty object, with at least a treatment and outcome set. Nodes are automatically placed in the following categories: treatment, outcome, confounder, mediator, latent variable, mediator-outcome-confounder, or instrumental variable.
-#' @param coords_spec Set of parameters for generating coordinates. Adjust node placement with lambda, a higher value increases volatility and results in more extreme DAG structures. Setting 'lambda_max' generates a DAG at each lambda value between lambda and lambda_max (only used if iterations is supplied). Iterations controls number of repeats for each lambda value (returns the first lambda value if NULL).
+#' @param coords_spec Adjusts node placement, a higher value increases volatility and results in more extreme DAG structures.
 #' @param confounders Vector of confounders in order of occurrence.
 #' @return dagitty object with coordinates.
 #' @examples
 #' dag <- add_coords(dag, coords_spec = 3) # update dagitty object node coordinates
+#'
 #' plot_dagitty(dag) # check coordinates
 #'
 #' @export
 add_coords <- function(dag,
-                       coords_spec = c(lambda = 0, lambda_max = NA, iterations = NA),
+                       coords_spec = 0,
                        confounders = NULL){
 
   edges <- get_roles(dag)
@@ -40,45 +216,28 @@ add_coords <- function(dag,
   outcomes <- edges$outcome
 
 
-  if(length(na.omit(coords_spec)) == 3){
-    message("Generating coordinates for ", coords_spec["iterations"], " DAGs for each lambda value between ", coords_spec["lambda"], " and ", coords_spec["lambda_max"], ".")
-    dag <- auto_coords(dag, confounders, mediators, instrumental_variables, mediator_outcome_confounders, coords_spec)
+  tryCatch(
+    {
+      dag <- add_coordinates(dag,
+                             treatments = treatments,
+                             outcomes = outcomes,
+                             confounders = confounders,
+                             mediators = mediators,
+                             instrumental_variables = instrumental_variables,
+                             mediator_outcome_confounders = mediator_outcome_confounders,
+                             competing_exposures = competing_exposures,
+                             latent_variables = latent_variables,
+                             observed = observed,
+                             colliders = colliders,
+                             na.omit(coords_spec))
 
-    return(dag)
+    },
 
-  }else if(length(na.omit(coords_spec)) == 1){
+    finally = {
+      return(dag)
+    }
+  )
 
-    tryCatch(
-      { # try
-
-        dag <- add_coordinates(dag,
-                               treatments = treatments,
-                               outcomes = outcomes,
-                               confounders = confounders,
-                               mediators = mediators,
-                               instrumental_variables = instrumental_variables,
-                               mediator_outcome_confounders = mediator_outcome_confounders,
-                               competing_exposures = competing_exposures,
-                               latent_variables = latent_variables,
-                               observed = observed,
-                               colliders = colliders,
-                               na.omit(coords_spec))
-
-      },
-      # error = function(cond) {
-      #  message("An unexpected error occurred:")
-      #  message(conditionMessage(cond))
-      #  NA
-      # },
-      #warning = function(cond) {
-      #  message("A warning occurred:")
-      #  message(conditionMessage(cond))
-      #},
-      finally = {
-        return(dag)
-      }
-    )
-  }
 }
 
 
@@ -94,14 +253,25 @@ add_coords <- function(dag,
 #' @return dagitty objecty with coordinates.
 #' @noRd
 add_coordinates <- function(dag, treatments, outcomes, confounders, mediators, instrumental_variables, mediator_outcome_confounders, competing_exposures, latent_variables, colliders,
-                            lambda = 0,
+                            lambda = 1,
                             observed = NA
 ){
 
   o <- length(outcomes)
+
   t <- length(treatments)
 
-  num_confounders <- c <- length(confounders)
+
+  if( all( complete.cases( unlist(confounders) ) ) ){
+
+    num_confounders <- c <- length(confounders)
+
+  }else{
+
+    confounders <- NA
+
+    num_confounders <- c <- 0
+  }
 
   if( all( complete.cases( unlist(instrumental_variables) ) ) ){
 
@@ -113,9 +283,8 @@ add_coordinates <- function(dag, treatments, outcomes, confounders, mediators, i
 
     i <- 0
   }
-  if( all( complete.cases( unlist(latent_variables) ) ) ){
 
-    #latent_variables <- get_latent_vec(latent_variables)
+  if( all( complete.cases( unlist(latent_variables) ) ) ){
 
     l <- length(latent_variables)
 
@@ -131,42 +300,54 @@ add_coordinates <- function(dag, treatments, outcomes, confounders, mediators, i
     m <- length(mediators)
 
   }else{
+
     m <- 0
   }
+
   if( all( complete.cases( mediator_outcome_confounders) ) ){
 
     moc <- length(mediator_outcome_confounders)
 
   }else{
+
     moc <- 0
   }
+
   if( all( complete.cases( competing_exposures) ) ){
 
     comp <- length(competing_exposures)
 
   }else{
+
     comp <- 0
   }
+
   if( all( complete.cases( colliders) ) ){
 
     coll <- length(colliders)
 
   }else{
+
     coll <- 0
   }
 
+
   ## variable order (used for generating coordinates)
-  var_order <- na.omit( c( unlist(confounders, recursive = FALSE), mediator_outcome_confounders, mediators, instrumental_variables, competing_exposures, colliders, treatments, outcomes) )
+  var_order <- c( unlist(confounders, recursive = FALSE), mediator_outcome_confounders, mediators, instrumental_variables, competing_exposures, colliders, treatments, outcomes)
+
+  var_order <- var_order[ complete.cases(var_order) ]
 
   num_vars <- n <- length(unlist(var_order))
 
+
   ## lambda tuning parameter
-  lambda <- lambda/(c + (n-i))
-  #print(paste("Coordinates added with randomization multiplier set to:", lambda/(num_confounders + (n-i))))
+  lambda <- lambda/(c + (n-i)) #print(paste("Coordinates added with randomization multiplier set to:", lambda/(num_confounders + (n-i))))
+
 
   ## get default ordered coordinates
   coords <- ggdag::time_ordered_coords(unlist(var_order), direction = c("x"), auto_sort_direction = c("right"))
   coords$y <- (ggdag::time_ordered_coords(unlist(var_order), direction = c("y"), auto_sort_direction = c("right")))$y
+
 
   ## randomize default coordinates
   rand_num_x <- runif(num_vars, min = -lambda, max = lambda)
@@ -178,22 +359,27 @@ add_coordinates <- function(dag, treatments, outcomes, confounders, mediators, i
   ## initial coordinates ##
 
   ## confounders
-  rand_conf_x_y <- sort(rlnorm(num_confounders*2), decreasing = FALSE)*(lambda/(n-i))
+  if( num_confounders > 0 ){
+    rand_conf_x_y <- sort(rlnorm(num_confounders*2), decreasing = FALSE)*(lambda/(n-i))
 
-  rand_conf_x <- rev(rand_conf_x_y)
-  rand_conf_x <- rand_conf_x[1:(num_confounders+1)]
-  rand_conf_y <- rand_conf_x_y[1:(num_confounders+1)]
+    rand_conf_x <- rev(rand_conf_x_y)
+    rand_conf_x <- rand_conf_x[1:(num_confounders+1)]
+    rand_conf_y <- rand_conf_x_y[1:(num_confounders+1)]
 
-  rand_conf_x <- c(0, seq(c*(lambda/3), (c)*(lambda), length.out = num_confounders))[1:(num_confounders)] + rand_conf_x[1:(num_confounders)]
-  rand_conf_y <- c(0, seq(-(c)*(lambda/3), -c*(lambda^2), length.out = num_confounders/2),
-                   seq(c*(lambda/3), c*(lambda), length.out = num_confounders/2))[1:(num_confounders)] + (rand_conf_y*(n-i))[1:(num_confounders)]
+    rand_conf_x <- c(0, seq(c*(lambda/3), (c)*(lambda), length.out = num_confounders))[1:(num_confounders)] + rand_conf_x[1:(num_confounders)]
+    rand_conf_y <- c(0, seq(-(c)*(lambda/3), -c*(lambda^2), length.out = num_confounders/2),
+                     seq(c*(lambda/3), c*(lambda), length.out = num_confounders/2))[1:(num_confounders)] + (rand_conf_y*(n-i))[1:(num_confounders)]
 
-  conf_num_vars_modifier <- seq(0, num_vars, length.out = c)
+    conf_num_vars_modifier <- seq(0, num_vars, length.out = c)
 
-  seq_conf <- seq(0, c, length.out = c)
+    seq_conf <- seq(0, c, length.out = c)
 
-  coords[1:num_confounders,]$x <- coords[1:num_confounders,]$x + conf_num_vars_modifier*0.6 + rand_conf_x[1:num_confounders]
-  coords[1:num_confounders,]$y <- coords[1:num_confounders,]$y + conf_num_vars_modifier*0.2 + rand_conf_y[1:num_confounders] - c/num_vars*seq_conf
+    coords[1:num_confounders,]$x <- coords[1:num_confounders,]$x + conf_num_vars_modifier*0.6 + rand_conf_x[1:num_confounders]
+
+    coords[1:num_confounders,]$y <- coords[1:num_confounders,]$y + conf_num_vars_modifier*0.2 + rand_conf_y[1:num_confounders] - c/num_vars*seq_conf
+
+  }
+
 
   ## mediator-outcome-confounders
   if( all( complete.cases( mediator_outcome_confounders) ) ){
@@ -214,6 +400,7 @@ add_coordinates <- function(dag, treatments, outcomes, confounders, mediators, i
 
   }
 
+
   ## treatments
   trt_y_max <- seq( 0 + length(t)/3,
                     1.1 + length(t)/n,  length.out = t )
@@ -224,12 +411,14 @@ add_coordinates <- function(dag, treatments, outcomes, confounders, mediators, i
   coords[ ( nrow(coords) - t - o + 1 ):( nrow(coords) - o ), ]$x <- coords[ ( nrow(coords) - t - o + 1):(nrow(coords) - o ), ]$x + trt_x_min
   coords[ ( nrow(coords) - t - o + 1 ):( nrow(coords) - o ), ]$y <- trt_y_max
 
+
   ## outcomes
   outcome_x_min <- ((m-i)*(lambda)*2) + m - i
   outcome_y_min <- ((m-i)*(lambda)*2) + i
 
   coords[ ( nrow(coords) - o + 1 ):( nrow(coords) ), ]$x <- coords[ ( nrow(coords) - o + 1 ):( nrow(coords) ), ]$x + outcome_x_min
   coords[ ( nrow(coords) - o + 1 ):( nrow(coords) ), ]$y <- coords[ ( nrow(coords) - o + 1 ):( nrow(coords) ), ]$y - outcome_y_min
+
 
   ## mediators
   if( all( complete.cases( mediators) ) ){
@@ -249,6 +438,7 @@ add_coordinates <- function(dag, treatments, outcomes, confounders, mediators, i
 
   }
 
+
   ## fine-tune treatment coordinates (based on parent nodes)
   grouped_nodes <- treatments
   len <- t
@@ -265,6 +455,7 @@ add_coordinates <- function(dag, treatments, outcomes, confounders, mediators, i
   # update treatment x-coords
   coords[ ( nrow(coords) - t - o + 1):(nrow(coords) - o ), ]$x <- max( coords$x ) + ( max( coords$x ) -
                                                                                         coords[ ( nrow(coords) - t - o + 1):(nrow(coords) - o ), ]$x )
+
 
   ## fine-tune outcome coordinates (based on parent nodes)
   group_parent_max_y_coord <- parent_node_max_coords(dag,
@@ -296,6 +487,7 @@ add_coordinates <- function(dag, treatments, outcomes, confounders, mediators, i
 
   }
 
+
   ## colliders
   if( all( complete.cases( colliders) ) ){
 
@@ -307,6 +499,7 @@ add_coordinates <- function(dag, treatments, outcomes, confounders, mediators, i
     coords[(num_confounders+moc+m+i+comp+1):(num_confounders+moc+m+i+comp+coll),]$x <- coll_x
 
   }
+
 
   ## instrumental variables
   if( all( complete.cases( unlist(instrumental_variables) ) ) ){
@@ -920,225 +1113,5 @@ renew_coords <- function(dag,
 
   return(coordinates)
 
-}
-
-
-# plot_dagitty()
-#' ggdag plot from a dagitty object
-#'
-#'Generates a ggdag plot from a dagitty object, adding coordinates and node labels using initials (capital letters).
-#'Essentially a wrapper for dagitty and ggdag plotting functions with added features.
-#'
-#' @importFrom dagitty coordinates
-#' @importFrom ggplot2 ggplot scale_shape_manual scale_size_manual scale_colour_manual labs guides guide_legend theme
-#' @importFrom ggdag geom_dag_edges geom_dag_text geom_dag_label_repel geom_dag_point theme_dag
-#' @importFrom ggraph circle
-#' @param dag A dagitty object
-#' @param coords_spec Set of parameters for generating coordinates. Adjust node placement with lambda, a higher value increases volatility and results in more extreme DAG structures. Setting 'lambda_max' generates a DAG at each lambda value between lambda and lambda_max (only used if iterations is supplied). Iterations controls number of repeats for each lambda value (returns the first lambda value if NULL).
-#' @param labels A vector of labels for nodes in dagitty object
-#' @param label_type Defaults to using the node names of the inputted dag, or 'initials' if specified. Labels are only assigned by plot_dagitty() if nodes are not already labelled, using a 'ggdag::dag_label()' wrapper..
-#' @param label_placement Labels are placed in a text box adjacent each node by default, or can be placed inside each node using 'label_node'. It is recommended to also specify label_type = 'initials' where label_placement = 'label_node' is used.
-#' @return ggdag plot
-#' @examples
-#' plot_dagitty(dag)
-#'
-#' g <- plot_dagitty(dag, coords_spec = 3) # increasing spec for more variation in node placement
-#'
-#' dag <- add_coords(dag, coords_spec = 3) # can also directly update dagitty object node coordinates
-#' plot_dagitty(dag)
-#'
-#' @export
-plot_dagitty <- function(dag,
-                         coords_spec = c( lambda = 0,
-                                          lambda_max = NA,
-                                          iterations = NA ),
-                         labels = NULL,
-                         label_type = "name",
-                         label_placement = "label_repel"){
-
-
-  if( any( is.na(dagitty::coordinates(dag)) ) ){
-
-    dag <- add_coords(dag, coords_spec = coords_spec)
-
-  }
-
-  # aesthetics for ggdag legend
-  col <- c("outcome"="deepskyblue",
-           "treatment"="darkolivegreen3",
-           "confounder"="coral2",
-           "mediator"="darkorchid1",
-           "mediator_outcome_confounder"="magenta4",
-           "instrumental"="deeppink1",
-           "proxy"="darkorange",
-           "competing_exposure"="darkseagreen4",
-           "collider"="darkred",
-           "latent"="grey",
-           "observed"="#222222")
-
-  shape <- c("outcome"=19,
-             "treatment"=19,
-             "confounder"=19,
-             "mediator"=19,
-             "mediator_outcome_confounder"=19,
-             "instrumental"=19,
-             "proxy"=19,
-             "collider"=19,
-             "competing_exposure"=19,
-             "latent"=1,
-             "observed"=19)
-
-  # variable for legend order
-  order_col <- c("outcome", "treatment", "confounder", "mediator", "mediator_outcome_confounder", "instrumental", "proxy", "competing_exposure", "collider", "latent")
-  if( is.null(labels) ){
-
-    if(label_type == "name"){
-
-      labels <- as.data.frame(unique(suppressWarnings(ggdag::dag_label(dag)$data["name"])))
-      labels <- as.vector(labels$name)
-      names(labels) <- labels
-
-    }else if(label_type == "initials"){
-
-
-      labels <- get_labels(dag)
-
-
-    }else{
-
-      stop("Invalid label_type input. Please use 'initials' or the default 'name'.")
-
-    }
-
-  }else if(!is.null(labels) & length(labels) != length(names(dag))){
-
-    stop("The length of supplied labels does not equal the number of nodes in the graph. Please check labels and try again.")
-
-  }
-
-
-  dag_df <- tidy_ggdagitty(dag, labels)
-
-  if(label_placement == "label_repel"){
-
-
-    ggdag <- ggplot2::ggplot(data = dag_df, ggplot2::aes(x = x, y = y, xend = xend, yend = yend, color=role, shape = role, fill = role)) +
-      ggdag::geom_dag_edges(start_cap = ggraph::circle(5, 'mm'),
-                            end_cap = ggraph::circle(5, 'mm')) +
-      ggdag::geom_dag_point(size=10) +
-      ggdag::geom_dag_label_repel(ggplot2::aes(label = label), colour = "white", alpha = 0.7, show.legend = FALSE) +
-      ggplot2::scale_colour_manual(values = col,
-                                   name = "Group",
-                                   breaks = order_col) +
-      ggplot2::scale_shape_manual(values = shape,
-                                  name = "Group",
-                                  breaks = order_col) +
-      ggplot2::scale_fill_manual(values = col,
-                                 name = "Group",
-                                 breaks = order_col
-      ) +
-      ggdag::theme_dag() +
-      ggplot2::labs(x = "", y="") +
-      ggplot2::guides(color = ggplot2::guide_legend(override.aes = list(size = 8))) +
-      ggplot2::theme(
-        legend.title = ggplot2::element_blank(),
-        # title = element_text(size = 16),
-        #legend.text = ggplot2::element_text(size = 6),               # Increase the legend text size
-      )
-
-    return(ggdag)
-
-  }else if(label_type == "label_node"){
-
-
-    ggdag <- ggplot2::ggplot(data = dag_df, ggplot2::aes(x = x, y = y, xend = xend, yend = yend, color=role, shape = role)) +
-      ggdag::geom_dag_edges(start_cap = ggraph::circle(5, 'mm'),
-                            end_cap = ggraph::circle(5, 'mm')) +
-      ggdag::geom_dag_point(size=10) +
-      ggdag::geom_dag_text(data = subset(dag_df, !duplicated(dag_df$label)), ggplot2::aes(label = label), colour = "grey10", size = 3) +
-      ggplot2::scale_colour_manual(values = col,
-                                   name = "Group",
-                                   breaks = order_col) +
-      ggplot2::scale_shape_manual(values = shape,
-                                  name = "Group",
-                                  breaks = order_col) +
-      ggdag::theme_dag() +
-      ggplot2::labs(x = "", y="") +
-      ggplot2::guides(color = ggplot2::guide_legend(override.aes = list(size = 8))) +
-      ggplot2::theme(
-        legend.title = ggplot2::element_blank(),
-        #legend.text = ggplot2::element_text(size = 6),               # Increase the legend text size
-      )
-
-    return(ggdag)
-
-  }else{
-
-    stop("The label_placement input is invalid. Please use either 'label_node' or 'label_repel'.")
-  }
-
-  #return(ggdag)
-}
-
-
-#' dataframe output from a dagitty object
-#'
-#'Generates a table similar to calling ggdag::tidy_dagitty on a ggdag::dagify object
-#'The benefit of this function is that it automatically identifies exposure, outcome, confounder, observed and latent variables inputted from dagitty.net, whereas ggdag::tidy_dagitty only does this for ggdag::dagify objects.
-#'Output can be used with ggdag to create better looking DAGs from dagitty.net code.
-#'
-#' @importFrom ggdag tidy_dagitty
-#' @param dag dagitty object
-#' @param labels vector of labels for nodes in dagitty object
-#' @return dag_df DAG as a dataframe for use with ggdag to create better looking DAGs
-#' @noRd
-tidy_ggdagitty <- function(dag, labels = NULL){
-  # Cleaning the dags and turning it into a data frame.
-  dag_df <- data.frame(ggdag::tidy_dagitty(dag))
-
-  # flip y axis for ggplot
-  dag_df$y <- dag_df$y*-1
-  dag_df$yend <- dag_df$yend*-1
-
-  if( is.null(labels) ){
-    return(dag_df)
-  }
-
-  dag_df <- add_labels(dag, dag_df, labels)
-
-  return(dag_df)
-}
-
-
-#' add labels to a dag dataframe
-#'
-#'Generates a table similar to calling ggdag::tidy_dagitty on a ggdag::dagify() object
-#'The benefit of this function is that it automatically identifies exposure, outcome, confounder, observed and latent variables inputted from dagitty.net, whereas ggdag::tidy_dagitty only does this for ggdag::dagify objects.
-#'Output can be used with ggdag to create better looking DAGs from dagitty.net code.
-#'
-#' @param dag dagitty object
-#' @param dag_df a dag object converted to data frame using the ggdag::tidy_dagitty() function, or similar.
-#' @param labels vector of labels for nodes in dagify object
-#' @return dagify DAG as a dataframe for use with ggdag to create better looking DAGs
-#' @noRd
-add_labels <- function(dag, dag_df, labels){
-  .datatable.aware <- TRUE
-
-  # Labeling variables
-
-  dag_df$label <- sapply( seq_along( dag_df$name ),
-                          function(x) if( dag_df$name[x] %in% attr(labels, "names")) attr(labels[ dag_df$name[x] ], "names") )
-
-
-  node_roles <- get_roles(dag)
-
-  dag_df$role <- sapply( seq_along(dag_df$name), function(x){
-
-    as.vector( unlist( sapply( seq_along(node_roles),
-                               function(n) if( dag_df$name[x] %in% node_roles[[n]] ) names(node_roles[n]) ) ) )
-
-  } )
-
-  return(dag_df)
 }
 

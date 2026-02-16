@@ -353,7 +353,7 @@ draw_confounder_edges <- function(type,
                                   confounder_occurrance
                                   ){
 
-  if( length(confounder_vec > 1) ){
+  if( all( complete.cases(confounder_vec) ) ){
     ## confounder edges ##
     confounder_list <- c()
 
@@ -560,6 +560,32 @@ draw_mediator_edges <- function(type,
       mediator_df <- rbind(mediator_df, mediator_unlist)
 
     }
+
+
+    if( type == "ordered" ){
+
+      mediator_occurrance <- as.numeric( order( match( mediator_vec, mediator_vec ) ) )
+
+      mediator_list <- suppressWarnings(lapply(1:length(mediator_vec), function(x){
+
+        mediator_list[x] <- lapply(1:length(mediator_vec), function(y){
+
+          list( c( ancestor = mediator_vec[x], edge = "->", descendant = mediator_vec[y], ancestor_order = mediator_occurrance[x], descendant_order = mediator_occurrance[y] ) )
+
+        })
+
+      }))
+
+      mediator_list <- Filter(Negate(anyNA), unlist(mediator_list, recursive = FALSE))
+      mediator_order_df <- as.data.table( do.call( rbind, unlist(mediator_list, recursive = FALSE) ) )
+
+      mediator_order_df <- mediator_order_df[,c(1:3)][!mediator_order_df$ancestor_order > mediator_order_df$descendant_order, ] # remove rows where temporal logic is not followed
+      mediator_df <- rbind(mediator_df, mediator_order_df)
+    }
+
+
+    mediator_df <- unique(mediator_df) # remove duplicate edges
+    mediator_df <- mediator_df[mediator_df$ancestor != mediator_df$descendant, ] # remove edges with identical ancestor and descendant node names
 
     return(mediator_df)
 

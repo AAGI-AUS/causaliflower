@@ -6,7 +6,7 @@
 \usage{
 plot_dagitty(
   dag,
-  coords_spec = c(lambda = 0, lambda_max = NA, iterations = NA),
+  coords_spec = 0,
   labels = NULL,
   label_type = "name",
   label_placement = "label_repel"
@@ -15,7 +15,7 @@ plot_dagitty(
 \arguments{
 \item{dag}{A dagitty object}
 
-\item{coords_spec}{Set of parameters for generating coordinates. Adjust node placement with lambda, a higher value increases volatility and results in more extreme DAG structures. Setting 'lambda_max' generates a DAG at each lambda value between lambda and lambda_max (only used if iterations is supplied). Iterations controls number of repeats for each lambda value (returns the first lambda value if NULL).}
+\item{coords_spec}{Adjusts node placement, a higher value increases volatility and results in more extreme DAG structures.}
 
 \item{labels}{A vector of labels for nodes in dagitty object}
 
@@ -33,9 +33,6 @@ Essentially a wrapper for dagitty and ggdag plotting functions with added featur
 \examples{
 plot_dagitty(dag)
 
-g <- plot_dagitty(dag, coords_spec = 3) # increasing spec for more variation in node placement
-
-dag <- add_coords(dag, coords_spec = 3) # can also directly update dagitty object node coordinates
-plot_dagitty(dag)
+plot_dagitty(dag, coords_spec = 3) # increasing spec for more variation in node placement
 
 }

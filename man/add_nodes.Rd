@@ -27,7 +27,7 @@ add_nodes(
 
 \item{print_edges}{Print new edges in console, defaults to TRUE.}
 
-\item{coords_spec}{Set of parameters for generating coordinates. Adjust node placement with lambda, a higher value increases volatility and results in more extreme DAG structures.}
+\item{coords_spec}{Adjust node placement with lambda, a higher value increases volatility and results in more extreme DAG structures. Threshold controls the closeness of nodes.}
 }
 \value{
 A dagitty object.

@@ -168,7 +168,7 @@ get_roles <- function(dag, multiple_roles = FALSE){
 
   names(roles_list) <- node_roles # assign node roles as list element names
 
-  roles_list <- lapply(roles_list, function(x) if(identical(x, character(0))) NA else x)
+  roles_list <- lapply( roles_list, function(x) if( identical(x, character(0)) ) NA else x )
 
 
   return(roles_list)

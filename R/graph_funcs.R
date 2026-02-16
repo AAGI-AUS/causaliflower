@@ -61,7 +61,7 @@
 #' plot_dagitty(dag)
 #'
 #' @export
-build_graph <- function(variables,
+build_graph <- function(variables = NA,
                        treatments = NA,
                        outcomes = NA,
                        mediators = NA,
@@ -71,7 +71,7 @@ build_graph <- function(variables,
                        competing_exposures = NA,
                        colliders = NA,
                        type = "full",
-                       coords_spec = c(lambda = 0, lambda_max = NA, iterations = NA)
+                       coords_spec = 0
                        ){
 
   # check for an existing dag (inputted as confounders)
@@ -125,8 +125,7 @@ build_graph <- function(variables,
     }
 
 
-  }else if( all( complete.cases( unlist(treatments) ) ) & all( complete.cases( unlist(outcomes) ) ) ){
-    # no existing dag, use other inputs
+  }else if( all( complete.cases( unlist(treatments) ) ) & all( complete.cases( unlist(outcomes) ) ) ){ # no existing dag, use other inputs
 
     existing_dag <- NA
 
@@ -140,30 +139,36 @@ build_graph <- function(variables,
 
     collider_vec <- as.vector( unlist( lapply( colliders, function(x) if( identical( x, character(0) ) ) NA_character_ else x ) ) )
 
-    # create confounder_vec & confounder_occurance
-    if( length(unlist(variables)) > length(variables) ){
+
+    if( length(unlist(variables)) > length(variables) ){     # create confounder_vec & confounder_occurance
       confounders_list <- list()
+
       confounders_list <- lapply( 1:length(variables), function(x){
 
         confounders_list[[x]] <- list( as.data.frame( variables[[x]]), rep(x, times = length(variables[[x]]) ) )
         confounders_list <- dplyr::bind_cols(confounders_list[[x]][1], confounders_list[[x]][2])
-
-      } )
+      })
 
       confounders_df <- dplyr::bind_rows( confounders_list )
       confounder_vec <- as.vector( unlist(confounders_df[1]) )
       confounder_occurrance <- as.vector( unlist(confounders_df[2]) )
 
-    }else{
+    }else {
 
       confounder_vec <- as.vector(variables)
       confounder_occurrance <- as.numeric(order(match(confounder_vec, confounder_vec)))
 
+
+      if( all( complete.cases(variables) ) & any( confounder_vec %in% m_o_confounder_vec ) ){ # if any mediator-outcome confounders are also inputted as confounders, execution is stopped
+
+        stop("Node names inputted in the 'variables' parameter detected in 'mediator_outcome_confounder'. These inputs should be mutually exclusive. Please adjust inputs and try again.")
+
+      }
+
     }
 
-    # if any mediator-outcome confounders are also inputted as confounders, execution is stopped
-
     observed <- NA
+
 
   }else{
 
@@ -172,11 +177,6 @@ build_graph <- function(variables,
   }
 
 
-  if( !dagitty::is.dagitty(variables) & all( confounder_vec %in% m_o_confounder_vec ) != FALSE ){
-
-    stop("Confounder names provided in 'variables' have been detected in the 'mediator_outcome_confounder' input. The 'variables' and 'mediator_outcome_confounder'inputs should be mutually exclusive. Please adjust inputs and try again.")
-
-  }
 
   ## get variable names ##
   observed_node_names <- unique( as.vector( c(confounder_vec, m_o_confounder_vec, mediator_vec, competing_exposure_vec, collider_vec, instrumental_variables) ) )
@@ -218,7 +218,7 @@ build_graph <- function(variables,
                            competing_exposures = competing_exposures,
                            latent_variables = latent_variables,
                            colliders = colliders,
-                           lambda = na.omit(coords_spec))
+                           lambda = unname( coords_spec[ complete.cases(coords_spec) ] ) )
 
   }else{
 
@@ -231,7 +231,6 @@ build_graph <- function(variables,
 
 }
 
-
 #' Assess dagitty object edges
 #'
 #' assess_edges() provides ways to assess connected edges based on causal criteria and/or user inputs.
@@ -239,8 +238,11 @@ build_graph <- function(variables,
 #' @importFrom data.table as.data.table is.data.table data.table
 #' @importFrom dagitty edges
 #' @param dag A dagitty object. Must include exposure and outcome nodes.
+#' @param edges_to_assess Defaults to "all" edges, "bidirectional" includes only the edges where nodes are connected in both directions.
 #' @param edges_to_keep A vector of directed arrows to be kept between (non-treatment and non-outcome) variables, e.g. c("Z1 -> Z2", "Z2 -> Z3"), c("y", "n", "y"), or c(TRUE, FALSE, TRUE).
 #' @param assess_causal_criteria Defaults to FALSE. If TRUE, the user is guided through a sequence that assesses each pair of connected nodes using causal criteria. Based on the Evidence Synthesis for Constructing Directed Acyclic Graphs (ESC-DAGs) from Ferguson et al. (2020).
+#' @param causal_criteria = Default "ESCDAGs" (Ferguson et al., 2020) causal criteria considers temporality, face-validity, and recourse to theory. Other causal criteria can be supplied as a data.frame, see summary(ESCDAGs) for column names.
+#' @param causal_criteria_answers = NULL,
 #' @returns A list or vector of edges.
 #' @examples
 #' ## initial dag
@@ -268,18 +270,24 @@ build_graph <- function(variables,
 #'                               assess_causal_criteria = TRUE)
 #'
 #' @export
-assess_edges <- function(dag, edges_to_keep = NA, assess_causal_criteria = FALSE){
+assess_edges <- function(dag,
+                         edges_to_assess = "all",
+                         edges_to_keep = NA,
+                         assess_causal_criteria = FALSE,
+                         causal_criteria = ESCDAGs,
+                         causal_criteria_answers = NULL
+                         ){
   .datatable.aware <- TRUE
-  #edges_to_keep <- initial_dag
-  #dag <- saturated_graph
-  edges_to_assess  <- data.table::as.data.table(dagitty::edges(dag))[, c("v", "e", "w")]
+  # debugging: edges_to_keep <- initial_dag # dag <- saturated_graph
 
+  # get dag edges
+  edges <- pdag_to_dag_edges(dag) # also checks for bi-directional edges "--" (pdag) or "<->" and changes to "->", adding rows for each edge
 
   if( dagitty::is.dagitty(edges_to_keep) ){
 
-    edges_to_keep <- data.table::as.data.table(dagitty::edges(edges_to_keep))[, c("v", "e", "w")]
+    edges_to_keep <- pdag_to_dag_edges(edges_to_keep)
 
-    edges_to_assess <-  edges_to_assess[!edges_to_keep, on = c("v", "e", "w")]
+    edges <-  edges[!edges_to_keep, on = c("v", "e", "w")]
 
   }else if( all( complete.cases( unlist(edges_to_keep) ) ) ){
 
@@ -293,7 +301,7 @@ assess_edges <- function(dag, edges_to_keep = NA, assess_causal_criteria = FALSE
 
     if( is.data.frame(edges_to_keep) | data.table::is.data.table(edges_to_keep) ){
 
-      edges_to_assess <-  edges_to_assess[!edges_to_keep, on = c("v", "e", "w")]
+      edges <-  edges[!edges_to_keep, on = c("v", "e", "w")]
 
     }else{
 
@@ -304,22 +312,59 @@ assess_edges <- function(dag, edges_to_keep = NA, assess_causal_criteria = FALSE
   }
 
 
-
   if( assess_causal_criteria == TRUE ){
 
-    check_skip_sequence <- FALSE
+    if( edges_to_assess == "bidirectional" ){ # if use inputs edges_to_assess = "bidirectional"
 
-    #cat("\nThere are", nrow(edges_to_assess), "directed arrows to be assessed:", "\n", "\n", sep=" ")
-    #print(edges_to_assess, quote=FALSE)
-    #cat("\nAssess the posited causal relationships? (ESC-DAGs causal criteria and counterfactual thought experiment sequence)", "\n")
+      # identify all bidirectional edges
+      edges_to_assess <- suppressWarnings( lapply( 1:nrow(edges), function(x){
 
-    edges_to_keep <- causal_criteria_sequence(edges_to_assess, check_skip_sequence, edges_to_keep)
+        lapply( 1:nrow(edges), function(y){
 
-    return(edges_to_keep)
+          if( ( identical( edges$v[x], edges$w[y] ) & identical( edges$w[x], edges$v[y] ) ) ){
+
+            edges_to_assess[x] <- edges[x, ]
+
+          }
+
+        } )
+
+      } ) )
+
+
+      edges_to_assess <- do.call(rbind, unlist(edges_to_assess, recursive = FALSE) ) # expand list elements as dataframe rows
+
+      # remove edges_to_assess from dag edges
+      edges <- data.table::setDT(edges)[!edges_to_assess, on = c("v", "e", "w")]
+
+      if( all( complete.cases( edges_to_keep ) ) ){ # check if edges_to_keep specified
+
+        # combine unidirectional edges and edges_to_keep
+        edges_to_keep <- rbind(edges, edges_to_keep)
+
+      }else{ # otherwise unidirectional edges become edges_to_keep
+
+        edges_to_keep <- edges
+      }
+
+    }else{ # edges_to_assess = all
+
+      edges_to_assess <- edges
+    }
+
+    edges <- causal_criteria_sequence(edges = edges_to_assess,
+                                      check_skip_sequence = FALSE,
+                                      edges_to_keep = edges_to_keep,
+                                      causal_criteria = causal_criteria,
+                                      causal_criteria_answers = causal_criteria_answers)
+
+    message("\nOutputted list containing edges and causal criteria answers.")
+
+    return(edges)
 
   }
 
-  if( nrow(edges_to_assess) != 0 ){
+  if( nrow(edges) != 0 ){
 
 
     if( all( complete.cases( unlist(edges_to_keep) ) ) ){
@@ -335,10 +380,10 @@ assess_edges <- function(dag, edges_to_keep = NA, assess_causal_criteria = FALSE
 
     }
 
-    # group edges_to_assess by unique node names
-    edges_assess_list <- print_edges_helper(edges_to_assess)
+    # group edges by unique node names
+    edges_list <- print_edges_helper(edges)
 
-    cat( paste("c(", paste( unlist(edges_assess_list), collapse=",\n\n" ), ")", sep = "\n", collapse = "") )
+    cat( paste("c(", paste( unlist(edges_list), collapse=",\n\n" ), ")", sep = "\n", collapse = "") )
 
   }else{
 
@@ -351,25 +396,26 @@ assess_edges <- function(dag, edges_to_keep = NA, assess_causal_criteria = FALSE
 
   if( !all( complete.cases(edges_to_keep) ) & assess_causal_criteria == FALSE ){
 
-    edges_to_assess <- suppressWarnings( sapply(1:nrow(edges_to_assess), function(x){
+    edges <- suppressWarnings( sapply(1:nrow(edges), function(x){
 
-      edges_to_assess <- paste( edges_to_assess[x,], collapse=" ")
+      edges <- paste( edges[x,], collapse=" ")
 
     }) )
 
     message("\nOutputted edges to assess.
             \n\nPrinted edges to assess - copy and paste in a .R file to use as a vector object.")
 
-    return(edges_to_assess)
+    return(edges)
 
   }
 
   edges_list <- list(
-    edges_to_keep = edges_to_keep,
-    edges_to_assess = edges_to_assess
+    edges_to_assess = edges,
+    edges_to_keep = edges_to_keep
+
   )
 
-  message("\nOutputted edges list (edges_to_keep & edges_to_assess).
+  message("\nOutputted edges list (edges_to_assess & edges_to_keep).
           \n\nPrinted edges to assess - copy and paste in a .R file to use as a vector object.")
 
   return(edges_list)
@@ -414,13 +460,11 @@ assess_edges <- function(dag, edges_to_keep = NA, assess_causal_criteria = FALSE
 keep_edges <- function(dag, edges_to_keep = NA){
   .datatable.aware <- TRUE
 
-  edges_all  <- as.data.table(dagitty::edges(dag))
-  edges <- edges_all[, c("v", "e", "w")]
-
+  edges <- pdag_to_dag_edges(dag)
 
   if( dagitty::is.dagitty(edges_to_keep)){
 
-    edges_to_keep <- data.table::as.data.table(dagitty::edges(edges_to_keep))[, c("v", "e", "w")]
+    edges_to_keep <- pdag_to_dag_edges(edges_to_keep)
 
   }else if( is.vector( edges_to_keep ) ){
 
@@ -474,7 +518,7 @@ keep_edges <- function(dag, edges_to_keep = NA){
 #' @param type Type of graph generated. Defaults to 'full' (fully connected graph) with arrows drawn between confounders (both directions) and from confounders to mediators. If type ='saturated', a similar saturated graph is produced except confounders are not connected to mediators, featuring bi-directional arrows between each of the confounders (follows the ESC-DAGs Mapping Stage in Ferguson et al. (2020)). When type = 'first' or 'last', inputted new_nodes are ordered first or last if a confounder, mediator, or treatment node_role is selected.
 #' @param temporal_reference_node Supply an alternative reference, or simply leave blank. Default settings uses dagitty::topologicalOrdering() and selects the first of the inputted node_role (e.g., first confounder) as the temporal point of reference. If type = 'last', the last node is used.
 #' @param print_edges Print new edges in console, defaults to TRUE.
-#' @param coords_spec Set of parameters for generating coordinates. Adjust node placement with lambda, a higher value increases volatility and results in more extreme DAG structures.
+#' @param coords_spec Adjust node placement with lambda, a higher value increases volatility and results in more extreme DAG structures. Threshold controls the closeness of nodes.
 #' @returns A dagitty object.
 #' @examples
 #' dag <- add_nodes(dag, new_nodes, node_role)
@@ -491,7 +535,8 @@ add_nodes <- function(dag,
   .datatable.aware <- TRUE
 
   ## get initial dag edges
-  edges <- as.data.frame( dagitty::edges(dag) )[, c("v", "e", "w")]
+  edges <- pdag_to_dag_edges(dag)
+
   names(edges) <- c("ancestor", "edge", "descendant") # change column names
 
   dag_node_names <- names(dag) # extract dag node names
@@ -606,12 +651,7 @@ add_nodes <- function(dag,
 
   }
 
-  new_coordinates <- renew_coords(dag = dag,
-                                 new_node_names = new_nodes,
-                                 coordinates = coordinates,
-                                 coords_spec = coords_spec[ complete.cases(coords_spec) ] )
 
-  dagitty::coordinates(dag) <- new_coordinates
 
   if( print_edges == TRUE){
 
@@ -625,7 +665,27 @@ add_nodes <- function(dag,
   }
 
 
-  return(dag)
+  tryCatch({
+    new_coordinates <- renew_coords(dag = dag,
+                                new_node_names = new_nodes,
+                                coordinates = coordinates,
+                                coords_spec = coords_spec[ complete.cases(coords_spec) ] )
+    dagitty::coordinates(dag) <- new_coordinates
+  }, warning = function(w){
+    message(paste("Warning:", w, "\n Using alternative function to generate dag coordinates."))
+    dag <- add_coords(dag, coords_spec = coords_spec[ complete.cases(coords_spec) ] )
+    return(dag)
+
+  }, error = function(e){
+    message(paste("Error:", e, "\n Using alternative function to generate dag coordinates."))
+    dag <- add_coords(dag, coords_spec = coords_spec[ complete.cases(coords_spec) ] )
+    return(dag)
+
+  }, finally = return(dag)
+
+  )
+
+
 }
 
 
@@ -653,7 +713,7 @@ saturate_nodes <- function(dag,
   .datatable.aware <- TRUE
 
   ## get initial dag edges
-  edges <- as.data.frame( dagitty::edges(dag) )[, c("v", "e", "w")]
+  edges <- pdag_to_dag_edges(dag)
   names(edges) <- c("ancestor", "edge", "descendant") # change column names
 
   dag_node_names <- names(dag) # extract dag node names
@@ -786,12 +846,12 @@ saturate_nodes <- function(dag,
 #' @param new_node_type A suffix added to each of the new node names, e.g. "post_treatment", or "t" (a number is added for each repeat if num_repeats is specified)
 #' @param temporal_reference_node Supply an alternative reference, or simply leave blank. Default settings use treatment as the temporal point of reference for adding new (post-treatment) nodes, but if other node types are specified it can be useful to specify the existing node name.
 #' @param num_repeats Number of additional copies of nodes, such as time points. Each repeat number is included at the end of new node names (new_new_t1, new_node_t2, etc.).
-#' @param coords_spec Set of parameters for generating coordinates. Adjust node placement with lambda, a higher value increases volatility and results in more extreme DAG structures.
+#' @param coords_spec Adjust node placement with lambda, a higher value increases volatility and results in more extreme DAG structures. Threshold controls the closeness of nodes.
 #' @returns A dagitty object.
 #' @examples
 #' dag <- copy_nodes(dag, existing_nodes)
 #'
-#' @export
+#' @noRd
 copy_nodes <- function(dag,
                        existing_nodes,
                        existing_node_type = "pre_treatment",
@@ -800,9 +860,10 @@ copy_nodes <- function(dag,
                        num_repeats = NA,
                        coords_spec = c(lambda = 0.1, threshold = 0.5)
 ){
-  ###### NOTE: this was written before add_nodes() and saturate_nodes(), as such needs to be updated (following a similar logic as the other node-adding funcs)
+  ###### NOTE: this was written before add_nodes() and saturate_nodes()
+  ###### needs to be updated before adding @export
   .datatable.aware <- TRUE
-  edges <- as.data.frame( dagitty::edges(dag) )[, c("v", "e", "w")] # get dag edges
+  edges <- pdag_to_dag_edges(dag) # get dag edges
   node_names <- names(dag) # extract dag node names
 
   treatments <- dagitty::exposures(dag) # get treatments
@@ -812,7 +873,7 @@ copy_nodes <- function(dag,
 
   if( dagitty::is.dagitty(existing_nodes) ){   # check for an existing dag (inputted as existing_nodes)
 
-    dag <- copy_nodes_helper(dag,
+    dag <- copy_nodes_helper2(dag,
                          edges,
                          node_names,
                          existing_nodes,
@@ -859,7 +920,7 @@ copy_nodes <- function(dag,
 #' @importFrom dagitty dagitty edges exposures outcomes latents coordinates
 #' @param dag First dagitty object.
 #' @param new_dag Second dagitty object, added to the first.
-#' @param coords_spec Parameters used for generating coordinates. Adjust node placement with lambda; a higher value increases volatility and results in more extreme DAG structures. Threshold controls the closeness of nodes.
+#' @param coords_spec Adjust node placement with lambda; a higher value increases volatility and results in more extreme DAG structures. Threshold controls the closeness of nodes.
 #' @returns A dagitty object
 #' @examples
 #' new_graph <- join_graphs(dag, new_dag)
@@ -871,7 +932,7 @@ join_graphs <- function(dag,
 ){
   .datatable.aware <- TRUE
 
-  edges <- as.data.frame( dagitty::edges(dag) )[, c("v", "e", "w")] # get primary dag edges
+  edges <- pdag_to_dag_edges(dag) # get primary dag edges
   node_names <- names(dag) # extract dag node names
 
   treatments <- dagitty::exposures(dag) # get treatments
@@ -879,7 +940,7 @@ join_graphs <- function(dag,
   latent_vec <- unlist(dagitty::latents(dag)) # get dag latent variables
   coordinates <- dagitty::coordinates(dag) # extract dag coordinates
 
-  new_edges <- as.data.frame( dagitty::edges(new_dag) )[, c("v", "e", "w")]  # get new dag edges
+  new_edges <- pdag_to_dag_edges(new_dag)  # get new dag edges
   new_node_names <- names(new_dag) # extract new dag node names
 
   existing_node_names <-  new_node_names[ new_node_names %in% node_names ] # saves duplicate node names
@@ -958,43 +1019,49 @@ join_graphs <- function(dag,
 
   }
 
-  coordinates <- renew_coords(dag = dag,
-                              new_node_names = new_node_names,
-                              coordinates = coordinates,
-                              coords_spec = coords_spec[ complete.cases(coords_spec) ] )
+  tryCatch({
+    coordinates <- renew_coords(dag = dag,
+                                new_node_names = new_node_names,
+                                coordinates = coordinates,
+                                coords_spec = coords_spec[ complete.cases(coords_spec) ] )
 
+    dagitty::coordinates(dag) <- coordinates
 
-  dagitty::coordinates(dag) <- coordinates
+    }, warning = function(w){
+    message(paste("Warning:", w, "\n Using alternative function to generate dag coordinates."))
+    dag <- add_coords(dag, coords_spec = coords_spec[ complete.cases(coords_spec) ] )
+    return(dag)
 
+    }, error = function(e){
+      message(paste("Error:", e, "\n Using alternative function to generate dag coordinates."))
+      dag <- add_coords(dag, coords_spec = coords_spec[ complete.cases(coords_spec) ] )
+      return(dag)
 
-  return(dag)
+    }, finally = return(dag)
+  )
 
 }
 
 
-#' Assess edges using causal criteria
-#'
-#' This function uses a written procedure outlined in Ferguson et al. (2019); Evidence Synthesis for Constructing Directed Acyclic Graphs (ESC-DAGs).
+#' Assess graph edges using causal criteria
 #'
 #' @param edges vector of edges whose relationships are to be assessed
 #' @param num_edges number of edges to be assessed
 #' @param check_skip_sequence TRUE or FALSE depending on prior inputs
+#' @param causal_criteria Set of causal criteria to be used. Can be user-specified, defaults to 'ESCDAGs'.
 #' @noRd
-causal_criteria_sequence <- function(edges, check_skip_sequence, edges_to_keep){
-  #edges <- edges_to_assess # used for debugging assess_edges()
-  #check_skip_sequence <- FALSE # used for debugging assess_edges()
-  #edges_to_keep <- NA # used for debugging assess_edges()
+causal_criteria_sequence <- function(edges,
+                                     check_skip_sequence,
+                                     edges_to_keep,
+                                     causal_criteria,
+                                     causal_criteria_answers){
+  # debugging: edges <- edges_to_assess # check_skip_sequence <- FALSE # edges_to_keep <- NA
   if(check_skip_sequence == FALSE) {
 
     num_edges <- nrow(edges)
-
-    cat("\nThere are ", num_edges, " directed arrows to be assessed.","\n", "\n", sep="")
+    cat( "\nThere are ", num_edges, " directed arrows to be assessed.","\n", "\n", sep="" )
     print(edges, quote=FALSE)
-    cat("\nAssess the posited causal relationships using causal criteria? (ESC-DAGs protocol)", "\n")
-
-    removed_arrows <- c()
-    arrow_count <- 1
-    num_arrow_to_remove <- 0
+    cat( "\nAssess the posited causal relationships using causal criteria?", "\n" )
 
     check_ans <- FALSE
 
@@ -1004,23 +1071,11 @@ causal_criteria_sequence <- function(edges, check_skip_sequence, edges_to_keep){
 
       if(choice == "y"){
 
-        #cat("\n", "\n===================================")
-        #cat("\nESC-DAGs (Ferguson et al., 2020)")
-        #cat("\nDAGs from background knowledge")
-        #cat("\nCode written by Aidan J Moller (2025)")
-        #cat("\n===================================", "\n")
-
         check_ans <- TRUE
 
       }else if(choice == "n"){
 
-        message("\nSkipped sequence.")
-
-        #edges <- noquote(paste("c('", paste(edges, collapse="', '"), "')", sep = ""))
-
-        # edges_to_keep <- noquote(paste("c('", paste(edges_to_keep, collapse="', '"), "')", sep = ""))
-
-        message("\nOutputting causal criteria assessed edges.")
+        message( "Skipped sequence." )
 
         edges_list <- list(
           edges_to_keep = edges_to_keep,
@@ -1031,218 +1086,138 @@ causal_criteria_sequence <- function(edges, check_skip_sequence, edges_to_keep){
 
       }else if(choice == "?info"){
 
-        cat("\nEach directed edge in the IG is assessed for three causal criteria: temporality; face-validity; and recourse to theory. They are primarily informed by the classic Bradford Hill viewpoints,24 and are compatible with the ‘inference to the best explanation’ approach advocated by Krieger and Davey Smith.1 If a relationship is determined to possess each criterion, a counterfactual thought experiment derived from the POF is used to further explicate the reviewers’ assumptions.25 The translation process thus combines ‘classic’ and ‘modern’ causal thinking and understands DAGs as ‘conceptual tools’1 for exploring causation, rather than substitutes for careful causal thinking.", "\n")
-        cat("\nThe ESC-DAGs causal criteria operate sequentially, with each criterion designed to elaborate over the previous. If any criterion on the edge is not present, the edge can be deleted. The exception is the recourse to theory criterion—absence of theory in the study or according to the reviewer does not equate to absence of effect.26 The counterfactual thought experiment is performed after assessing all criteria. All retained directed edges are entered into the directed edge index. However, each edge should be tested in both directions (i.e. with the head and tail of the arrow swapped). If the posited and reverse edges are both retained, then the relationship should be noted as bi-directional in the directed edge index. Reviewers can also note low confidence in particular directed edges.", "\n")
+        cat( "This is a guided sequence for assessing graph edges. By default it uses the causal criteria in ESC-DAGs protocol (Ferguson et al., 2020).
+             \nA data frame containing user-specified criteria can be supplied in assess_edges().")
 
       }else{
 
-        cat("\n", "\nPlease type a valid answer.", "\n")
-
+        message( "Please type a valid answer." )
       }
+
     }
+
+    removed_arrows <- c()
+    arrow_count <- 1
+    num_arrow_to_remove <- 0
+
+    num_criteria <- nrow(causal_criteria)
+    criteria_answers <- as.data.frame( matrix(nrow = 0, ncol = num_criteria) )
+    colnames(criteria_answers) <- causal_criteria[, "name" ]
+
+    causal_criteria$required <- as.factor(causal_criteria$required)
 
     for(arrow_count in 1:num_edges){
 
-      criterion_num <- 1
-      check_arrow_removed <- FALSE
+        criterion_num <- 1
+        check_ans <- FALSE
 
-      check_ans <- FALSE
+        arrow <- noquote( paste( edges[ arrow_count ], collapse=" " ) )
+        cat( "For the directed arrow '", arrow, "' consider each of the following:", "\n", "\n", sep="")
 
-      arrow <- noquote( paste(edges[arrow_count], collapse=" ") )
-      cat("\n", "\nFor the directed arrow '", arrow, "' consider each of the following:", sep="")
+        while( check_ans == FALSE ){
 
-      cat("\n", "\n'", arrow, "' (", arrow_count, "/", num_edges, ")",  sep="")
-      cat("\n[1/4] Temporality: does the variable to the left of the arrow precede the variable on the right?", "\n")
-      cat("\nFor help, enter ?info")
+          if( !criterion_num > num_criteria ){
 
-      while(check_ans == FALSE){
+            cat( paste0(arrow, "' (", arrow_count, "/", num_edges, ")"),
+                 "\n", paste0("\n[", criterion_num, "/", num_criteria, "]"),
+                 paste0( causal_criteria[ criterion_num, "name" ], ":"),
+                 causal_criteria[ criterion_num, "question" ], "\n",
+                 "\nFor help, enter \'?info\'")
 
-        choice <- readline("(y/n/?info): ")
+            choice <- readline("(y/n/?info): ")
 
-        if(choice == "y"){
+            if( choice == "y" ){
 
-          criterion_num <- criterion_num + 1
+              criteria_answers[ arrow_count, criterion_num] <- "y" # "yes (causal)"
 
-          check_ans <- TRUE
+              criterion_num <- criterion_num + 1
 
-        }else if(choice == "n"){
+            }else if( choice == "n" ){
 
-          num_arrow_to_remove <- num_arrow_to_remove + 1
-          removed_arrows[num_arrow_to_remove] <- arrow_count
+              if( causal_criteria[ criterion_num, "required" ] == "yes"){
 
-          check_arrow_removed <- TRUE
+                num_arrow_to_remove <- num_arrow_to_remove + 1
+                removed_arrows[ num_arrow_to_remove ] <- arrow_count
 
-          check_ans <- TRUE
+                criteria_answers[ arrow_count, criterion_num ] <- "n" # "no - remove edge"
 
-          message("\n", "\nCausal relationship '", arrow, "' assessed; edge removed.", "\n", sep="")
+                criterion_num <- num_criteria + 1
 
-        }else if(choice == "?info"){
+                message( "Causal relationship '", arrow, "' assessed; edge removed.", sep="" )
 
-          cat("\n", "\nCausal criterion 1—temporality:")
-          cat("\nOf the Bradford Hill criteria, temporality is the only one not requiring extensive qualification or not yet disproven. (Thomas et al., 2013; DOI: https://doi.org/10.1146/annurev-publhealth-031811-124606) It states that effect cannot precede cause. For example, in Figure 1(A) (Ferguson et al., 2020; DOI: https://doi.org/10.1093/ije/dyz150), adolescent substance use cannot precede historical parental alcohol use, so the relationship would not be temporal. Unless the directed edge is not temporal, we proceed to causal criterion 2.", "\n")
-          cat("\nSource: Ferguson et al., 2020, 'Evidence synthesis for constructing directed acyclic graphs (ESC-DAGs): a novel and systematic method for building directed acyclic graphs', DOI: https://doi.org/10.1093/ije/dyz150)")
+                check_ans <- TRUE
 
-        }else{
+              }else{
 
-          cat("\n", "\nPlease type a valid answer.", "\n")
+                criteria_answers[ arrow_count, criterion_num ] <- "n"
 
-        }
-      }
+                criterion_num <- criterion_num + 1
 
-      check_ans <- FALSE
+                message( "Answer recorded. Causal relationship '", arrow, "' assessed.", sep="" )
+              }
 
-      if(check_arrow_removed == FALSE){
 
-        cat("\n", "\n'", arrow, "' (", arrow_count, "/", num_edges, ")",  sep="")
-        cat("\n[2/4] Face-validity: is the posited relationship plausible?", "\n")
-        cat("\nFor help, enter ?info")
 
-        while(check_ans == FALSE){
+            }else if( choice == "?info" ){
 
-          choice <- readline("(y/n/?info): ")
+              cat( "\n", "\nCausal criterion", criterion_num, "—", causal_criteria[ criterion_num, "name" ],
+                   "\n", "\n", paste0("Definition", ":"),
+                   "\n", causal_criteria[ criterion_num, "description" ],
+                   "\n", "\n", causal_criteria[ criterion_num, "source" ],
+                   "\n", "\n" )
 
-          if(choice == "y"){
+            }else{
 
-            criterion_num <- criterion_num + 1
+              cat( "\n", "\nPlease type a valid answer.", "\n" )
 
-            check_ans <- TRUE
-
-          }else if(choice == "n"){
-
-            num_arrow_to_remove <- num_arrow_to_remove + 1
-            removed_arrows[num_arrow_to_remove] <- arrow_count
-
-            check_arrow_removed <- TRUE
-
-            check_ans <- TRUE
-
-            cat("\n", "\nCausal relationship '", arrow, "' assessed; edge removed.", "\n", sep="")
-
-          }else if(choice == "?info"){
-
-            cat("\n", "\nCausal criterion 2—face-validity:")
-            cat("\nFace-validity is related to the Bradford Hill criterion of (biologic) plausibility. Nested within the wider causal criteria scheme, the face-validity criterion is a rapid means of using reviewer background knowledge to identify implausible relationships, given the temporality established in criterion 1. For example, in Figure 1(A) it is plausible that directed edges originate from sex, but implausible that historical parental alcohol use could influence adolescent sex assignment despite temporal ordering.", "\n")
-            cat("\nSource: Ferguson et al., 2020, 'Evidence synthesis for constructing directed acyclic graphs (ESC-DAGs): a novel and systematic method for building directed acyclic graphs', DOI: https://doi.org/10.1093/ije/dyz150)")
-
+            }
 
           }else{
 
-            cat("\n", "\nPlease type a valid answer.", "\n")
+            check_ans <- TRUE
 
           }
+
+
         }
+
+        arrow_count <- arrow_count + 1
       }
 
-      check_ans <- FALSE
 
-      if(check_arrow_removed == FALSE){
 
-        cat("\n", "\n'", arrow, "' (", arrow_count, "/", num_edges, ")",  sep="")
-        cat("\n[3/4] Recourse to theory—is the posited relationship supported by theory?", "\n")
-        cat("\nFor help, enter ?info")
+    if(num_arrow_to_remove > 0){
 
-        while(check_ans == FALSE){
+      criteria_answers <- cbind(edges, criteria_answers)
 
-          choice <- readline("(y/n/?info): ")
+      edges <- edges[ -removed_arrows, ]
 
-          if(choice == "y"){
+      if( all( complete.cases( edges_to_keep ) ) ){
 
-            criterion_num <- criterion_num + 1
-            check_ans <- TRUE
+        edges <- rbind(edges_to_keep, edges)
 
-          }else if(choice == "n"){
-
-            #num_arrow_to_remove <- num_arrow_to_remove + 1
-            #removed_arrows[num_arrow_to_remove] <- arrow_count
-
-            #check_arrow_removed <- TRUE
-
-            check_ans <- TRUE
-
-            #cat("\n", "\nCausal relationship '", arrow, "' assessed; edge removed.", "\n", sep="")
-
-            cat("\n", "\nCausal relationship '", arrow, "' assessed; answer recorded.", "\n", sep="")
-
-          }else if(choice == "?info"){
-
-            cat("\n", "\nCausal criterion 3—recourse to theory:")
-            cat("\nThe recourse to theory criterion considers background and expert knowledge more overtly. It subsumes the temporality and face-validity criteria and continues to cement a platform for the counterfactual thought experiment. Where the face-validity criterion is concerned with the researcher’s own knowledge, the step assesses whether there is formal theoretical support for the relationship. The decision log for this criterion requires the reviewer to state briefly what theory applies (if any) with space for a reference. As noted above, lack of theory does not equate to lack of effect. As such the purpose of this criterion is not so much falsification as preparation for the next step.", "\n")
-            cat("\nSource: Ferguson et al., 2020, 'Evidence synthesis for constructing directed acyclic graphs (ESC-DAGs): a novel and systematic method for building directed acyclic graphs', DOI: https://doi.org/10.1093/ije/dyz150)")
-
-          }else{
-
-            cat("\n", "\nPlease type a valid answer.", "\n")
-
-          }
-        }
       }
 
-      check_ans <- FALSE
+      edges <- list(edges = edges, causal_criteria_answers = criteria_answers)
 
-      if(check_arrow_removed == FALSE){
+      return(edges)
 
-        cat("\n", "\n'", arrow, "' (", arrow_count, "/", num_edges, ")",  sep="")
-        cat("\n[4/4] Counterfactual thought experiment: is the posited relationship supported by a systematic thought experiment informed by the potential outcomes framework?")
-        cat("\n", "\nFor help, enter ?info")
+    }else{
 
-        while(check_ans == FALSE){
+      message( "No arrows were removed." )
 
-          choice <- readline("(y/n/?info): ")
+      edges_list <- list(
+        edges_to_keep = edges_to_keep,
+        edges_to_assess = edges
+      )
 
-          if(choice == "y"){
+      return(edges_list)
 
-            criterion_num <- criterion_num + 1
-
-            check_ans <- TRUE
-
-          }else if(choice == "n"){
-
-            num_arrow_to_remove <- num_arrow_to_remove + 1
-            removed_arrows[num_arrow_to_remove] <- arrow_count
-
-            check_arrow_removed <- TRUE
-
-            check_ans <- TRUE
-
-            cat("\n", "\nCausal relationship '", arrow, "' assessed; edge removed.", "\n", sep="")
-
-          }else if(choice == "?info"){
-
-            cat("\n", "\nCounterfactual thought experiment")
-            cat("\nFundamentally, potential outcomes compare the outcome that would have occurred if all of the sample had been exposed, with the outcome that would have occurred if all of the sample had not been exposed.3,4,25 The counterfactual thought experiment employs this heuristic in a formulaic and transparent way, comparing two or more ‘counterfactual exposures’ and considering whether their potential outcomes would be different, given the causal criteria. The original study’s measurement of variables should be emulated. See Ferguson et al. (2020) for more details.", "\n")
-            cat("\nSource: Ferguson et al., 2020, 'Evidence synthesis for constructing directed acyclic graphs (ESC-DAGs): a novel and systematic method for building directed acyclic graphs', DOI: https://doi.org/10.1093/ije/dyz150)")
-
-          }else{
-
-            cat("\n", "\nPlease type a valid answer.", "\n")
-
-          }
-        }
-      }
-
-      arrow_count <- arrow_count + 1
     }
+
   }
 
-  if(num_arrow_to_remove > 0){
-
-    edges <- edges[-removed_arrows, ]
-
-    edges_to_keep <- rbind(edges_to_keep, edges)
-
-    return(edges_to_keep)
-
-  }else{
-
-    message("\nNo arrows were removed.", "\n")
-
-    edges_list <- list(
-      edges_to_keep = edges_to_keep,
-      edges_to_assess = edges
-    )
-
-    return(edges_list)
-  }
+  return(edges_list)
 }
 
 
