@@ -724,3 +724,42 @@ connect_post_treatment_node_children <- function(new_node_names, existing_node_n
   return(new_nodes_list)
 }
 
+
+#' Returns root node
+#'
+#' find_root_node() is a helper function for merged_node_coords_helper().
+#'
+#' @param new_node_name_vec Inputted vector of new node names added to the graph.
+#' @param nodes_parents List of parents by node name.
+#' @param nodes_children List of children by node name.
+#' @return Named list of new coordinates.
+#' @noRd
+find_root_node <- function(new_node_name_vec,
+                           nodes_parents,
+                           nodes_children
+                           ){
+
+  names(nodes_parents) <- new_node_name_vec
+
+  sort_by_num_children <- names( sort( summary( as.factor( unlist(nodes_parents) ) ), decreasing = TRUE ) )
+
+  root_node <- sapply(1:length(sort_by_num_children), function(x){
+
+    sapply(1:length(nodes_parents), function(y){
+
+      if( length(nodes_parents[[y]]) == 0 & sort_by_num_children[x] %in% names(nodes_parents[y]) ){
+
+        root_node <- sort_by_num_children[x]
+
+      }
+
+    })
+
+  })
+
+  root_node <- unlist(root_node)
+
+  return(root_node)
+
+
+}

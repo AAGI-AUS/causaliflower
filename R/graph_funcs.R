@@ -70,7 +70,7 @@ build_graph <- function(variables = NA,
                        competing_exposures = NA,
                        colliders = NA,
                        type = "ordered",
-                       coords_spec = 0
+                       coords_spec = 0.1
                        ){
 
   # check for an existing dag (inputted as confounders)
@@ -187,19 +187,11 @@ build_graph <- function(variables = NA,
 
   dag <- construct_graph(edges_df, node_names, treatments, outcomes, latent_vec)
 
+
+
   if( !all(complete.cases(existing_dag)) ){
 
-    dag <- add_coordinates(dag = dag,
-                           treatments = treatments,
-                           outcomes = outcomes,
-                           confounders = variables,
-                           mediators = mediators,
-                           instrumental_variables = instrumental_variables,
-                           mediator_outcome_confounders = mediator_outcome_confounders,
-                           competing_exposures = competing_exposures,
-                           latent_variables = latent_variables,
-                           colliders = colliders,
-                           lambda = unname( coords_spec[ complete.cases(coords_spec) ] ) )
+    dag <- add_coords(dag, coords_spec = unname( coords_spec[1][ complete.cases(coords_spec) ] ) )
 
   }else{
 
@@ -286,7 +278,7 @@ assess_edges <- function(dag,
 
     }else{
 
-      stop("Edges_to_keep must be a data frame, data table, vector, or dagitty object. Please check inputs and try again.")
+      stop("'edges_to_keep' must be a data frame, data table, vector, or dagitty object. Please check inputs and try again.")
 
     }
 
@@ -381,8 +373,7 @@ assess_edges <- function(dag,
 
     }) )
 
-    message("\nOutputted edges to assess.
-            \n\nPrinted edges to assess - copy and paste in a .R file to use as a vector object.")
+    message("\nOutputted and printed edges to assess - copy and paste in a .R file to use as a vector object.")
 
     return(edges)
 
@@ -394,7 +385,7 @@ assess_edges <- function(dag,
 
   )
 
-  message("\nOutputted edges list (edges_to_assess & edges_to_keep).
+  message("\nOutputted edges list contains 'edges_to_assess' and 'edges_to_keep'.
           \n\nPrinted edges to assess - copy and paste in a .R file to use as a vector object.")
 
   return(edges_list)
@@ -507,6 +498,8 @@ add_nodes <- function(dag,
                       new_nodes,
                       ancestors = NULL,
                       descendants = NULL,
+                      node_role = NULL,
+                      type = NULL,
                       print_edges = TRUE,
                       coords_spec = c(lambda = 0.1, threshold = 0.5)
                       ){
@@ -523,7 +516,12 @@ add_nodes <- function(dag,
 
   new_node_names <- new_nodes[ !new_nodes %in% dag_node_names ] # remove duplicate node names
 
-  new_edges <- connect_new_nodes(dag, new_node_names, ancestors, descendants)
+  new_edges <- connect_new_nodes(dag = dag,
+                                 new_nodes = new_node_names,
+                                 ancestors = ancestors,
+                                 descendants = descendants,
+                                 node_role = node_role,
+                                 type = type)
 
   ## pre-process before merging
   new_edges <- new_edges[ complete.cases(new_edges), ] # remove NAs
@@ -539,7 +537,6 @@ add_nodes <- function(dag,
 
   dag <- rebuild_dag(dag, edges)
 
-
   if( print_edges == TRUE){
 
     new_edges_list <- print_edges_helper(new_edges)
@@ -550,6 +547,15 @@ add_nodes <- function(dag,
 
   }
 
+  num_nodes <- length(new_node_names)
+  time_limit <- num_nodes + num_nodes*coords_spec[1]
+
+  setTimeLimit(cpu = time_limit, elapsed = time_limit, transient = TRUE)
+
+  on.exit( {
+    setTimeLimit(cpu = Inf, elapsed = Inf, transient = FALSE)
+  } )
+
   tryCatch({
     new_coordinates <- renew_coords(dag = dag,
                                 new_node_names = new_node_names,
@@ -558,12 +564,12 @@ add_nodes <- function(dag,
     dagitty::coordinates(dag) <- new_coordinates
   }, warning = function(w){
     message(paste("Warning:", w, "\n Using alternative function to generate dag coordinates."))
-    dag <- add_coords(dag, coords_spec = coords_spec[1][ complete.cases(coords_spec) ] )
+    dag <- add_coords_helper(dag, coords_spec = coords_spec[1][ complete.cases(coords_spec) ] )
     return(dag)
 
   }, error = function(e){
     message(paste("Error:", e, "\n Using alternative function to generate dag coordinates."))
-    dag <- add_coords(dag, coords_spec = coords_spec[1][ complete.cases(coords_spec) ] )
+    dag <- add_coords_helper(dag, coords_spec = coords_spec[1][ complete.cases(coords_spec) ] )
     return(dag)
 
   }, finally = return(dag)
@@ -619,9 +625,8 @@ saturate_nodes <- function(dag,
     output_list <- add_nodes_helper(dag, nodes, node_role, type)
 
     new_edges <- output_list$new_edges
-    treatments <- output_list$treatments
-    outcomes <- output_list$outcomes
-    latent_vec <- output_list$latent_vec
+
+    colnames(new_edges) <- c("v", "e", "w")
   }
 
   ## pre-process before merging
@@ -788,53 +793,17 @@ join_graphs <- function(dag,
 
   edges <- rbind(edges, new_edges) # combine both dag edges
 
-  node_name_and_coords_vec <- c()
-
-  if( length(latent_vec) > 0 ){ ########### simplify this section ##############
-
-    if( all(complete.cases(latent_vec)) ) {
-
-      node_name_and_coords_vec <- c(paste(treatments, " [exposure] ", sep=""),
-                                    paste(outcomes, " [outcome] ", sep=""),
-                                    paste(latent_vec, " [latent] ", sep=""),
-                                    paste(node_names, collapse=" "))
-
-    }else{
-      node_name_and_coords_vec <- c(paste(treatments, " [exposure] ", sep=""),
-                                    paste(outcomes, " [outcome] ", sep=""),
-                                    paste(node_names, collapse=" "))
-    }
-
-  }else{
-
-    node_name_and_coords_vec <- c(paste(treatments, " [exposure] ", sep=""),
-                                  paste(outcomes, " [outcome] ", sep=""),
-                                  paste(node_names, collapse=" "))
-  }
+  dag <- rebuild_dag(dag, edges)
 
 
-  num_edges <- nrow(edges)
+  num_nodes <- length(length(new_node_names))
+  time_limit <- num_nodes + num_nodes*coords_spec[1]
 
-  if( num_edges != 0 ){
+  setTimeLimit(cpu = time_limit, elapsed = time_limit, transient = TRUE)
 
-    edges <- suppressWarnings( sapply(1:num_edges, function(x){
-
-      edges <- paste( edges[x,], collapse=" ")
-
-    }) )
-
-  }
-
-
-  dag <- paste("dag {", paste(node_name_and_coords_vec, collapse=""), paste(edges, collapse=" "), "}", sep = " ")
-
-  dag <- dagitty::dagitty(dag)
-
-  if( all(!is.na(unlist(coordinates))) ){
-
-    dagitty::coordinates(dag) <- coordinates
-
-  }
+  on.exit( {
+    setTimeLimit(cpu = Inf, elapsed = Inf, transient = FALSE)
+  } )
 
   tryCatch({
     coordinates <- renew_coords(dag = dag,
@@ -845,13 +814,13 @@ join_graphs <- function(dag,
     dagitty::coordinates(dag) <- coordinates
 
     }, warning = function(w){
-    message(paste("Warning:", w, "\n Using alternative function to generate dag coordinates."))
-    dag <- add_coords(dag, coords_spec = coords_spec[ complete.cases(coords_spec) ] )
-    return(dag)
+      message(paste("Warning:", w, "\n Using alternative function to generate dag coordinates."))
+      dag <- add_coords_helper(dag, coords_spec = coords_spec[ complete.cases(coords_spec) ] )
+      return(dag)
 
     }, error = function(e){
       message(paste("Error:", e, "\n Using alternative function to generate dag coordinates."))
-      dag <- add_coords(dag, coords_spec = coords_spec[ complete.cases(coords_spec) ] )
+      dag <- add_coords_helper(dag, coords_spec = coords_spec[ complete.cases(coords_spec) ] )
       return(dag)
 
     }, finally = return(dag)
@@ -894,18 +863,14 @@ causal_criteria_sequence <- function(edges,
 
         message( "Skipped sequence." )
 
-        edges_list <- list(
-          edges = edges_to_keep,
-          edges_to_assess = edges
-        )
-
+        edges_list <- list(edges = edges_to_keep,
+                           edges_to_assess = edges)
         return(edges_list)
 
       }else if(choice == "?info"){
 
         cat( "This is a guided sequence for assessing graph edges. By default it uses the causal criteria in ESC-DAGs protocol (Ferguson et al., 2020).
              \nA data frame containing user-specified criteria can be supplied in assess_edges().")
-
       }else{
 
         message( "Please type a valid answer." )
@@ -935,7 +900,7 @@ causal_criteria_sequence <- function(edges,
 
           if( !criterion_num > num_criteria ){
 
-            cat( paste0(arrow, "' (", arrow_count, "/", num_edges, ")"),
+            cat( paste0("'", arrow, "' (", arrow_count, "/", num_edges, ")"),
                  "\n", paste0("\n[", criterion_num, "/", num_criteria, "]"),
                  paste0( causal_criteria[ criterion_num, "name" ], ":"),
                  causal_criteria[ criterion_num, "question" ], "\n",
@@ -973,8 +938,6 @@ causal_criteria_sequence <- function(edges,
                 message( "Answer recorded. Causal relationship '", arrow, "' assessed.", sep="" )
               }
 
-
-
             }else if( choice == "?info" ){
 
               cat( "\n", "\nCausal criterion", criterion_num, "—", causal_criteria[ criterion_num, "name" ],
@@ -982,19 +945,15 @@ causal_criteria_sequence <- function(edges,
                    "\n", causal_criteria[ criterion_num, "description" ],
                    "\n", "\n", causal_criteria[ criterion_num, "source" ],
                    "\n", "\n" )
-
             }else{
 
               cat( "\n", "\nPlease type a valid answer.", "\n" )
-
             }
 
           }else{
 
             check_ans <- TRUE
-
           }
-
 
         }
 
@@ -1018,7 +977,7 @@ causal_criteria_sequence <- function(edges,
       edges <- list(edges = edges,
                     causal_criteria_answers = criteria_answers)
 
-      message("\nOutputted list containing edges and causal criteria answers.")
+      message("\nOutputted list containing 'edges' and 'causal_criteria_answers'.")
 
       return(edges)
 
@@ -1029,7 +988,7 @@ causal_criteria_sequence <- function(edges,
       edges_list <- list(edges = rbind(edges_to_keep, edges),
                          causal_criteria_answers = criteria_answers)
 
-      message("\nOutputted list containing edges and causal criteria answers.")
+      message("\nOutputted list containing 'edges' and 'causal_criteria_answers'.")
 
       return(edges_list)
 

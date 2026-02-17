@@ -9,6 +9,8 @@ add_nodes(
   new_nodes,
   ancestors = NULL,
   descendants = NULL,
+  node_role = NULL,
+  type = NULL,
   print_edges = TRUE,
   coords_spec = c(lambda = 0.1, threshold = 0.5)
 )
@@ -18,13 +20,13 @@ add_nodes(
 
 \item{new_nodes}{Inputted vector of node names to be added to the graph.}
 
-\item{print_edges}{Print new edges in console, defaults to TRUE.}
-
-\item{coords_spec}{Adjust node placement with lambda, a higher value increases volatility and results in more extreme DAG structures. Threshold controls the closeness of nodes.}
-
 \item{node_role}{Determines which nodes will be connected, defaults to "confounder". Options include the following: c("confounder", "treatment", "outcome", "mediator", "mediator_outcome_confounder", "instrumental", "competing_exposure", "collider", "latent", "observed").}
 
 \item{type}{Type of graph generated. Defaults to 'full' (fully connected graph) with arrows drawn between confounders (both directions) and from confounders to mediators. If type ='saturated', a similar saturated graph is produced except confounders are not connected to mediators, featuring bi-directional arrows between each of the confounders (follows the ESC-DAGs Mapping Stage in Ferguson et al. (2020)). When type = 'first' or 'last', inputted new_nodes are ordered first or last if a confounder, mediator, or treatment node_role is selected.}
+
+\item{print_edges}{Print new edges in console, defaults to TRUE.}
+
+\item{coords_spec}{Adjust node placement with lambda, a higher value increases volatility and results in more extreme DAG structures. Threshold controls the closeness of nodes.}
 
 \item{temporal_reference_node}{Supply an alternative reference, or simply leave blank. Default settings uses dagitty::topologicalOrdering() and selects the first of the inputted node_role (e.g., first confounder) as the temporal point of reference. If type = 'last', the last node is used.}
 }

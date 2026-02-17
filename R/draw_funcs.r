@@ -1237,8 +1237,22 @@ draw_edges_for_copy_nodes_helper <- function(dag, new_node_names, existing_node_
 #' @param dag An existing dagitty object.
 #' @param new_nodes A vector of new nodes.
 #' @noRd
-connect_new_nodes <- function(dag, new_nodes, ancestors, descendants){
+connect_new_nodes <- function(dag, new_nodes, ancestors, descendants, node_roles, type){
   .datatable.aware <- TRUE
+
+  if( length(node_roles) > 0 ){
+
+    output_list <- add_nodes_helper(dag = dag,
+                            nodes = new_nodes,
+                            node_role = node_role,
+                            type = type)
+    edges <- output_list$new_edges
+
+    colnames(edges) <- c("v", "e", "w")
+
+    return( edges )
+
+  }
 
   node_list <- c()
   edges <- c()

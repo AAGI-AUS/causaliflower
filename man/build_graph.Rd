@@ -15,7 +15,7 @@ build_graph(
   competing_exposures = NA,
   colliders = NA,
   type = "ordered",
-  coords_spec = 0
+  coords_spec = 0.1
 )
 }
 \arguments{

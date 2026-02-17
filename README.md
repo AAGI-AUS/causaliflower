@@ -39,16 +39,16 @@ variables <- c("Z3", "Z2", "Z1")
 treatments <- "X"
 outcomes <- "Y"
 
-dag <- build_graph(variables = variables, 
-                   treatments = treatments, 
-                   outcomes = outcomes) 
+dag <- build_graph(variables = variables,
+                   treatments = treatments,
+                   outcomes = outcomes)
 ```
 
 - Plot dagitty objects (ggdag wrapper with custom causaliflower presets):
 
 ```R
 
-plot_dagitty(new_dag)
+plot_dagitty(dag)
 
 ```
 

@@ -6,7 +6,7 @@
 \usage{
 plot_dagitty(
   dag,
-  coords_spec = 0,
+  coords_spec = 0.1,
   labels = NULL,
   label_type = "name",
   label_placement = "label_repel"

@@ -22,14 +22,16 @@
 #'
 #' @export
 plot_dagitty <- function(dag,
-                         coords_spec =  0,
+                         coords_spec =  0.1,
                          labels = NULL,
                          label_type = "name",
                          label_placement = "label_repel"){
 
   dag <- pdag_to_dag(dag)
 
-  if( any( is.na(dagitty::coordinates(dag)) ) ){
+  existing_coordinates <- dagitty::coordinates(dag)
+
+  if( any( is.na( existing_coordinates$x ) ) | any( is.na( existing_coordinates$y ) ) ){
 
     dag <- add_coords(dag, coords_spec = coords_spec)
 
@@ -186,56 +188,35 @@ plot_dagitty <- function(dag,
 #'
 #' @export
 add_coords <- function(dag,
-                       coords_spec = 0,
-                       confounders = NULL){
+                       coords_spec = 0.1){
 
-  edges <- get_roles(dag)
+  num_nodes <- length(names(dag))
+  time_limit <- num_nodes + num_nodes*coords_spec[1]
 
-  if( is.null(confounders) ){
+  setTimeLimit(cpu = time_limit, elapsed = time_limit, transient = TRUE)
 
-    confounders <-  edges$confounder
+  on.exit( {
+    setTimeLimit(cpu = Inf, elapsed = Inf, transient = FALSE)
+  } )
 
-  }
+  tryCatch({
+    new_coordinates <- renew_coords(dag = dag,
+                                    coords_spec = c( coords_spec[ complete.cases(coords_spec) ], threshold = 0.9 ) )
 
-  mediators <-  edges$mediator
+    dagitty::coordinates(dag) <- new_coordinates
+    return(dag)
+  }, warning = function(w){
+    message(paste("Warning:", w, "\n Using alternative function to generate dag coordinates."))
+    dag <- add_coords_helper(dag, coords_spec = unname( coords_spec[1][ complete.cases(coords_spec) ] ) )
+    return(dag)
 
-  instrumental_variables <- edges$instrumental
+  }, error = function(e){
+    message(paste("Error:", e, "\n Using alternative function to generate dag coordinates."))
+    dag <- add_coords_helper(dag, coords_spec = unname( coords_spec[1][ complete.cases(coords_spec) ] ) )
+    return(dag)
 
-  mediator_outcome_confounders <- edges$mediator_outcome_confounder
+  }, finally = return(dag)
 
-  competing_exposures <- edges$competing_exposure
-
-  colliders <- edges$collider
-
-  latent_variables <- edges$latent
-
-  observed <- edges$observed
-
-  treatments <- edges$treatment
-
-  outcomes <- edges$outcome
-
-
-  tryCatch(
-    {
-      dag <- add_coordinates(dag,
-                             treatments = treatments,
-                             outcomes = outcomes,
-                             confounders = confounders,
-                             mediators = mediators,
-                             instrumental_variables = instrumental_variables,
-                             mediator_outcome_confounders = mediator_outcome_confounders,
-                             competing_exposures = competing_exposures,
-                             latent_variables = latent_variables,
-                             observed = observed,
-                             colliders = colliders,
-                             na.omit(coords_spec))
-
-    },
-
-    finally = {
-      return(dag)
-    }
   )
 
 }
@@ -562,7 +543,7 @@ add_coordinates <- function(dag, treatments, outcomes, confounders, mediators, i
 renew_coords <- function(dag,
                          new_node_names = NULL,
                          coordinates = NA,
-                         coords_spec = c(lambda = 0.1, threshold = 0.5)
+                         coords_spec = c(lambda = 0.1, threshold = 0.9)
 ){
 
   new_node_names <- as.vector( unlist( new_node_names ) ) # new node names as vector
@@ -632,10 +613,15 @@ renew_coords <- function(dag,
 
   }
 
+  ordered_nodes <- unlist( dagitty::topologicalOrdering(dag) )
+  ordered_nodes <- order(ordered_nodes)
+  new_node_names <- new_node_names[ordered_nodes]
+
   if( all( complete.cases(confounders) ) ){
 
     ## confounders
-    new_node_name_vec <- confounders[ confounders %in% new_node_names ]
+
+    new_node_name_vec <- new_node_names[ new_node_names %in% confounders ]
     num_nodes <- length(new_node_name_vec)
 
     if( num_nodes > 0 ){
@@ -655,6 +641,7 @@ renew_coords <- function(dag,
                                                                  lambda = lambda,
                                                                  threshold = threshold)
       )
+
     }else{
 
       coordinates <- list(
@@ -672,7 +659,7 @@ renew_coords <- function(dag,
   if( all( complete.cases(treatments) ) ){
 
     ## treatments
-    new_node_name_vec <- treatments[ treatments %in% new_node_names ]
+    new_node_name_vec <- new_node_names[ new_node_names %in% treatments ]
 
     if(  keep_existing_coords == FALSE ){
 
@@ -716,7 +703,7 @@ renew_coords <- function(dag,
   if(  all( complete.cases(instrumental_variables) ) ){
 
     ## instrumental_variables
-    new_node_name_vec <- instrumental_variables[ instrumental_variables %in% new_node_names ]
+    new_node_name_vec <- new_node_names[ new_node_names %in% instrumental_variables ]
 
     if(  keep_existing_coords == FALSE ){
 
@@ -761,7 +748,7 @@ renew_coords <- function(dag,
   if( all( complete.cases(mediator_outcome_confounders) ) ){
 
     ## mediator_outcome_confounders
-    new_node_name_vec <- mediator_outcome_confounders[ mediator_outcome_confounders %in% new_node_names ]
+    new_node_name_vec <- new_node_names[ new_node_names %in% mediator_outcome_confounders ]
 
     if(  keep_existing_coords == FALSE ){
 
@@ -806,7 +793,7 @@ renew_coords <- function(dag,
   if( all( complete.cases(proxy_variables) ) ){
 
     ## proxy_variables
-    new_node_name_vec <- proxy_variables[ proxy_variables %in% new_node_names ]
+    new_node_name_vec <- new_node_names[ new_node_names %in% proxy_variables ]
 
     if(  keep_existing_coords == FALSE ){
 
@@ -851,7 +838,7 @@ renew_coords <- function(dag,
   if( all( complete.cases(mediators) ) ){
 
     ## mediators
-    new_node_name_vec <- mediators[ mediators %in% new_node_names ]
+    new_node_name_vec <- new_node_names[ new_node_names %in% mediators ]
 
     if(  keep_existing_coords == FALSE ){
 
@@ -897,7 +884,7 @@ renew_coords <- function(dag,
   if( all( complete.cases(outcomes) ) ){
 
     ## outcomes
-    new_node_name_vec <- outcomes[ outcomes %in% new_node_names ]
+    new_node_name_vec <- new_node_names[ new_node_names %in% outcomes ]
 
     if(  keep_existing_coords == FALSE ){
 
@@ -938,7 +925,7 @@ renew_coords <- function(dag,
   if( all( complete.cases(colliders) ) ){
 
     ## colliders
-    new_node_name_vec <- colliders[ colliders %in% new_node_names ]
+    new_node_name_vec <- new_node_names[ new_node_names %in% colliders ]
 
     if(  keep_existing_coords == FALSE ){
 
@@ -979,7 +966,7 @@ renew_coords <- function(dag,
   if( all( complete.cases(competing_exposures) ) ){
 
     ## competing_exposures
-    new_node_name_vec <- competing_exposures[ competing_exposures %in% new_node_names ]
+    new_node_name_vec <- new_node_names[ new_node_names %in% competing_exposures ]
 
     if(  keep_existing_coords == FALSE ){
 
@@ -1021,7 +1008,7 @@ renew_coords <- function(dag,
   if( all( complete.cases(latent_variables) ) ){
 
     ## latent_variables
-    new_node_name_vec <- latent_variables[ latent_variables %in% new_node_names ]
+    new_node_name_vec <- new_node_names[ new_node_names %in% latent_variables ]
 
     if(  keep_existing_coords == FALSE ){
 
@@ -1067,7 +1054,7 @@ renew_coords <- function(dag,
   if( all( complete.cases(observed) ) ){
 
     ## observed
-    new_node_name_vec <- observed[ observed %in% new_node_names ]
+    new_node_name_vec <- new_node_names[ new_node_names %in% observed ]
 
     if(  keep_existing_coords == FALSE ){
 
