@@ -69,7 +69,7 @@ build_graph <- function(variables = NA,
                        mediator_outcome_confounders = NA,
                        competing_exposures = NA,
                        colliders = NA,
-                       type = "full",
+                       type = "ordered",
                        coords_spec = 0
                        ){
 
@@ -339,8 +339,6 @@ assess_edges <- function(dag,
                                       causal_criteria = causal_criteria,
                                       causal_criteria_answers = causal_criteria_answers)
 
-    message("\nOutputted list containing edges and causal criteria answers.")
-
     return(edges)
 
   }
@@ -507,9 +505,8 @@ keep_edges <- function(dag, edges_to_keep = NA){
 #' @export
 add_nodes <- function(dag,
                       new_nodes,
-                      node_role = NULL,
-                      type = "full",
-                      temporal_reference_node = NA,
+                      ancestors = NULL,
+                      descendants = NULL,
                       print_edges = TRUE,
                       coords_spec = c(lambda = 0.1, threshold = 0.5)
                       ){
@@ -518,7 +515,7 @@ add_nodes <- function(dag,
   ## get initial dag edges
   edges <- pdag_to_dag_edges(dag)
 
-  names(edges) <- c("ancestor", "edge", "descendant") # change column names
+  names(edges) <- c("v", "e", "w") # change column names
 
   dag_node_names <- names(dag) # extract dag node names
 
@@ -526,112 +523,21 @@ add_nodes <- function(dag,
 
   new_node_names <- new_nodes[ !new_nodes %in% dag_node_names ] # remove duplicate node names
 
-
-  ## call helper function to draw new node edges etc.
-
-  if( length(node_role) == 0 ){
-
-    new_edges <- connect_all_nodes_to_new(dag, new_nodes)
-
-    existing_node_names <- dag_node_names[ !dag_node_names %in% new_nodes ] # remove excluded_names from existing node names
-    treatments <- dagitty::exposures(dag) # treatment
-    outcomes <- dagitty::outcomes(dag)  # outcome
-    latent_vec <- dagitty::latents(dag)  # latent variables
-
-  }else{ # node role inputted
-
-    output_list <- add_nodes_helper(dag, new_nodes, node_role, type, temporal_reference_node)
-
-    temporal_reference_node <- output_list$temporal_reference_node
-    existing_node_names <- output_list$existing_node_names
-    new_edges <- output_list$new_edges
-    treatments <- output_list$treatments
-    outcomes <- output_list$outcomes
-    latent_vec <- output_list$latent_vec
-
-  }
+  new_edges <- connect_new_nodes(dag, new_node_names, ancestors, descendants)
 
   ## pre-process before merging
   new_edges <- new_edges[ complete.cases(new_edges), ] # remove NAs
 
   ## merge new and existing dag edges
   edges <- merge(edges, new_edges,
-                 by = c("ancestor", "edge", "descendant"),
+                 by = c("v", "e", "w"),
                  all = TRUE) # combine both dag edges
 
   edges <- unique(edges) # remove duplicate new_edges
 
-  edges <- edges[edges$ancestor != edges$descendant, ] # remove new_edges with identical ancestor and descendant node names
+  edges <- edges[edges$v != edges$w, ] # remove new_edges with identical ancestor and descendant node names
 
-  ## create node names and coordinates vector for dagitty object
-  exclude_names <- c(treatments, outcomes, latent_vec) # create excluded_names
-
-  node_names <- dag_node_names[ !dag_node_names %in% exclude_names ] # remove excluded_names from existing node names
-
-  node_names <- c(node_names, new_node_names) # combine both existing and new node names
-
-  node_name_and_coords_vec <- c()
-
-  if( length(latent_vec) > 0 ){ ########### simplify this section ##############
-
-    if( all(complete.cases(latent_vec)) ) {
-
-      node_name_and_coords_vec <- c(paste(treatments, " [exposure] ", sep=""),
-                                    paste(outcomes, " [outcome] ", sep=""),
-                                    paste(latent_vec, " [latent] ", sep=""),
-                                    paste(node_names, collapse=" "))
-
-    }else{
-      node_name_and_coords_vec <- c(paste(treatments, " [exposure] ", sep=""),
-                                    paste(outcomes, " [outcome] ", sep=""),
-                                    paste(node_names, collapse=" "))
-    }
-
-  }else{
-
-    node_name_and_coords_vec <- c(paste(treatments, " [exposure] ", sep=""),
-                                  paste(outcomes, " [outcome] ", sep=""),
-                                  paste(node_names, collapse=" "))
-  }
-
-  num_edges <- nrow(edges)
-
-  if( num_edges != 0 ){
-
-    edges <- suppressWarnings( sapply(1:num_edges, function(x){
-
-      edges <- paste( edges[x,], collapse=" ")
-
-    }) )
-
-  }
-
-  dag <- paste("dag {", paste(node_name_and_coords_vec, collapse=""), paste(edges, collapse=" "), "}", sep = " ")
-
-  dag <- dagitty::dagitty(dag)
-
-  if( all(!is.na(unlist(coordinates))) ){
-
-    dagitty::coordinates(dag) <- coordinates
-
-  }else{
-
-    dag <- add_coords(dag, coords_spec = coords_spec)
-
-  }
-
-  if( all( !complete.cases(existing_node_names) ) ){
-
-    existing_node_names <- names( coordinates$y[ order(coordinates$y)] ) # existing dag node names in ascending y-coords order
-
-  }
-
-  if( any( !complete.cases(temporal_reference_node) ) ){
-
-    temporal_reference_node <- existing_node_names[1] # first node is selected as the temporal reference node
-
-  }
-
+  dag <- rebuild_dag(dag, edges)
 
 
   if( print_edges == TRUE){
@@ -640,26 +546,24 @@ add_nodes <- function(dag,
 
     cat( paste("c(", paste( unlist(new_edges_list), collapse=",\n\n" ), ")", sep = "\n", collapse = "") )
 
-    message("\nPrinted new edges to assess. - copy and paste in a .R file to use as a vector object.\n")
-
+    message("\nPrinted new edges - copy and paste to use as a vector object.\n")
 
   }
 
-
   tryCatch({
     new_coordinates <- renew_coords(dag = dag,
-                                new_node_names = new_nodes,
+                                new_node_names = new_node_names,
                                 coordinates = coordinates,
                                 coords_spec = coords_spec[ complete.cases(coords_spec) ] )
     dagitty::coordinates(dag) <- new_coordinates
   }, warning = function(w){
     message(paste("Warning:", w, "\n Using alternative function to generate dag coordinates."))
-    dag <- add_coords(dag, coords_spec = coords_spec[ complete.cases(coords_spec) ] )
+    dag <- add_coords(dag, coords_spec = coords_spec[1][ complete.cases(coords_spec) ] )
     return(dag)
 
   }, error = function(e){
     message(paste("Error:", e, "\n Using alternative function to generate dag coordinates."))
-    dag <- add_coords(dag, coords_spec = coords_spec[ complete.cases(coords_spec) ] )
+    dag <- add_coords(dag, coords_spec = coords_spec[1][ complete.cases(coords_spec) ] )
     return(dag)
 
   }, finally = return(dag)
@@ -692,38 +596,25 @@ saturate_nodes <- function(dag,
                            print_edges = TRUE
                            ){
   .datatable.aware <- TRUE
-
   ## get initial dag edges
   edges <- pdag_to_dag_edges(dag)
-  names(edges) <- c("ancestor", "edge", "descendant") # change column names
-
   dag_node_names <- names(dag) # extract dag node names
-
   coordinates <- dagitty::coordinates(dag) # extract dag coordinates
 
   if( length(nodes) == 0 ){
 
     nodes <- dag_node_names
-
   }
 
   if( length(node_role) == 0 ){
-
     new_edges <- saturate_nodes_helper(dag, nodes, dag_node_names, type)
-
-
     # treatment
     treatments <- dagitty::exposures(dag)
-
     # outcome
     outcomes <- dagitty::outcomes(dag)
-
     # latent variables
     latent_vec <- dagitty::latents(dag)
-
-
   }else{
-
     ## call helper function to draw new node edges etc.
     output_list <- add_nodes_helper(dag, nodes, node_role, type)
 
@@ -731,7 +622,6 @@ saturate_nodes <- function(dag,
     treatments <- output_list$treatments
     outcomes <- output_list$outcomes
     latent_vec <- output_list$latent_vec
-
   }
 
   ## pre-process before merging
@@ -739,65 +629,14 @@ saturate_nodes <- function(dag,
 
   ## merge new and existing dag edges
   edges <- merge(edges, new_edges,
-                 by = c("ancestor", "edge", "descendant"),
+                 by = c("v", "e", "w"),
                  all = TRUE) # combine both dag edges
 
   edges <- unique(edges) # remove duplicate new_edges
 
-  edges <- edges[edges$ancestor != edges$descendant, ] # remove new_edges with identical ancestor and descendant node names
+  edges <- edges[edges$v != edges$w, ] # remove new_edges with identical ancestor and descendant node names
 
-  ## create node names and coordinates vector for dagitty object
-  exclude_names <- c(treatments, outcomes, latent_vec) # create excluded_names
-
-  node_names <- dag_node_names[ !dag_node_names %in% exclude_names ] # remove excluded_names from existing node names
-
-  node_name_and_coords_vec <- c()
-
-  if( length(latent_vec) > 0 ){ ########### simplify this section ##############
-
-    if( all(complete.cases(latent_vec)) ) {
-
-      node_name_and_coords_vec <- c(paste(treatments, " [exposure] ", sep=""),
-                                    paste(outcomes, " [outcome] ", sep=""),
-                                    paste(latent_vec, " [latent] ", sep=""),
-                                    paste(node_names, collapse=" "))
-
-    }else{
-      node_name_and_coords_vec <- c(paste(treatments, " [exposure] ", sep=""),
-                                    paste(outcomes, " [outcome] ", sep=""),
-                                    paste(node_names, collapse=" "))
-    }
-
-  }else{
-
-    node_name_and_coords_vec <- c(paste(treatments, " [exposure] ", sep=""),
-                                  paste(outcomes, " [outcome] ", sep=""),
-                                  paste(node_names, collapse=" "))
-  }
-
-
-  num_edges <- nrow(edges)
-
-  if( num_edges != 0 ){
-
-    edges <- suppressWarnings( sapply(1:num_edges, function(x){
-
-      edges <- paste( edges[x,], collapse=" ")
-
-    }) )
-
-  }
-
-  dag <- paste("dag {", paste(node_name_and_coords_vec, collapse=""), paste(edges, collapse=" "), "}", sep = " ")
-
-  dag <- dagitty::dagitty(dag)
-
-  if( all(!is.na(unlist(coordinates))) ){
-
-    dagitty::coordinates(dag) <- coordinates
-
-  }
-
+  dag <- rebuild_dag(dag, edges)
 
   if( print_edges == TRUE){
 
@@ -806,10 +645,7 @@ saturate_nodes <- function(dag,
     cat( paste("c(", paste( unlist(new_edges_list), collapse=",\n\n" ), ")", sep = "\n", collapse = "") )
 
     message("\nPrinted new edges to assess. - copy and paste in a .R file to use as a vector object.\n")
-
-
   }
-
 
   return(dag)
 }
@@ -1059,7 +895,7 @@ causal_criteria_sequence <- function(edges,
         message( "Skipped sequence." )
 
         edges_list <- list(
-          edges_to_keep = edges_to_keep,
+          edges = edges_to_keep,
           edges_to_assess = edges
         )
 
@@ -1179,7 +1015,10 @@ causal_criteria_sequence <- function(edges,
 
       }
 
-      edges <- list(edges = edges, causal_criteria_answers = criteria_answers)
+      edges <- list(edges = edges,
+                    causal_criteria_answers = criteria_answers)
+
+      message("\nOutputted list containing edges and causal criteria answers.")
 
       return(edges)
 
@@ -1187,10 +1026,10 @@ causal_criteria_sequence <- function(edges,
 
       message( "No arrows were removed." )
 
-      edges_list <- list(
-        edges_to_keep = edges_to_keep,
-        edges_to_assess = edges
-      )
+      edges_list <- list(edges = rbind(edges_to_keep, edges),
+                         causal_criteria_answers = criteria_answers)
+
+      message("\nOutputted list containing edges and causal criteria answers.")
 
       return(edges_list)
 

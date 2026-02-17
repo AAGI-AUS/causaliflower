@@ -54,15 +54,6 @@ confounders <- function(dag){
   treatment_parents <- dagitty::parents(dag, treatments)
   confounders <- treatment_parents[treatment_parents %in% dagitty::parents(dag, outcomes)]
 
-  if(get_edges == TRUE){
-    cat(paste("There are", length(confounders), "confounders in the supplied graph: ", sep = " ", collapse = " "))
-    cat(paste("\n", confounders, collapse = "\n"))
-
-    edges <- get_edges(dag, "confounder")
-
-    return(edges)
-  }
-
   return(confounders)
 }
 

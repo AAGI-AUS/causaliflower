@@ -2,7 +2,23 @@
 
 The causaliflower package aims to support causal analysis in R. It extends 'dagitty' and 'ggdag' functions for analysing and visualising directed acylic graphs (DAGs) to enable building and assessing causal DAGs using expert knowledge.
 
-## Overview
+### Installation
+
+Causaliflower is currently in development. The most recent version can be installed from [GitHub](https://github.com/AAGI-AUS/causaliflower) with:
+
+```R
+o <- options() # store original options
+
+options(pkg.build_vignettes = TRUE)
+
+if (!require("pak")) {
+  install.packages("pak")
+}
+
+pak::pak("AAGI-AUS/causaliflower")
+options(o) # reset options
+
+```
 
 ###  What is causaliflower?
 
@@ -13,76 +29,87 @@ The goal of this package is to provide functions for reproducible causal analyti
 Some examples are included below, however an in-depth tutorial will be provided in an upcoming vignette.
 
 
-### In This Version
+### Example code
 
 
-- Build a dagitty object, inputting node roles (if known):
+- Build and plot a basic graph (dagitty object)
+
+```R
+variables <- c("Z3", "Z2", "Z1")
+treatments <- "X"
+outcomes <- "Y"
+
+dag <- build_graph(variables = variables, 
+                   treatments = treatments, 
+                   outcomes = outcomes) 
+```
+
+- Plot dagitty objects (ggdag wrapper with custom causaliflower presets):
 
 ```R
 
-dag <- build_graph(type = 'ordered', variables, treatments, outcomes) # required inputs
+plot_dagitty(new_dag)
 
 ```
 
-
-- Saturate dagitty object nodes, up to a fully connected graph:
+- Create a fully connected graph 
 
 ```R
-saturated_graph <- build_graph(type = c('full', 'saturated'), # choose a type
-                               variables = dag) # existing dagitty object inputted
+
+fc_graph <- saturate_nodes(dag)
+plot_dagitty(fc_graph)
+
 ```
 
 
 - Assess implied causal relationships to remove edges using a set of causal criteria:
 
 ```R
-edges <- assess_edges(saturated_graph, edges_to_keep = dag) 
 
-edges_to_keep <- assess_edges(saturated_graph, edges_to_keep = dag, 
+edges <- assess_edges(fc_graph, edges_to_keep = dag,
                       assess_causal_criteria = TRUE) # guided causal criteria sequence
 
-dag <- keep_edges(saturated_graph, edges_to_keep)
+dag <- keep_edges(fc_graph, edges$edges)
+plot_dagitty(dag)
+
 ```
-
-
-- Add or update node coordinates:
-
-```R
-dag <- add_coords(dag) # also called in build_graph()
-```
-
 
 - Join two dagitty objects, keeping the coordinates of the first:
 
 ```R
-new_dag <- build_graph(type = 'ordered', variables, treatments, outcomes, # required inputs
-                       mediators, latent_variables, instrumental_variables, # more inputs
-                       coords_spec = 2) # higher spec increases volatility in node placement
-            
-new_dag <- join_graphs(dag, new_dag)
+
+mediators <- "M"
+
+new_dag <- build_graph(treatments = treatments, 
+                       outcomes = outcomes, 
+                       mediators = mediators)
+plot_dagitty(new_dag)
+
+merged_dag <- join_graphs(dag, new_dag)
+plot_dagitty(merged_dag)
+
 ```
 
 
 - Output minimal sufficient adjustment sets (returns smallest 5 sets by default):
 
 ```R
+
 minimal_sets(dag, effect = "direct")
-```
 
-
-- Display dagitty objects using ggdag (wrapper function with custom causaliflower presets):
-
-```R
-plot_dagitty(new_dag)
 ```
 
 
 - Add nodes to an existing graph:
 
 ```R
-add_nodes(dag, new_nodes)
 
-saturate_nodes(dag, new_nodes)
+new_nodes <- c("Z4", "Z5")
+descendants <- names(merged_dag)
+
+new_dag <- add_nodes(merged_dag, new_nodes, descendants = descendants)
+plot_dagitty(new_dag)
+
 ```
 
 

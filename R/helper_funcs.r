@@ -700,7 +700,7 @@ add_nodes_helper <- function(dag,
 
   nodes_ordered <- sort( unlist( dagitty::topologicalOrdering(dag) ) ) # ggdag estimated temporal order of new nodes
 
-  if( length( node_role) > 1 | length( node_role) == 0){
+  if( length( node_role) > 1 | length( node_role) == 0 ){
 
     stop("add_nodes() currently only supports single node_role character inputs.")
 
@@ -900,7 +900,7 @@ add_nodes_helper <- function(dag,
     new_edges <- draw_outcome_edges(type, outcomes = nodes, # new nodes as outcome
                                     collider_vec)
 
-    outcomes  <- c(outcome, nodes)
+    outcomes  <- c(outcomes, nodes)
 
     existing_node_names <- names( nodes_ordered[ names(nodes_ordered) %in% outcomes ] ) # existing node names in temporal order
 
@@ -1128,6 +1128,8 @@ saturate_nodes_helper <- function(dag, nodes, dag_node_names, type){
                       observed = observed,
                       confounder_occurrance = confounder_occurrance,
                       existing_dag = dag)
+
+  colnames(edges) <- c("v", "e", "w")
 
   return( edges )
 

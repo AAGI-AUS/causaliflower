@@ -1228,3 +1228,69 @@ draw_edges_for_copy_nodes_helper <- function(dag, new_node_names, existing_node_
 
 }
 
+
+#' Fully connect new nodes to others
+#'
+#' connect_all_nodes_to_new() is a helper function for saturate_nodes() that draws edges between new and existing nodes, in both directions.
+#'
+#' @importFrom data.table as.data.table
+#' @param dag An existing dagitty object.
+#' @param new_nodes A vector of new nodes.
+#' @noRd
+connect_new_nodes <- function(dag, new_nodes, ancestors, descendants){
+  .datatable.aware <- TRUE
+
+  node_list <- c()
+  edges <- c()
+
+  ## get node names
+  node_names <- names( dag )
+
+  if( ( length( descendants ) == 0 | length ( descendants[ descendants %in% node_names ] ) == 0  ) & length( ancestors ) == 0 ){
+
+    descendants <- node_names
+
+  }
+
+  if( length( descendants ) > 0){
+    ## connect new_nodes to descendants
+    node_list <- suppressWarnings( lapply(1:length(new_nodes), function(x){
+
+      node_list[x] <- lapply(1:length(descendants), function(y){
+
+        list( c( v = new_nodes[x], e = "->", w = descendants[y]) )
+
+      })
+
+    }) )
+
+    node_list <- Filter(Negate(anyNA), unlist(node_list, recursive = FALSE))
+    edges <- as.data.table( do.call( rbind, unlist(node_list, recursive = FALSE) ) )
+  }
+
+  if( ( length( ancestors ) == 0 | length ( ancestors[ ancestors %in% node_names ] ) == 0  ) & length( descendants ) == 0 ){
+
+    ancestors <- node_names
+
+  }
+
+  if( length( ancestors ) > 0){
+    ## connect new_nodes to ancestors
+    node_list <- suppressWarnings( lapply(1:length(ancestors), function(x){
+
+      node_list[x] <- lapply(1:length(new_nodes), function(y){
+
+        list( c( v = ancestors[x], e = "->", w = new_nodes[y]) )
+
+      })
+
+    }) )
+
+    node_list <- Filter(Negate(anyNA), unlist(node_list, recursive = FALSE))
+    node_unlist <- as.data.table( do.call( rbind, unlist(node_list, recursive = FALSE) ) )
+
+    edges <- rbind(edges, node_unlist)
+  }
+
+  return( edges )
+}

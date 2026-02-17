@@ -3,7 +3,7 @@ Title: Build and assess causal graphs, create useful causal analysis workflows i
 Version: 0.0.0.91
 Authors@R: 
     person("Aidan", "Moller", , "aidan.moller@adelaide.edu.au", role = c("aut", "cre"))
-Description: The causaliflower package provides simple ways of working with causal graphs in R. It extends 'dagitty' and 'ggdag' functions to provide cohesive and reproducible causal analysis workflows.
+Description: The causaliflower package aims to provides simple ways of working with causal graphs in R. It extends 'dagitty' and 'ggdag' functions to enable cohesive and reproducible causal analysis workflows in R.
 License: `use_mit_license()`
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
