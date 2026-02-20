@@ -880,6 +880,48 @@ renew_coords <- function(dag,
 
   }
 
+  if( all( complete.cases(competing_exposures) ) ){
+
+    ## competing_exposures
+    new_node_name_vec <- new_node_names[ new_node_names %in% competing_exposures ]
+
+    if(  keep_existing_coords == FALSE ){
+
+      new_node_name_vec <- c( competing_exposures, new_node_name_vec )
+      new_node_name_vec <- new_node_name_vec[ !duplicated(new_node_name_vec) ]
+
+    }
+
+    num_nodes <- length(new_node_name_vec)
+
+    if( num_nodes > 0 ){
+
+      coordinates <- suppressWarnings( merged_node_coords_helper(dag,
+                                                                 new_node_name_vec = new_node_name_vec,
+                                                                 num_nodes = num_nodes,
+                                                                 coordinates_x = coordinates$x,
+                                                                 coordinates_y = coordinates$y,
+                                                                 outcomes = outcomes,
+                                                                 post_outcome = FALSE,
+                                                                 num_vars = num_vars,
+                                                                 lambda = lambda,
+                                                                 threshold = threshold)
+      )
+
+
+    }else{
+
+      coordinates <- list(
+        x = c(existing_coordinates$x[ names(existing_coordinates$x) %in% competing_exposures ],
+              coordinates$x),
+        y = c(existing_coordinates$y[ names(existing_coordinates$y) %in% competing_exposures ],
+              coordinates$y)
+      )
+
+    }
+
+  }
+
 
   if( all( complete.cases(outcomes) ) ){
 
@@ -963,14 +1005,15 @@ renew_coords <- function(dag,
 
   }
 
-  if( all( complete.cases(competing_exposures) ) ){
 
-    ## competing_exposures
-    new_node_name_vec <- new_node_names[ new_node_names %in% competing_exposures ]
+  if( all( complete.cases(observed) ) ){
+
+    ## observed
+    new_node_name_vec <- new_node_names[ new_node_names %in% observed ]
 
     if(  keep_existing_coords == FALSE ){
 
-      new_node_name_vec <- c( competing_exposures, new_node_name_vec )
+      new_node_name_vec <- c( observed, new_node_name_vec )
       new_node_name_vec <- new_node_name_vec[ !duplicated(new_node_name_vec) ]
 
     }
@@ -979,31 +1022,33 @@ renew_coords <- function(dag,
 
     if( num_nodes > 0 ){
 
+      # new node coordinates
+      coordinates_x <- coordinates$x
+      coordinates_y <- coordinates$y
+
       coordinates <- suppressWarnings( merged_node_coords_helper(dag,
                                                                  new_node_name_vec = new_node_name_vec,
                                                                  num_nodes = num_nodes,
-                                                                 coordinates_x = coordinates$x,
-                                                                 coordinates_y = coordinates$y,
-                                                                 outcomes = outcomes,
+                                                                 coordinates_x = coordinates_x,
+                                                                 coordinates_y = coordinates_y,
                                                                  post_outcome = TRUE,
+                                                                 outcomes = outcomes,
                                                                  num_vars = num_vars,
                                                                  lambda = lambda,
                                                                  threshold = threshold)
       )
 
-
     }else{
 
       coordinates <- list(
-        x = c(existing_coordinates$x[ names(existing_coordinates$x) %in% competing_exposures ],
+        x = c(existing_coordinates$x[ names(existing_coordinates$x) %in% observed ],
               coordinates$x),
-        y = c(existing_coordinates$y[ names(existing_coordinates$y) %in% competing_exposures ],
+        y = c(existing_coordinates$y[ names(existing_coordinates$y) %in% observed ],
               coordinates$y)
       )
 
     }
 
-  }
 
   if( all( complete.cases(latent_variables) ) ){
 
@@ -1050,49 +1095,6 @@ renew_coords <- function(dag,
     }
 
   }
-
-  if( all( complete.cases(observed) ) ){
-
-    ## observed
-    new_node_name_vec <- new_node_names[ new_node_names %in% observed ]
-
-    if(  keep_existing_coords == FALSE ){
-
-      new_node_name_vec <- c( observed, new_node_name_vec )
-      new_node_name_vec <- new_node_name_vec[ !duplicated(new_node_name_vec) ]
-
-    }
-
-    num_nodes <- length(new_node_name_vec)
-
-    if( num_nodes > 0 ){
-
-      # new node coordinates
-      coordinates_x <- coordinates$x
-      coordinates_y <- coordinates$y
-
-      coordinates <- suppressWarnings( merged_node_coords_helper(dag,
-                                                                 new_node_name_vec = new_node_name_vec,
-                                                                 num_nodes = num_nodes,
-                                                                 coordinates_x = coordinates_x,
-                                                                 coordinates_y = coordinates_y,
-                                                                 post_outcome = TRUE,
-                                                                 outcomes = outcomes,
-                                                                 num_vars = num_vars,
-                                                                 lambda = lambda,
-                                                                 threshold = threshold)
-      )
-
-    }else{
-
-      coordinates <- list(
-        x = c(existing_coordinates$x[ names(existing_coordinates$x) %in% observed ],
-              coordinates$x),
-        y = c(existing_coordinates$y[ names(existing_coordinates$y) %in% observed ],
-              coordinates$y)
-      )
-
-    }
 
   }
 

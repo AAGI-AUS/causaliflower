@@ -24,6 +24,7 @@ draw_edges <- function(observed_node_names,
                        type,
                        outcomes,
                        treatments,
+                       confounders,
                        confounder_vec,
                        m_o_confounder_vec,
                        mediator_vec,
@@ -50,6 +51,7 @@ draw_edges <- function(observed_node_names,
   confounder_df <- draw_confounder_edges(type,
                                     outcomes,
                                     treatments,
+                                    confounders,
                                     confounder_vec,
                                     m_o_confounder_vec,
                                     mediator_vec,
@@ -346,6 +348,7 @@ draw_treatment_edges <- function(type,
 draw_confounder_edges <- function(type,
                                   outcomes,
                                   treatments,
+                                  confounders,
                                   confounder_vec,
                                   m_o_confounder_vec,
                                   mediator_vec,
@@ -354,6 +357,7 @@ draw_confounder_edges <- function(type,
                                   ){
 
   if( all( complete.cases(confounder_vec) ) ){
+
     ## confounder edges ##
     confounder_list <- c()
 
@@ -391,21 +395,51 @@ draw_confounder_edges <- function(type,
 
     # connect all confounders (fully connected or saturated graph type)
     if( type == "full" ){
-      confounder_list <- suppressWarnings( lapply(1:length(confounder_vec), function(x){
 
-        confounder_list[x] <- lapply(1:length(confounder_vec), function(y){
+      # check if list supplied to build_graph() 'variables'
+      if( length( unlist( confounders ) ) > length( confounders ) ){
 
-          list( c( ancestor = confounder_vec[x], edge = "->", descendant = confounder_vec[y]) )
+        confounder_list <- suppressWarnings( lapply(1:(length(confounders) - 1), function(x){
 
-        })
+          lapply(1:length(confounders[[x]]), function(y){
 
-      }) )
+            confounder_list[[x]] <- sapply(1:length(confounders[[x+1]]), function(z){
 
-      confounder_list <- Filter(Negate(anyNA), unlist(confounder_list, recursive = FALSE))
-      confounder_unlist <- as.data.table( do.call( rbind, unlist(confounder_list, recursive = FALSE) ) )
+              list( c( ancestor = confounders[[x]][y], edge = "<->", descendant = confounders[[x+1]][z]) )
 
-      confounder_df <- rbind(confounder_df, confounder_unlist)
+            })
 
+          })
+
+        }) )
+
+        confounder_unlist <- Filter(Negate(anyNA), unlist(confounder_list, recursive = FALSE))
+        confounder_unlist <- data.table::as.data.table( do.call( rbind, unlist(confounder_unlist, recursive = FALSE) ) )
+
+        colnames(confounder_df) <- c("v", "e", "w")
+        confounder_df <- pdag_to_dag_edges_helper(edges = confounder_df)
+        colnames(confounder_df) <- c("ancestor", "edge", "descendant")
+
+        confounder_df <- rbind(confounder_df, confounder_unlist)
+
+      }else{
+
+        confounder_list <- suppressWarnings( lapply(1:length(confounder_vec), function(x){
+
+          confounder_list[x] <- lapply(1:length(confounder_vec), function(y){
+
+            list( c( ancestor = confounder_vec[x], edge = "->", descendant = confounder_vec[y]) )
+
+          })
+
+        }) )
+
+        confounder_list <- Filter(Negate(anyNA), unlist(confounder_list, recursive = FALSE))
+        confounder_unlist <- as.data.table( do.call( rbind, unlist(confounder_list, recursive = FALSE) ) )
+
+        confounder_df <- rbind(confounder_df, confounder_unlist)
+
+      }
 
         confounder_list <- suppressWarnings( lapply(1:length(confounder_vec), function(x){
 
@@ -461,21 +495,50 @@ draw_confounder_edges <- function(type,
 
     if( type == "ordered" | type == "saturated" ){
 
-      confounder_list <- suppressWarnings(lapply(1:length(confounder_vec), function(x){
+      # check if list supplied to build_graph() 'variables'
+      if( length( unlist( confounders ) ) > length( confounders ) ){
 
-        confounder_list[x] <- lapply(1:length(confounder_vec), function(y){
+        confounder_list <- suppressWarnings( lapply(1:(length(confounders) - 1), function(x){
 
-          list( c( ancestor = confounder_vec[x], edge = "->", descendant = confounder_vec[y], ancestor_order = confounder_occurrance[x], descendant_order = confounder_occurrance[y] ) )
+          lapply(1:length(confounders[[x]]), function(y){
 
-        })
+            confounder_list[[x]] <- sapply(1:length(confounders[[x+1]]), function(z){
 
-      }))
+              list( c( ancestor = confounders[[x]][y], edge = "->", descendant = confounders[[x+1]][z]) )
 
-      confounder_list <- Filter(Negate(anyNA), unlist(confounder_list, recursive = FALSE))
-      confounder_order_df <- as.data.table( do.call( rbind, unlist(confounder_list, recursive = FALSE) ) )
+            })
 
-      confounder_order_df <- confounder_order_df[,c(1:3)][!confounder_order_df$ancestor_order > confounder_order_df$descendant_order, ] # remove rows where temporal logic is not followed
-      confounder_df <- rbind(confounder_df, confounder_order_df)
+          })
+
+        }) )
+
+        confounder_unlist <- Filter(Negate(anyNA), unlist(confounder_list, recursive = FALSE))
+        confounder_unlist <- data.table::as.data.table( do.call( rbind, unlist(confounder_unlist, recursive = FALSE) ) )
+
+        confounder_df <- rbind(confounder_df, confounder_unlist)
+
+      }else{
+
+        confounder_list <- suppressWarnings(lapply(1:length(confounder_vec), function(x){
+
+          confounder_list[x] <- lapply(1:length(confounder_vec), function(y){
+
+            list( c( ancestor = confounder_vec[x], edge = "->", descendant = confounder_vec[y], ancestor_order = confounder_occurrance[x], descendant_order = confounder_occurrance[y] ) )
+
+          })
+
+        }))
+
+        confounder_list <- Filter(Negate(anyNA), unlist(confounder_list, recursive = FALSE))
+        confounder_order_df <- as.data.table( do.call( rbind, unlist(confounder_list, recursive = FALSE) ) )
+
+        confounder_order_df <- confounder_order_df[,c(1:3)][!confounder_order_df$ancestor_order > confounder_order_df$descendant_order, ] # remove rows where temporal logic is not followed
+        confounder_df <- rbind(confounder_df, confounder_order_df)
+
+      }
+
+
+
     }
 
     confounder_df <- unique(confounder_df) # remove duplicate edges

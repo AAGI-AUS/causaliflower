@@ -126,6 +126,10 @@ build_graph <- function(variables = NA,
 
   }else if( all( complete.cases( unlist(treatments) ) ) & all( complete.cases( unlist(outcomes) ) ) ){ # no existing dag, use other inputs
 
+    confounders <- variables
+    confounder_vec <- as.vector( unlist(variables) )
+    confounder_occurrance <- as.numeric(order(match(confounder_vec, confounder_vec)))
+
     existing_dag <- NA
 
     mediator_vec <- as.vector( unlist( lapply( mediators, function(x) if( identical( x, character(0) ) ) NA_character_ else x ) ) )
@@ -138,15 +142,12 @@ build_graph <- function(variables = NA,
 
     collider_vec <- as.vector( unlist( lapply( colliders, function(x) if( identical( x, character(0) ) ) NA_character_ else x ) ) )
 
-    confounder_vec <- as.vector( unlist(variables) )
-    confounder_occurrance <- as.numeric(order(match(confounder_vec, confounder_vec)))
 
-    if( all( complete.cases(variables) ) & any( confounder_vec %in% m_o_confounder_vec ) ){ # if any mediator-outcome confounders are also inputted as confounders, execution is stopped
+    if( all( complete.cases( unlist(variables) ) ) & any( confounder_vec %in% m_o_confounder_vec ) ){ # if any mediator-outcome confounders are also inputted as confounders, execution is stopped
 
       stop("Node names inputted in the 'variables' parameter detected in 'mediator_outcome_confounder'. These inputs should be mutually exclusive. Please adjust inputs and try again.")
 
     }
-
 
     observed <- NA
 
@@ -167,6 +168,7 @@ build_graph <- function(variables = NA,
                          type,
                          outcomes,
                          treatments,
+                         confounders,
                          confounder_vec,
                          m_o_confounder_vec,
                          mediator_vec,

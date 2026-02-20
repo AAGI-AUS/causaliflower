@@ -1377,6 +1377,23 @@ pdag_to_dag_edges <- function(dag){
 
   edges <- data.table::as.data.table(dagitty::edges(dag))[, c("v", "e", "w")]
 
+  edges <- pdag_to_dag_edges_helper(edges)
+
+  return(edges)
+
+}
+
+#' convert pdag edges to dag edges
+#'
+#' pdag_to_dag_edges_helper()
+#'
+#' @importFrom data.table as.data.table
+#' @importFrom dagitty edges
+#' @param edges A dagitty object, must use dag{} instead of pdag{}.
+#' @returns A data frame of edges.
+#' @noRd
+pdag_to_dag_edges_helper <- function(edges){
+
   # check if any bi-directional edges are "--" instead of "<->" (pdag)
   if( any( edges$e == "--" | edges$e == "<->" ) ){
 
@@ -1389,13 +1406,12 @@ pdag_to_dag_edges <- function(dag){
 
     edges <- rbind(dag_edges, pdag_edges)
 
-    return(edges)
-
   }
 
   return(edges)
 
 }
+
 
 #' convert pdag to dag
 #'

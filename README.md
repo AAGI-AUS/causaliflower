@@ -118,7 +118,7 @@ plot_dagitty(new_dag)
 ```R
 get_edges(dag)
 
-get_roles(dag)  
+get_nodes(dag)  
 
 get_roles(dag)
 
