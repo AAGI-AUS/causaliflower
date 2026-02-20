@@ -6,95 +6,43 @@
 #' @importFrom data.table data.table
 #' @param dag A dagitty object.
 #' @param selected_nodes Nodes to return edges. Defaults to NULL, or can be a character or vector combination of any of the following: c("outcome", "treatment", "confounder", "mediator", "mediator_outcome_confounder", "instrumental", "proxy", "competing_exposure", "collider", "latent", "observed"))
-#' @param output_structure Outputted data can be a "data.table", "data.frame", or "list".
 #' @returns A data frame, data table, or list of edges for the roles specified in selected_nodes.
 #' @examples
 #' edges <- get_edges(dag)
 #'
 #' @export
 get_edges <- function(dag,
-                     selected_nodes = c("outcome",
-                                        "treatment",
-                                        "confounder",
-                                        "mediator",
-                                        "mediator_outcome_confounder",
-                                        "instrumental",
-                                        "proxy",
-                                        "competing_exposure",
-                                        "collider",
-                                        "latent",
-                                        "observed"),
-                     output_structure = "data.table"){
+                      selected_nodes = c("outcome",
+                                         "treatment",
+                                         "confounder",
+                                         "mediator",
+                                         "mediator_outcome_confounder",
+                                         "instrumental",
+                                         "proxy",
+                                         "competing_exposure",
+                                         "collider",
+                                         "latent",
+                                         "observed")
+                      ){
   .datatable.aware <- TRUE
 
   all_roles <- c("outcome", "treatment", "confounder", "mediator", "mediator_outcome_confounder", "instrumental", "proxy", "competing_exposure", "collider", "latent", "observed")
-
   if( identical(selected_nodes, all_roles) ){
     # seems unnecessary but putting this if-statement first prevents unnecessary checks, assuming the selected_nodes input is predominantly left blank
-    selected_remove <- NULL
-
-  }else if(any(grepl("!", selected_nodes))){
+  }else if( any(grepl("!", selected_nodes)) ){
     # if any input includes "!", removes edges with matching roles in selected_nodes (for both parent and children nodes)
     all_nodes <- all_roles
     cleaned_nodes <- gsub("!", "", selected_nodes)
-
-    selected_remove <- cleaned_nodes
     selected_nodes <- all_nodes[!all_nodes %in% cleaned_nodes]
-
-  }else if(any(grepl(">", selected_nodes))){
-    # if any input includes ">", the function removes all edges without roles that match the selected_nodes input
-    all_nodes <- all_roles
-    cleaned_nodes <- gsub(">", "", selected_nodes)
-
-    selected_remove <- all_nodes[!all_nodes %in% cleaned_nodes]
-    selected_nodes <- cleaned_nodes
-    is.character(selected_nodes)
-  }else if(is.character(selected_nodes) & length(selected_nodes) < length(all_roles)){
-    # this ensures the order of variable names in selected_nodes is consistent
-    all_nodes <- all_roles
-
-    selected_remove <- NULL
-    selected_nodes <- all_nodes[all_nodes %in% selected_nodes]
   }else{
-
     stop("Please check the selected_nodes input and try again.")
-
   }
-
 
   edges <- extract_unique_node_roles(dag) # add ancestor and descendant nodes (calls a function from later in this file)
-
-
   edges <- edges_longer(edges)
+  edges <- edges[ edges[, "ancestor_role"] %in% selected_nodes, ]
 
-  edges <- edges[role_ancestor %in% selected_nodes, ]
-
-
-  if( output_structure == "data.table" ){
-
-
-    return(edges)
-
-  }else if( output_structure == "data.frame" ){
-
-
-    edges <- as.data.frame(edges)
-
-    return(edges)
-
-  }
-
-
-  edges_list <- lapply( seq_along(selected_nodes), function(x){
-
-    edges_list <- edges[role_ancestor == selected_nodes[x], ]
-
-  } )
-
-
-  return(edges_list)
-
-  #stop("Invalid 'output_format' - check input and try again.")
+  return(edges)
 
 }
 
@@ -200,11 +148,10 @@ get_nodes <- function(dag){
   names(edges_ancestors)[1:3] <- c("ancestor", "edge", "descendant")
 
   ## group by nodes
-  unique_ancestors <- unique( edges_ancestors[,"ancestor"] ) # vector of unique node names
-  num_unique_ancestors <- nrow(unique_ancestors) # count of unique node names
+  unique_ancestors <- unique( unlist( edges_ancestors[,"ancestor"] ) )# vector of unique node names
+  num_unique_ancestors <- length(unique_ancestors) # count of unique node names
 
   all_roles <- c("outcome", "treatment", "confounder", "mediator", "mediator_outcome_confounder", "instrumental", "proxy", "competing_exposure", "collider", "latent", "observed")
-
 
   # edges grouped by each unique node in a list
   edges_ancestor_list <- c()
@@ -238,22 +185,26 @@ get_nodes <- function(dag){
 
   missing_descendant_edges <- rbind(missing_outcomes, missing_colliders, missing_observed, missing_latent)
 
-  unique_descendants <- unique(missing_descendant_edges[,1])
-  num_unique_descendants <- nrow(unique_descendants)
-
+  unique_descendants <- unique(unlist(missing_descendant_edges[,1]))
+  num_unique_descendants <- length(unique_descendants)
 
   # descendant edges grouped by each unique node in a list
   edges_descendant_list <- c()
 
-  edges_descendant_list <- suppressWarnings( lapply(1:num_unique_descendants, function(x){
+  if( num_unique_descendants > 0 ){
 
-    edges_descendant_list <- unique(unlist(
-      edges_descendants[ unlist(edges_descendants[,"w"]) %in% unlist(unique_descendants[x]), ][, c(2)] ))
+    edges_descendant_list <- suppressWarnings( lapply(1:num_unique_descendants, function(x){
+
+      edges_descendant_list <- unique(unlist(
+        edges_descendants[ unlist(edges_descendants[,"w"]) %in% unlist(unique_descendants[x]), ][, c(2)] ))
 
 
-  }) )
+    }) )
 
-  names(edges_descendant_list) <- unlist(unique_descendants) # assign descendant node role to name of each element in edges list
+    names(edges_descendant_list) <- unlist(unique_descendants) # assign descendant node role to name of each element in edges list
+
+  }
+
 
 
   edges_list <- c(edges_ancestor_list, edges_descendant_list) # combine ancestor and descendant node role lists
@@ -283,77 +234,55 @@ get_structure <- function(dag){
   unique_nodes <- unname(unlist(  unique(edges_wide[,1]) ))
   num_unique_nodes <- length(unique_nodes)
 
-
   ## ancestor node edges to list ##
   edges_ancestors <- edges_wide[,1:14]
   edges_ancestors <- na.omit( reshape(edges_ancestors, varying = list(4:14), idvar = "id",
-                                      v.names = "role", direction = "long")[,c("v", "e", "w", "role", "id")] )
-  edges_ancestors <- edges_ancestors[order(edges_ancestors$id), c(1,3,4)]
+                                      v.names = "role", direction = "long")[,c("v", "w", "role", "id")] )
   names(edges_ancestors)[1:2] <- c("ancestor", "descendant")
+  edges_ancestors <- edges_ancestors[order(edges_ancestors$id), ][,c(1:3)]
 
-  edges_ancestors$role_node_id <- "ancestor"
-
-  unique_ancestors <- unname(unlist(  unique(edges_ancestors[,1]) ))
+  unique_ancestors <- unname(unlist( unique(edges_ancestors[,1]) ))
   num_unique_ancestors <- length(unique_nodes)
-
 
   ## descendant node edges to list ##
   edges_descendants <- edges_wide[,c(1:3,15:25)]
   edges_descendants <- na.omit( reshape(edges_descendants, varying = list(4:14), idvar = "id",
-                                        v.names = "role", direction = "long")[,c("v", "e", "w", "role", "id")] )
-  edges_descendants <- edges_descendants[order(edges_descendants$id), c(1,3,4)]
+                                        v.names = "role", direction = "long")[,c("v", "w", "role", "id")] )
   names(edges_descendants)[1:2] <- c("ancestor", "descendant")
-
-  edges_descendants$role_node_id <- "descendant"
+  edges_descendants <- edges_descendants[order(edges_descendants$id), ][,c(1:3)]
 
   unique_descendant <- unname(unlist(  unique(edges_descendants[,1]) ))
   num_unique_descendant <- length(unique_nodes)
 
-
-  ## combine ancestor and descendant nodes ##
-  edges_long <- rbind(edges_ancestors, edges_descendants)
-
-  ancestor_descendant_string_vec <- c("ancestor", "descendant")
-  ancestors_descendants_label_vec <- c("ancestors", "descendants")
-
-
   # ancestor edges grouped by each unique node in a list
-  edges_ancestor_list <- c()
-
   edges_ancestor_list <- suppressWarnings( lapply(1:num_unique_ancestors, function(x){
 
-    edges_ancestor_list <- edges_long[ unlist(edges_long[,"ancestor"]) %in% unlist(unique_ancestors[x]) &
-                                         unlist(edges_long[,"role_node_id"]) == "descendant", ]
-
-    #edges_ancestor_list[[x]]$ancestor_role <- unique(unlist( edges_long[,3][ unlist(edges_long[,1]) %in% unlist(unique_ancestors[x]) ] ))
-
+    edges_ancestors[ unlist(edges_ancestors[,"ancestor"]) %in% unlist(unique_ancestors[x]), ]
 
   }) )
-
 
   # descendant edges grouped by each unique node in a list
   edges_descendant_list <- suppressWarnings( lapply(1:num_unique_ancestors, function(x){
 
-    edges_long[ unlist(edges_long[,"descendant"]) %in% unlist(unique_ancestors[x]) &
-                  unlist(edges_long[,"role_node_id"]) == "ancestor", ]
-
+    edges_descendants[ unlist(edges_descendants[,"descendant"]) %in% unlist(unique_ancestors[x]), ]
 
   }) )
 
+
+  ## combine ancestor and descendant nodes ##
   edges_list <- Map(rbind, edges_descendant_list, edges_ancestor_list)
 
   names(edges_list) <- unlist(unique_nodes)
 
-
+  ancestors_descendants_label_vec <- c("ancestor", "descendant")
   ## next create list with each node as an element
   edges_structure_list <- c()
 
-  edges_structure_list <- lapply( 1:num_unique_ancestors , function(x){
+  edges_structure_list <- suppressWarnings( lapply( 1:num_unique_ancestors , function(x){
 
     edges_structure_list <- lapply(1:2, function(n){ # edges grouped by unique node name
 
-
-      edges_structure_list[[n]] <- edges_list[[x]][ edges_list[[x]][[4]] %in% unlist(ancestor_descendant_string_vec[n]), ]
+      edges_structure_list[x][[n]] <- edges_list[[x]][ edges_list[[x]][[n]] %in% names(edges_list[x]), ]
 
     })
 
@@ -361,10 +290,9 @@ get_structure <- function(dag){
 
     edges_structure_list
 
-  } )
+  } ) )
 
   names(edges_structure_list) <- unlist(unique_ancestors) # assign ancestor node role to name of each element in edges list
-
 
   return(edges_structure_list)
 

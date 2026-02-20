@@ -3,7 +3,6 @@
 #' build_graph() produces a dagitty graph object from inputted parameters (e.g. treatments, outcome, confounders).
 #'
 #' @importFrom dagitty is.dagitty children coordinates
-#' @param type Type of connected graph (e.g. "full", "saturated", "ordered", "none"). Defaults to 'full' (fully connected graph) with arrows drawn between confounders (both directions) and from confounders to mediators. If type ='saturated', a similar saturated graph is produced except confounders are not connected to mediators, featuring bi-directional arrows between each of the confounders (follows the ESC-DAGs Mapping Stage in Ferguson et al. (2020)). When type = 'ordered', the order of supplied confounders and mediators determines the order that each node occurs, therefore directed arrows are to be connected in one direction from confounders and mediators to other confounders and mediators, respectively. This builds a saturated DAG with temporal, uni-directional arrows, based on Tennnant et al. (2021).
 #' @param variables Dagitty object, or vector of variable names, e.g. "Z" or c("Z1", "Z2", "Z3"). If variable names are inputted the order determines the assigned coordinates. A list can also be supplied. Variables inputted are treated as confounders. If type = "ordered", confounders located in the same list will be assigned similar coordinates.
 #' @param treatments Treatment variable name, e.g. "X". Must be specified.
 #' @param outcomes Outcome variable name, e.g. "Y". Must be specified.
@@ -13,7 +12,7 @@
 #' @param mediator_outcome_confounders Vector of mediator-outcome confounder names, that instead of being common causes of treatment and outcome (X <- Z -> Y) are a common cause of mediators and outcome (M <- Z -> Y). A list can also be supplied.
 #' @param competing_exposures Vector of competing exposure names. An arrow is drawn connecting competing exposures to the outcome, with other arrows also connected depending on type of graph specified.
 #' @param colliders Vector of collider variables, with both treatment and outcome parents.
-#' @param coords_spec Set of parameters for generating coordinates. Adjust node placement with lambda, a higher value increases volatility and results in more extreme DAG structures. Setting 'lambda_max' generates a DAG at each lambda value between lambda and lambda_max (only used if iterations is supplied). Iterations controls number of repeats for each lambda value (returns the first lambda value if NA).
+#' @param type Type of connected graph (e.g. "full", "saturated", "ordered", "none"). Defaults to 'full' (fully connected graph) with arrows drawn between confounders (both directions) and from confounders to mediators. If type ='saturated', a similar saturated graph is produced except confounders are not connected to mediators, featuring bi-directional arrows between each of the confounders (follows the ESC-DAGs Mapping Stage in Ferguson et al. (2020)). When type = 'ordered', the order of supplied confounders and mediators determines the order that each node occurs, therefore directed arrows are to be connected in one direction from confounders and mediators to other confounders and mediators, respectively. This builds a saturated DAG with temporal, uni-directional arrows, based on Tennnant et al. (2021).
 #' @returns A dagitty object, fully connected (saturated) graph.
 #' @examples
 #' ## initial variables (see above for full list of possible inputs)
@@ -69,8 +68,7 @@ build_graph <- function(variables = NA,
                        mediator_outcome_confounders = NA,
                        competing_exposures = NA,
                        colliders = NA,
-                       type = "ordered",
-                       coords_spec = 0.1
+                       type = "ordered"
                        ){
 
   # check for an existing dag (inputted as confounders)
@@ -80,12 +78,11 @@ build_graph <- function(variables = NA,
     #existing_dag <- dag
     node_roles <- get_roles(existing_dag)
 
+    confounders <- variables <- node_roles$confounder
+
     treatments <- node_roles$treatment
 
     outcomes <- node_roles$outcome
-
-    confounder_vec <- variables <- node_roles$confounder
-    confounder_occurrance <- as.numeric(order(match(confounder_vec, confounder_vec)))
 
     m_o_confounder_vec <- mediator_outcome_confounders <- node_roles$mediator_outcome_confounder
 
@@ -123,12 +120,9 @@ build_graph <- function(variables = NA,
 
     }
 
-
   }else if( all( complete.cases( unlist(treatments) ) ) & all( complete.cases( unlist(outcomes) ) ) ){ # no existing dag, use other inputs
 
     confounders <- variables
-    confounder_vec <- as.vector( unlist(variables) )
-    confounder_occurrance <- as.numeric(order(match(confounder_vec, confounder_vec)))
 
     existing_dag <- NA
 
@@ -142,65 +136,47 @@ build_graph <- function(variables = NA,
 
     collider_vec <- as.vector( unlist( lapply( colliders, function(x) if( identical( x, character(0) ) ) NA_character_ else x ) ) )
 
-
-    if( all( complete.cases( unlist(variables) ) ) & any( confounder_vec %in% m_o_confounder_vec ) ){ # if any mediator-outcome confounders are also inputted as confounders, execution is stopped
-
-      stop("Node names inputted in the 'variables' parameter detected in 'mediator_outcome_confounder'. These inputs should be mutually exclusive. Please adjust inputs and try again.")
-
-    }
-
     observed <- NA
 
+    if( all( complete.cases( unlist(confounders) ) ) & any( unlist(confounders) %in% m_o_confounder_vec ) ){ # if any mediator-outcome confounders are also inputted as confounders, execution is stopped
+
+      stop("Node names inputted in the 'variables' parameter detected in 'mediator_outcome_confounder'. These inputs should be mutually exclusive. Please adjust inputs and try again.")
+    }
 
   }else{
 
     stop("The 'treatments' and 'outcomes' inputs should be used if a DAG is not provided in the 'variables' input. Please adjust inputs and try again.")
-
   }
 
-
-
   ## get variable names ##
-  observed_node_names <- unique( as.vector( c(confounder_vec, m_o_confounder_vec, mediator_vec, competing_exposure_vec, collider_vec, instrumental_variables) ) )
+  observed_node_names <- unique( as.vector( c(unlist(confounders), m_o_confounder_vec, mediator_vec, competing_exposure_vec, collider_vec, instrumental_variables) ) )
   observed_node_names <- Filter(Negate(anyNA), observed_node_names)
 
-  edges_df <- draw_edges(observed_node_names,
-                         type,
-                         outcomes,
-                         treatments,
-                         confounders,
-                         confounder_vec,
-                         m_o_confounder_vec,
-                         mediator_vec,
-                         instrumental_variables,
-                         competing_exposure_vec,
-                         latent_vec,
-                         latent_variables,
-                         collider_vec,
-                         observed,
-                         confounder_occurrance,
-                         existing_dag)
+  edges <- draw_edges(type = type,
+                      confounders = confounders,
+                      treatments = treatments,
+                      outcomes = outcomes,
+                      mediator_vec = mediator_vec,
+                      latent_vec = latent_vec,
+                      latent_variables = latent_variables,
+                      instrumental_variables = instrumental_variables,
+                      m_o_confounder_vec = m_o_confounder_vec,
+                      competing_exposure_vec = competing_exposure_vec,
+                      collider_vec = collider_vec,
+                      observed = observed,
+                      observed_node_names = observed_node_names,
+                      existing_dag = NA)
 
   ## remove treatments, outcomes and latents from node names ##
-  exclude_names <- c(treatments, outcomes, latent_vec)
+  exclude_names <- c(treatments, unlist(outcomes), latent_vec)
   exclude_names <- exclude_names[ complete.cases(exclude_names) ]
   node_names <- observed_node_names[!observed_node_names %in% exclude_names]
 
-
-  dag <- construct_graph(edges_df, node_names, treatments, outcomes, latent_vec)
-
-
-
-  if( !all(complete.cases(existing_dag)) ){
-
-    dag <- add_coords(dag, coords_spec = unname( coords_spec[1][ complete.cases(coords_spec) ] ) )
-
-  }else{
-
-    dagitty::coordinates(dag) <- dagitty::coordinates(existing_dag)
-
-  }
-
+  dag <- construct_graph(edges,
+                         node_names,
+                         treatments,
+                         outcomes,
+                         latent_vec)
 
   return(dag)
 
@@ -429,7 +405,9 @@ assess_edges <- function(dag,
 #' dag <- keep_edges(saturated_graph, edges_to_keep)
 #'
 #' @export
-keep_edges <- function(dag, edges_to_keep = NA){
+keep_edges <- function(dag,
+                       edges_to_keep = NA
+                       ){
   .datatable.aware <- TRUE
 
   edges <- pdag_to_dag_edges(dag)
@@ -683,7 +661,7 @@ copy_nodes <- function(dag,
                        temporal_reference_node = NA,
                        num_repeats = NA,
                        coords_spec = c(lambda = 0.1, threshold = 0.5)
-){
+                       ){
   ###### NOTE: this was written before add_nodes() and saturate_nodes()
   ###### needs to be updated before adding @export
   .datatable.aware <- TRUE
@@ -753,7 +731,7 @@ copy_nodes <- function(dag,
 join_graphs <- function(dag,
                         new_dag,
                         coords_spec = c(lambda = 0.1, threshold = 0.5)
-){
+                        ){
   .datatable.aware <- TRUE
 
   edges <- pdag_to_dag_edges(dag) # get primary dag edges
@@ -842,7 +820,8 @@ causal_criteria_sequence <- function(edges,
                                      check_skip_sequence,
                                      edges_to_keep,
                                      causal_criteria,
-                                     causal_criteria_answers){
+                                     causal_criteria_answers
+                                     ){
   # debugging: edges <- edges_to_assess # check_skip_sequence <- FALSE # edges_to_keep <- NA
   if(check_skip_sequence == FALSE) {
 

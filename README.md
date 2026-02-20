@@ -48,7 +48,11 @@ dag <- build_graph(variables = variables,
 
 ```R
 
-plot_dagitty(dag)
+plot_dagitty(dag) # This generates coordinates based on the dag structure
+
+# You can also add coordinates directly:
+dag <- add_coords(dag, 
+                  coords_spec = 0.9) # make sure this value is between 0 and 1!
 
 ```
 
@@ -83,6 +87,8 @@ mediators <- "M"
 new_dag <- build_graph(treatments = treatments, 
                        outcomes = outcomes, 
                        mediators = mediators)
+                       
+new_dag <- add_coords(new_dag, coords_spec = 0.9)
 plot_dagitty(new_dag)
 
 merged_dag <- join_graphs(dag, new_dag)
