@@ -350,7 +350,7 @@ draw_treatment_edges <- function(type,
 
       lapply(1:length(outcomes), function(y){
 
-        outcome_list[[x]] <- sapply(1:length(outcomes[[y]]), function(z){
+        treatment_list[[x]] <- sapply(1:length(outcomes[[y]]), function(z){
 
           list( c( ancestor = treatments[x], edge = e, descendant = outcomes[[y]][z]) )
 
@@ -600,7 +600,7 @@ draw_mediator_edges <- function(type,
 
         lapply(1:length(outcomes), function(y){
 
-          outcome_list[[x]] <- sapply(1:length(outcomes[[y]]), function(z){
+          mediator_list[[x]] <- sapply(1:length(outcomes[[y]]), function(z){
 
             list( c( ancestor = mediator_vec[x], edge = e, descendant = outcomes[[y]][z]) )
 
@@ -614,7 +614,7 @@ draw_mediator_edges <- function(type,
 
       mediator_list <- suppressWarnings( lapply(1:length(mediator_vec), function(x){
 
-        treatment_list[x] <- lapply(1:length(outcomes), function(y){
+        mediator_list[x] <- lapply(1:length(outcomes), function(y){
 
           list( c( ancestor = mediator_vec[x], edge = e, descendant = outcomes[y]) )
 
@@ -740,7 +740,7 @@ draw_moc_edges <- function(type,
 
         lapply(1:length(outcomes), function(y){
 
-          outcome_list[[x]] <- sapply(1:length(outcomes[[y]]), function(z){
+          moc_list[[x]] <- sapply(1:length(outcomes[[y]]), function(z){
 
             list( c( ancestor = m_o_confounder_vec[x], edge = e, descendant = outcomes[[y]][z]) )
 
@@ -754,7 +754,7 @@ draw_moc_edges <- function(type,
 
       moc_list <- suppressWarnings( lapply(1:length(m_o_confounder_vec), function(x){
 
-        treatment_list[x] <- lapply(1:length(outcomes), function(y){
+        moc_list[x] <- lapply(1:length(outcomes), function(y){
 
           list( c( ancestor = m_o_confounder_vec[x], edge = e, descendant = outcomes[y]) )
 
@@ -865,7 +865,7 @@ draw_competing_exposure_edges <- function(type,
 
         lapply(1:length(outcomes), function(y){
 
-          outcome_list[[x]] <- sapply(1:length(outcomes[[y]]), function(z){
+          competing_exposure_list[[x]] <- sapply(1:length(outcomes[[y]]), function(z){
 
             list( c( ancestor = competing_exposure_vec[x], edge = e, descendant = outcomes[[y]][z]) )
 
@@ -879,7 +879,7 @@ draw_competing_exposure_edges <- function(type,
 
       competing_exposure_list <- suppressWarnings( lapply(1:length(competing_exposure_vec), function(x){
 
-        treatment_list[x] <- lapply(1:length(outcomes), function(y){
+        competing_exposure_list[x] <- lapply(1:length(outcomes), function(y){
 
           list( c( ancestor = competing_exposure_vec[x], edge = e, descendant = outcomes[y]) )
 
@@ -1129,7 +1129,7 @@ draw_latent_edges <- function(observed_node_names,
 
           lapply(1:length(outcomes), function(y){
 
-            outcome_list[[x]] <- sapply(1:length(outcomes[[y]]), function(z){
+            latent_list[[x]] <- sapply(1:length(outcomes[[y]]), function(z){
 
               list( c( ancestor = latent_variables[x], edge = e, descendant = outcomes[[y]][z]) )
 
@@ -1143,7 +1143,7 @@ draw_latent_edges <- function(observed_node_names,
 
         latent_list <- suppressWarnings( lapply(1:length(latent_variables), function(x){
 
-          treatment_list[x] <- lapply(1:length(outcomes), function(y){
+          latent_list[x] <- lapply(1:length(outcomes), function(y){
 
             list( c( ancestor = latent_variables[x], edge = e, descendant = outcomes[y]) )
 

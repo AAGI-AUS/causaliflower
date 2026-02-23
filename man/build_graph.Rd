@@ -14,8 +14,7 @@ build_graph(
   mediator_outcome_confounders = NA,
   competing_exposures = NA,
   colliders = NA,
-  type = "ordered",
-  coords_spec = 0.1
+  type = "ordered"
 )
 }
 \arguments{
@@ -38,8 +37,6 @@ build_graph(
 \item{colliders}{Vector of collider variables, with both treatment and outcome parents.}
 
 \item{type}{Type of connected graph (e.g. "full", "saturated", "ordered", "none"). Defaults to 'full' (fully connected graph) with arrows drawn between confounders (both directions) and from confounders to mediators. If type ='saturated', a similar saturated graph is produced except confounders are not connected to mediators, featuring bi-directional arrows between each of the confounders (follows the ESC-DAGs Mapping Stage in Ferguson et al. (2020)). When type = 'ordered', the order of supplied confounders and mediators determines the order that each node occurs, therefore directed arrows are to be connected in one direction from confounders and mediators to other confounders and mediators, respectively. This builds a saturated DAG with temporal, uni-directional arrows, based on Tennnant et al. (2021).}
-
-\item{coords_spec}{Set of parameters for generating coordinates. Adjust node placement with lambda, a higher value increases volatility and results in more extreme DAG structures. Setting 'lambda_max' generates a DAG at each lambda value between lambda and lambda_max (only used if iterations is supplied). Iterations controls number of repeats for each lambda value (returns the first lambda value if NA).}
 }
 \value{
 A dagitty object, fully connected (saturated) graph.
