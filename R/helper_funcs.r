@@ -42,9 +42,9 @@ get_nodes_between_treatment_and_outcome <- function(dag, treatments, outcomes, o
 
     }
 
-    paths_trt_to_y <- data.table::as.data.table( do.call( rbind, unlist(paths_trt_to_y, recursive = FALSE) ) )
+    paths_trt_to_y <- unlist(paths_trt_to_y)
 
-    paths_trt_to_y <- as.vector(unique(paths_trt_to_y))
+    paths_trt_to_y <- unique(paths_trt_to_y)
 
   }
 

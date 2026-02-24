@@ -285,9 +285,14 @@ instrumental_variables <- function(dag){
     dagitty::children(dag, outcomes[x])
 
   })
-  # collider
+
+  ## nodes between treatment and outcome
+  nodes_trt_to_y <- get_nodes_between_treatment_and_outcome(dag, treatments, outcomes, output_list = TRUE)
+
+  ## colliders
   colliders <- outcome_children[outcome_children %in% treatment_children]
 
+  ## latent parents
   latent_parents <- dagitty::parents(dag, latent_vars)
 
   collider_children <- dagitty::children(dag, colliders)
