@@ -2,7 +2,7 @@
 % Please edit documentation in R/utility_funcs.r
 \name{instrumental_variables}
 \alias{instrumental_variables}
-\title{Extracts instrumental variable names from a dagitty object}
+\title{Get instrumental variable names}
 \usage{
 instrumental_variables(dag)
 }
@@ -10,10 +10,10 @@ instrumental_variables(dag)
 \item{dag}{A dagitty object.}
 }
 \value{
-Vector of instrumental variable names.
+List of instrumental variable names.
 }
 \description{
-getInstrumentalVariables() is a dagitty wrapper function capable of identifying  multiple instrumental variables in multi-treatment and multi-outcome settings.
+instrumental_variables() is a dagitty wrapper function capable of identifying  multiple instrumental variables in multi-treatment and multi-outcome settings.
 }
 \examples{
 instrumental_variables(dag)

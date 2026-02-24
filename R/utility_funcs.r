@@ -225,20 +225,18 @@ colliders <- function(dag){
 }
 
 
-#' Extracts instrumental variable names from a dagitty object
+#' Get instrumental variable names
 #'
-#' getInstrumentalVariables() is a dagitty wrapper function capable of identifying  multiple instrumental variables in multi-treatment and multi-outcome settings.
-#'
+#' instrumental_variables() is a dagitty wrapper function capable of identifying  multiple instrumental variables in multi-treatment and multi-outcome settings.
 #'
 #' @importFrom dagitty exposures outcomes latents parents children
 #' @param dag A dagitty object.
-#' @returns Vector of instrumental variable names.
+#' @returns List of instrumental variable names.
 #' @examples
 #' instrumental_variables(dag)
 #'
 #' @export
 instrumental_variables <- function(dag){
-
 
   # treatment
   treatments <- dagitty::exposures(dag)
@@ -250,14 +248,29 @@ instrumental_variables <- function(dag){
   latent_vars <- dagitty::latents(dag)
 
   # treatment_parents
-  treatment_parents <- dagitty::parents(dag, treatments)
+  #treatment_parents <- dagitty::parents(dag, treatments)
+  treatment_parents <- lapply(1:length(treatments), function(x){
+
+    dagitty::parents(dag, treatments[x])
+
+    })
+  names(treatment_parents) <- treatments
 
   # outcome_parents
-  outcome_parents <- dagitty::parents(dag, outcomes)
+  #outcome_parents <- dagitty::parents(dag, outcomes)
+  outcome_parents <- lapply(1:length(outcomes), function(x){
+
+    dagitty::parents(dag, outcomes[x])
+
+  })
 
   #treatment_children
-  treatment_children <- dagitty::children(dag, treatments)
+  #treatment_children <- dagitty::children(dag, treatments)
+  treatment_children <- lapply(1:length(treatments), function(x){
 
+    dagitty::children(dag, treatments[x])
+
+  })
   # mediator_parents
   mediators <- outcome_parents[outcome_parents %in% treatment_children]
   mediator_parents <- dagitty::parents(dag, mediators) # filter to include only parents of mediator variables
@@ -266,77 +279,63 @@ instrumental_variables <- function(dag){
   latent_children <- dagitty::children(dag, latent_vars)
 
   # outcome_children
-  outcome_children <- dagitty::children(dag, outcomes)
+  #outcome_children <- dagitty::children(dag, outcomes)
+  outcome_children <- lapply(1:length(outcomes), function(x){
 
+    dagitty::children(dag, outcomes[x])
+
+  })
   # collider
   colliders <- outcome_children[outcome_children %in% treatment_children]
 
-  instrumental_vars <- extract_instrumental_variables(dag,
-                                                      treatments,
-                                                      outcomes,
-                                                      latent_vars,
-                                                      colliders,
-                                                      treatment_parents,
-                                                      treatment_children,
-                                                      mediator_parents,
-                                                      latent_children,
-                                                      outcome_children,
-                                                      outcome_parents)
-  instrumental_vars <- unlist(instrumental_vars[,1])
+  latent_parents <- dagitty::parents(dag, latent_vars)
 
-  # treatment
-  treatments <- dagitty::exposures(dag)
+  collider_children <- dagitty::children(dag, colliders)
 
-  treatment_children <- dagitty::children(dag, treatments)
+  instrumental_vars <- lapply(1:length(treatments), function(x){ # iterate through each treatment
 
-  treatment_parents <- dagitty::parents(dag, treatments)
+    exclude_as_instruments <- treatment_parents[[x]][
 
-  # outcome
-  outcomes <- dagitty::outcomes(dag)
+      treatment_parents[[x]] %in% mediator_parents | # not allowed as an instrument
+        treatment_parents[[x]] %in% latent_parents | # not allowed as an instrument
+        treatment_parents[[x]] %in% latent_children | # not allowed as an instrument
+        treatment_parents[[x]] %in% collider_children | # cyclic relationship
+        treatment_parents[[x]] %in% latent_vars  # exclude latent variables
 
-  outcome_children <- dagitty::children(dag, outcomes)
+    ]
 
-  outcome_parents <- dagitty::parents(dag, outcomes)
+    exclude_as_instruments <- c(exclude_as_instruments, unlist( lapply(1:length(treatments), function(y){ # iterate through each treatment
 
-  # latent variables
-  latent_vars <- dagitty::latents(dag)
+      exclude_as_instruments <- treatment_parents[[x]][
 
-  # confounders
-  confounders <- treatment_parents[treatment_parents %in% dagitty::parents(dag, outcomes) ]
+        treatment_parents[[x]] %in% treatment_children[[y]] # not allowed as an instrument
+      ]
 
-  # mediators - first parse (includes mediator-outcome confounders)
-  nodes_trt_to_y <- get_nodes_between_treatment_and_outcome(dag, treatments, outcomes)
+    } ), recursive = FALSE ) )
 
-  mediators <- outcome_parents[ ( outcome_parents %in% treatment_children | outcome_parents %in% nodes_trt_to_y ) ]
+    exclude_as_instruments <- c(exclude_as_instruments, unlist( lapply(1:length(outcomes), function(z){ # iterate through each outcome
 
-  # mediator-outcome confounders
-  mediator_parents <- dagitty::parents(dag, mediators) # filter to include only parents of mediator variables
+      exclude_as_instruments <- treatment_parents[[x]][
 
-  latent_children <- dagitty::children(dag, latent_vars)
+        treatment_parents[[x]] %in% outcome_children[[z]] | # cyclic relationship
+          treatment_parents[[x]] %in% outcome_parents[[z]] | # cyclic relationship
+          treatment_parents[[x]] %in% nodes_trt_to_y[[x]][[z]]
+      ]
 
-  # collider
-  colliders <- outcome_children[ outcome_children %in% treatment_children ]
+    } ), recursive = FALSE ) )
 
-  # instrumental variables
-  instrumental_vars <- extract_instrumental_variables(dag,
-                                                      treatments,
-                                                      outcomes,
-                                                      latent_vars,
-                                                      colliders,
-                                                      treatment_parents,
-                                                      treatment_children,
-                                                      mediator_parents,
-                                                      latent_children,
-                                                      outcome_children,
-                                                      outcome_parents)
+    exclude_as_instruments <-unique(exclude_as_instruments)
 
+    instrumental_vars <- treatment_parents[[x]][!treatment_parents[[x]] %in% exclude_as_instruments]
 
-  instrumental_vars <- instrumental_vars[,1][instrumental_vars$role ==  "instrumental"]
+  })
+
+  names(instrumental_vars) <- treatments
+
 
   return(instrumental_vars)
 
 }
-
 
 #' Minimal sufficient adjustment sets
 #'

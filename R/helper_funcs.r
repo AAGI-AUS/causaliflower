@@ -7,7 +7,7 @@
 #' @param outcomes A vector of outcome node names
 #' @returns Vector of nodes in path from treatment to outcome
 #' @noRd
-get_nodes_between_treatment_and_outcome <- function(dag, treatments, outcomes){
+get_nodes_between_treatment_and_outcome <- function(dag, treatments, outcomes, output_list = FALSE){
   .datatable.aware <- TRUE
   nodes <- c()
 
@@ -23,6 +23,8 @@ get_nodes_between_treatment_and_outcome <- function(dag, treatments, outcomes){
                                                      to = outcomes[y],
                                                      directed = TRUE,
                                                      paths_only = TRUE)[["data"]])
+          paths_trt_to_y <- as.vector(unique(paths_trt_to_y$name))
+          paths_trt_to_y <- paths_trt_to_y[ !paths_trt_to_y %in% treatments]
                  }, warning = function(w){
                    paths_trt_to_y <- NULL
                  }, error = function(e){
@@ -34,15 +36,19 @@ get_nodes_between_treatment_and_outcome <- function(dag, treatments, outcomes){
 
     })
 
+    if(output_list == TRUE){
+
+      return(paths_trt_to_y)
+
+    }
+
     paths_trt_to_y <- data.table::as.data.table( do.call( rbind, unlist(paths_trt_to_y, recursive = FALSE) ) )
 
-    nodes <- as.vector(unique(paths_trt_to_y$name))
-
-    nodes <- nodes[ !nodes %in% treatments]
+    paths_trt_to_y <- as.vector(unique(paths_trt_to_y))
 
   }
 
-  return(nodes)
+  return(paths_trt_to_y)
 
 }
 
@@ -51,7 +57,7 @@ get_nodes_between_treatment_and_outcome <- function(dag, treatments, outcomes){
 #' get_latent_vec() is a helper function for buildGraph().
 #'
 #' @importFrom data.table data.table
-#' @param instrumental_variables Inputted list or vector of instrumental variables.
+#' @param latent_variables Inputted list or vector of latent variables.
 #' @returns A vector of latent variable names.
 #' @noRd
 get_latent_vec <- function(latent_variables){
@@ -82,7 +88,7 @@ extract_instrumental_variables <- function(dag, treatments, outcomes, latent_var
   .datatable.aware <- TRUE
   nodes_trt_to_y <- get_nodes_between_treatment_and_outcome(dag, treatments, outcomes)
 
-  nodes_trt_to_y_parents <- dagitty::parents(dag, nodes_trt_to_y)
+ # nodes_trt_to_y_parents <- dagitty::parents(dag, nodes_trt_to_y)
 
   # instrumental variables
   latent_parents <- dagitty::parents(dag, latent_vars)
@@ -99,7 +105,7 @@ extract_instrumental_variables <- function(dag, treatments, outcomes, latent_var
       treatment_parents %in% outcome_parents | # cyclic relationship
       treatment_parents %in% collider_children | # cyclic relationship
       treatment_parents %in% latent_vars | # exclude latent variables
-      treatment_parents %in% nodes_trt_to_y_parents # in path treatment -> ... -> outcome
+      treatment_parents %in% nodes_trt_to_y # in path treatment -> ... -> outcome
 
   ]
 
