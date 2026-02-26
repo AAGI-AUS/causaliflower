@@ -453,8 +453,8 @@ draw_treatment_edges <- function(type,
     }
 
     ## final checks
-    confounder_df <- unique(confounder_df) # remove duplicate edges
-    confounder_df <- confounder_df[confounder_df$ancestor != confounder_df$descendant, ] # remove edges with identical ancestor and descendant node names
+    treatment_df <- unique(treatment_df) # remove duplicate edges
+    treatment_df <- treatment_df[treatment_df$ancestor != treatment_df$descendant, ] # remove edges with identical ancestor and descendant node names
 
   }
 

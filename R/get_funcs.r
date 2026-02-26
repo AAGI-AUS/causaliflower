@@ -42,6 +42,11 @@ get_edges <- function(dag,
   edges <- edges_longer(edges)
   edges <- edges[ edges[, "ancestor_role"] %in% selected_nodes, ]
 
+  # handle simultaneous edges
+  names(edges) <- c("v", "e", "w", "ancestor_role", "descendant_role")
+  edges <- handle_simultaneous_edges(edges)
+  names(edges) <- c("ancestor", "edge", "descendant", "ancestor_role", "descendant_role")
+
   return(edges)
 
 }

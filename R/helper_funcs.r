@@ -1358,91 +1358,6 @@ copy_nodes_helper2 <- function(dag,
 
 }
 
-#' convert pdag edges to dag
-#'
-#' pdag_to_dag_edges()
-#'
-#' @importFrom data.table as.data.table
-#' @importFrom dagitty edges
-#' @param dag A dagitty object, must use dag{} instead of pdag{}.
-#' @returns A data frame of edges.
-#' @noRd
-pdag_to_dag_edges <- function(dag){
-  .datatable.aware <- TRUE
-  edges <- data.table::as.data.table(dagitty::edges(dag))[, c("v", "e", "w")]
-
-  edges <- pdag_to_dag_edges_helper(edges)
-
-  return(edges)
-
-}
-
-#' convert pdag edges to dag edges
-#'
-#' pdag_to_dag_edges_helper()
-#'
-#' @importFrom data.table as.data.table
-#' @importFrom dagitty edges
-#' @param edges A dagitty object, must use dag{} instead of pdag{}.
-#' @returns A data frame of edges.
-#' @noRd
-pdag_to_dag_edges_helper <- function(edges){
-  .datatable.aware <- TRUE
-  # check if any bi-directional edges are "--" instead of "<->" (pdag)
-  if( any( edges$e == "--" | edges$e == "<->" ) ){
-
-    pdag_edges <- edges[ ( edges$e == "--" | edges$e == "<->"), ]
-    dag_edges <- edges[ !( edges$e == "--" | edges$e == "<->" ), ]
-
-    pdag_edges <- data.frame( v = c(pdag_edges$v, pdag_edges$w),
-                              e = "->",
-                              w = c(pdag_edges$w, pdag_edges$v) )
-
-    edges <- rbind(dag_edges, pdag_edges)
-
-  }
-
-  return(edges)
-
-}
-
-
-#' convert pdag to dag
-#'
-#' pdag_to_dag()
-#'
-#' @importFrom data.table as.data.table
-#' @importFrom dagitty edges
-#' @param dag A dagitty object, must use dag{} instead of pdag{}.
-#' @returns A data frame of edges.
-#' @noRd
-pdag_to_dag <- function(dag){
-  .datatable.aware <- TRUE
-  edges <- data.table::as.data.table(dagitty::edges(dag))[, c("v", "e", "w")]
-
-  # check if any bi-directional edges are "--" instead of "<->" (pdag)
-  if( any( edges$e == "--" | edges$e == "<->" ) ){
-
-    pdag_edges <- edges[ ( edges$e == "--" | edges$e == "<->"), ]
-    dag_edges <- edges[ !( edges$e == "--" | edges$e == "<->" ), ]
-
-    pdag_edges <- data.frame( v = c(pdag_edges$v, pdag_edges$w),
-                              e = "->",
-                              w = c(pdag_edges$w, pdag_edges$v) )
-
-    edges <- rbind(dag_edges, pdag_edges)
-
-    dag <- rebuild_dag(dag, edges)
-
-    return(dag)
-
-  }
-
-  return(dag)
-
-}
-
-
 #' Rebuild dag
 #'
 #' rebuild_dag() rebuilds a dag using a dagitty object and data frame of edges input.
@@ -1472,7 +1387,6 @@ rebuild_dag <- function(dag,
   # construct dag
   dag <- construct_graph(edges, unlist(node_names), treatments, outcomes, latent_vec)
 
-
   if(all(!is.na(unlist(coordinates)))){
     dagitty::coordinates(dag) <- coordinates
   }
@@ -1498,6 +1412,10 @@ construct_graph <- function(edges,
                             latent_vec
                             ){
   .datatable.aware <- TRUE
+
+  # handle simultaneous edges
+  names(edges) <- c("v", "e", "w")
+  edges <- handle_simultaneous_edges(edges)
 
   outcome_vec <- unlist(outcomes)
   node_name_and_coords_vec <- c()
@@ -2253,3 +2171,145 @@ add_coords_helper <- function(dag,
 
 
 }
+
+
+#' convert pdag edges to dag
+#'
+#' pdag_to_dag_edges()
+#'
+#' @importFrom data.table as.data.table
+#' @importFrom dagitty edges
+#' @param dag A dagitty object, must use dag{} instead of pdag{}.
+#' @returns A data frame of edges.
+#' @noRd
+pdag_to_dag_edges <- function(dag){
+  .datatable.aware <- TRUE
+  edges <- data.table::as.data.table(dagitty::edges(dag))[, c("v", "e", "w")]
+
+  edges <- pdag_to_dag_edges_helper(edges)
+
+  return(edges)
+
+}
+
+#' convert pdag edges to dag edges
+#'
+#' pdag_to_dag_edges_helper()
+#'
+#' @importFrom data.table as.data.table
+#' @importFrom dagitty edges
+#' @param edges A dagitty object, must use dag{} instead of pdag{}.
+#' @returns A data frame of edges.
+#' @noRd
+pdag_to_dag_edges_helper <- function(edges){
+  .datatable.aware <- TRUE
+  # check if any bi-directional edges are "--" instead of "<->" (pdag)
+  if( any( edges$e == "--" | edges$e == "<->" ) ){
+
+    pdag_edges <- edges[ ( edges$e == "--" | edges$e == "<->"), ]
+    dag_edges <- edges[ !( edges$e == "--" | edges$e == "<->" ), ]
+
+    pdag_edges <- data.frame( v = c(pdag_edges$v, pdag_edges$w),
+                              e = "->",
+                              w = c(pdag_edges$w, pdag_edges$v) )
+
+    edges <- rbind(dag_edges, pdag_edges)
+
+  }
+
+  return(edges)
+
+}
+
+
+#' convert pdag to dag
+#'
+#' pdag_to_dag()
+#'
+#' @importFrom data.table as.data.table
+#' @importFrom dagitty edges
+#' @param dag A dagitty object, must use dag{} instead of pdag{}.
+#' @returns A data frame of edges.
+#' @noRd
+pdag_to_dag <- function(dag){
+  .datatable.aware <- TRUE
+  edges <- data.table::as.data.table(dagitty::edges(dag))[, c("v", "e", "w")]
+
+  # check if any bi-directional edges are "--" instead of "<->" (pdag)
+  if( any( edges$e == "--" | edges$e == "<->" ) ){
+
+    pdag_edges <- edges[ ( edges$e == "--" | edges$e == "<->"), ]
+    dag_edges <- edges[ !( edges$e == "--" | edges$e == "<->" ), ]
+
+    pdag_edges <- data.frame( v = c(pdag_edges$v, pdag_edges$w),
+                              e = "->",
+                              w = c(pdag_edges$w, pdag_edges$v) )
+
+    edges <- rbind(dag_edges, pdag_edges)
+
+    dag <- rebuild_dag(dag, edges)
+
+    return(dag)
+
+  }
+
+  return(dag)
+
+}
+
+#' detect simultaneous edges to combine arrows where possible
+#'
+#' handle_simultaneous_edges()
+#'
+#' @importFrom data.table as.data.table
+#' @param edges Dataframe of graph edges.
+#' @returns A data frame of edges.
+#' @noRd
+handle_simultaneous_edges <- function(edges){
+  .datatable.aware <- TRUE
+
+  edges_vw <- paste0(edges$v, edges$w)
+  edges_wv <- paste0(edges$w, edges$v)
+  check_simultaneous <- edges_vw %in% edges_wv
+
+  # check if any bi-directional edges are "--" instead of "<->" (pdag)
+  if( length(edges$e[check_simultaneous]) > 0 & all(edges$e[check_simultaneous] == "->") ){
+
+    edges_bidirected <- edges
+    edges_bidirected$e <- "<->"
+
+    directed_edges <- edges[ !check_simultaneous, ]
+    simultaneous_edges <- edges_bidirected[ check_simultaneous,]
+
+    # for all [x,v] if [y,v] equals [x,w] and if [y,w] == [x,v] delete [x,w]
+    x <- 1
+    for(x in 1:(nrow(simultaneous_edges)-1)){
+      y <- 2
+      for(y in 2:nrow(simultaneous_edges)){
+        if( simultaneous_edges[y,"v"] == simultaneous_edges[x,"w"] &
+            simultaneous_edges[y,"w"] == simultaneous_edges[x,"v"]
+        ){
+          simultaneous_edges[x,"v"] <- "<@RM@>"
+          simultaneous_edges[x,]
+          x <- x + 1
+          y <- x + 1
+        }else{
+          y <- y + 1
+        }
+      }
+      x <- x + 1
+    }
+
+    simultaneous_edges <- simultaneous_edges[ !simultaneous_edges$v == "<@RM@>", ]
+
+    edges <- rbind(directed_edges, simultaneous_edges)
+
+    return(edges)
+
+  }
+
+  return(edges)
+
+}
+
+
