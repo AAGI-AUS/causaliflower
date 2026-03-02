@@ -63,41 +63,41 @@ draw_edges <- function(confounders,
                                        collider_vec = collider_vec,
                                        e = e)
   ## outcome edges ##
-  outcome_df <- draw_outcome_edges(type,
-                                   outcomes,
-                                   collider_vec,
+  outcome_df <- draw_outcome_edges(type = type,
+                                   outcomes = outcomes,
+                                   collider_vec = collider_vec,
                                    e = e)
   ## mediator edges ##
-  mediator_df <- draw_mediator_edges(type,
-                                     outcomes,
-                                     mediator_vec,
-                                     latent_vec,
-                                     e)
+  mediator_df <- draw_mediator_edges(type = type,
+                                     outcomes = outcomes,
+                                     mediator_vec = mediator_vec,
+                                     latent_vec = latent_vec,
+                                     e = e)
   ## mediator_outcome_confounder edges ##
-  moc_df <- draw_moc_edges(type,
-                           treatments,
-                           outcomes,
-                           confounder_vec,
-                           m_o_confounder_vec,
-                           mediator_vec,
-                           latent_vec,
-                           e)
+  moc_df <- draw_moc_edges(type = type,
+                           treatments = treatments,
+                           outcomes = outcomes,
+                           confounder_vec = confounder_vec,
+                           m_o_confounder_vec = m_o_confounder_vec, # new nodes as mediator_outcome_confounder,
+                           mediator_vec = mediator_vec,
+                           latent_vec = latent_vec,
+                           e = e)
   ## competing_exposure edges ##
-  competing_exposure_df <- draw_competing_exposure_edges(type,
-                                                         outcomes,
+  competing_exposure_df <- draw_competing_exposure_edges(type = type,
+                                                         outcomes = outcomes,
                                                          competing_exposure_vec,
-                                                         e)
+                                                         e = e)
 
   ## connect observed to ancestors and descendants ##
   observed_df <- draw_observed_edges(observed,
                                      existing_dag,
-                                     e)
+                                     e = e)
 
   ## instrumental_variables edges ##
-  instrumental_df <- draw_iv_edges(type,
+  instrumental_df <- draw_iv_edges(type = type,
                                    instrumental_variables,
                                    treatments = treatments,
-                                   e)
+                                   e = e)
 
   ## latent_variables edges ##
   latent_df <- draw_latent_edges(observed_node_names,
@@ -362,6 +362,8 @@ draw_treatment_edges <- function(type,
 
   }else{
 
+    outcomes <- unlist(outcomes) # in case outcomes are enclosed within a list
+
     treatment_list <- suppressWarnings( lapply(1:length(treatments), function(x){
 
       treatment_list[x] <- lapply(1:length(outcomes), function(y){
@@ -612,6 +614,8 @@ draw_mediator_edges <- function(type,
 
     }else{
 
+      outcomes <- unlist(outcomes) # in case outcomes are enclosed within a list
+
       mediator_list <- suppressWarnings( lapply(1:length(mediator_vec), function(x){
 
         mediator_list[x] <- lapply(1:length(outcomes), function(y){
@@ -752,6 +756,8 @@ draw_moc_edges <- function(type,
 
     }else{
 
+      outcomes <- unlist(outcomes) # in case outcomes are enclosed within a list
+
       moc_list <- suppressWarnings( lapply(1:length(m_o_confounder_vec), function(x){
 
         moc_list[x] <- lapply(1:length(outcomes), function(y){
@@ -876,6 +882,8 @@ draw_competing_exposure_edges <- function(type,
       }) )
 
     }else{
+
+      outcomes <- unlist(outcomes) # in case outcomes are enclosed within a list
 
       competing_exposure_list <- suppressWarnings( lapply(1:length(competing_exposure_vec), function(x){
 
@@ -1141,6 +1149,8 @@ draw_latent_edges <- function(observed_node_names,
 
       }else{
 
+        outcomes <- unlist(outcomes) # in case outcomes are enclosed within a list
+
         latent_list <- suppressWarnings( lapply(1:length(latent_variables), function(x){
 
           latent_list[x] <- lapply(1:length(outcomes), function(y){
@@ -1282,7 +1292,6 @@ draw_latent_edges <- function(observed_node_names,
   return( latent_df )
 
 }
-
 
 
 #' draws edges for copy_nodes_helper()
@@ -1458,6 +1467,13 @@ connect_new_nodes <- function(dag,
                               ){
   .datatable.aware <- TRUE
 
+  e <- "->"
+
+  if(type == "full"){
+
+    e <- "<->"
+  }
+
   if( length(node_roles) > 0 ){
 
     output_list <- add_nodes_helper(dag = dag,
@@ -1490,7 +1506,7 @@ connect_new_nodes <- function(dag,
 
       node_list[x] <- lapply(1:length(descendants), function(y){
 
-        list( c( v = new_nodes[x], e = "->", w = descendants[y]) )
+        list( c( v = new_nodes[x], e = e, w = descendants[y]) )
 
       })
 
@@ -1512,7 +1528,7 @@ connect_new_nodes <- function(dag,
 
       node_list[x] <- lapply(1:length(new_nodes), function(y){
 
-        list( c( v = ancestors[x], e = "->", w = new_nodes[y]) )
+        list( c( v = ancestors[x], e = e, w = new_nodes[y]) )
 
       })
 
