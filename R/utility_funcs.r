@@ -22,7 +22,9 @@ mediators <- function(dag){
   outcome_parents <- dagitty::parents(dag, outcomes)
   treatment_children <- dagitty::children(dag, treatments)
 
-  nodes_trt_to_y <- get_nodes_between_treatment_and_outcome(dag, treatments, outcomes)
+  nodes_trt_to_y <- get_nodes_between_treatment_and_outcome(dag = dag,
+                                                            treatments = treatments,
+                                                            outcomes = outcomes)
 
   mediators <- outcome_parents[ ( outcome_parents %in% treatment_children | outcome_parents %in% nodes_trt_to_y ) ]
 
@@ -84,7 +86,9 @@ mediator_outcome_confounders <- function(dag){
   outcome_parents <- dagitty::parents(dag, outcomes)
   treatment_children <- dagitty::children(dag, treatments)
 
-  nodes_trt_to_y <- get_nodes_between_treatment_and_outcome(dag, treatments, outcomes)
+  nodes_trt_to_y <- get_nodes_between_treatment_and_outcome(dag = dag,
+                                                            treatments = treatments,
+                                                            outcomes = outcomes)
 
   mediators <- outcome_parents[ ( outcome_parents %in% treatment_children | outcome_parents %in% nodes_trt_to_y ) ]
 
@@ -126,7 +130,9 @@ competing_exposures <- function(dag){
   outcome_parents <- dagitty::parents(dag, outcomes)
   treatment_children <- dagitty::children(dag, treatments)
 
-  nodes_trt_to_y <- get_nodes_between_treatment_and_outcome(dag, treatments, outcomes)
+  nodes_trt_to_y <- get_nodes_between_treatment_and_outcome(dag = dag,
+                                                            treatments = treatments,
+                                                            outcomes = outcomes)
 
   mediators <- outcome_parents[ ( outcome_parents %in% treatment_children | outcome_parents %in% nodes_trt_to_y ) ]
 
@@ -171,7 +177,9 @@ proxies <- function(dag){
   outcome_parents <- dagitty::parents(dag, outcomes)
   treatment_children <- dagitty::children(dag, treatments)
 
-  nodes_trt_to_y <- get_nodes_between_treatment_and_outcome(dag, treatments, outcomes)
+  nodes_trt_to_y <- get_nodes_between_treatment_and_outcome(dag = dag,
+                                                            treatments = treatments,
+                                                            outcomes = outcomes)
 
   mediators <- outcome_parents[ ( outcome_parents %in% treatment_children | outcome_parents %in% nodes_trt_to_y ) ]
 
@@ -287,7 +295,10 @@ instrumental_variables <- function(dag){
   })
 
   ## nodes between treatment and outcome
-  nodes_trt_to_y <- get_nodes_between_treatment_and_outcome(dag, treatments, outcomes, output_list = TRUE)
+  nodes_trt_to_y <- get_nodes_between_treatment_and_outcome(dag = dag,
+                                                            treatments = treatments,
+                                                            outcomes = outcomes,
+                                                            output_list = TRUE)
 
   ## colliders
   colliders <- outcome_children[outcome_children %in% treatment_children]

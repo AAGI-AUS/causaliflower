@@ -1,57 +1,3 @@
-#' node names in path from treatment to outcome
-#'
-#' @importFrom ggdag dag_paths
-#' @importFrom data.table as.data.table data.table
-#' @param dag A dagitty object
-#' @param treatments A vector of treatment node names
-#' @param outcomes A vector of outcome node names
-#' @returns Vector of nodes in path from treatment to outcome
-#' @noRd
-get_nodes_between_treatment_and_outcome <- function(dag, treatments, outcomes, output_list = FALSE){
-  .datatable.aware <- TRUE
-  nodes <- c()
-
-  if( length(treatments) > 0 & length(outcomes) > 0 ){
-
-    paths_trt_to_y <- lapply(1:length(treatments), function(x){
-
-      paths_trt_to_y <- lapply(1:length(outcomes), function(y){
-
-        tryCatch({
-          paths_trt_to_y <- na.omit(ggdag::dag_paths(dag,
-                                                     from = treatments[x],
-                                                     to = outcomes[y],
-                                                     directed = TRUE,
-                                                     paths_only = TRUE)[["data"]])
-          paths_trt_to_y <- as.vector(unique(paths_trt_to_y$name))
-          paths_trt_to_y <- paths_trt_to_y[ !paths_trt_to_y %in% treatments]
-                 }, warning = function(w){
-                   paths_trt_to_y <- NULL
-                 }, error = function(e){
-                   paths_trt_to_y <- NULL
-                 }
-        )
-
-      })
-
-    })
-
-    if(output_list == TRUE){
-
-      return(paths_trt_to_y)
-
-    }
-
-    paths_trt_to_y <- unlist(paths_trt_to_y)
-
-    paths_trt_to_y <- unique(paths_trt_to_y)
-
-  }
-
-  return(paths_trt_to_y)
-
-}
-
 #' Get latent variable names from list
 #'
 #' get_latent_vec() is a helper function for buildGraph().
@@ -86,7 +32,9 @@ get_latent_vec <- function(latent_variables){
 #' @noRd
 extract_instrumental_variables <- function(dag, treatments, outcomes, latent_vars, colliders, treatment_parents, treatment_children, mediator_parents, latent_children, outcome_children, outcome_parents){
   .datatable.aware <- TRUE
-  nodes_trt_to_y <- get_nodes_between_treatment_and_outcome(dag, treatments, outcomes)
+  nodes_trt_to_y <- get_nodes_between_treatment_and_outcome(dag = dag,
+                                                            treatments = treatments,
+                                                            outcomes = outcomes)
 
  # nodes_trt_to_y_parents <- dagitty::parents(dag, nodes_trt_to_y)
 
@@ -191,7 +139,9 @@ extract_unique_node_roles <- function(dag){
   outcome_parents <- dagitty::parents(dag, outcomes)
   treatment_children <- dagitty::children(dag, treatments)
 
-  nodes_trt_to_y <- get_nodes_between_treatment_and_outcome(dag, treatments, outcomes)
+  nodes_trt_to_y <- get_nodes_between_treatment_and_outcome(dag = dag,
+                                                            treatments = treatments,
+                                                            outcomes = outcomes)
 
   mediators <- outcome_parents[ ( outcome_parents %in% treatment_children | outcome_parents %in% nodes_trt_to_y ) &
                                 !outcome_parents %in% treatments &
@@ -222,14 +172,14 @@ extract_unique_node_roles <- function(dag){
 
   proxy_b <- suppressWarnings( treatment_parents[ treatment_parents %in% latent_children &
                                   !treatment_parents %in% latent_vars &
-                                  !treatment_parents %in% treatments ] )# proxy_b
+                                  !treatment_parents %in% treatments ] )# proxy_b (type b confounder)
 
-  proxy_c <- outcome_parents[ outcome_parents %in% latent_children & # proxy_c
+  proxy_c <- outcome_parents[ outcome_parents %in% latent_children & # proxy_c (type a confounder)
                                 !outcome_parents %in% treatments &
                                 !outcome_parents %in% mediators &
                                 !outcome_parents %in% latent_vars &
                                 !outcome_parents %in% outcomes ]
-  proxy <- c(proxy_b, proxy_c)
+  confounders <- c(confounders, proxy_b, proxy_c) # add to confounders
 
   # collider
   outcome_children <- dagitty::children(dag, outcomes)
@@ -268,7 +218,6 @@ extract_unique_node_roles <- function(dag){
 
   observed <- all_vars[!all_vars %in% treatments &
                          !all_vars %in% colliders &
-                         !all_vars %in% proxy &
                          !all_vars %in% competing_exposure &
                          !all_vars %in% mediators &
                          !all_vars %in% moc &
@@ -294,12 +243,6 @@ extract_unique_node_roles <- function(dag){
   edges$ancestor_competing_exposure[edges[, "v"] %in% competing_exposure &
                                       !edges[, "v"] %in% proxy_c ] <- "competing_exposure"
 
-  edges$ancestor_proxy[ ( edges[, "v"] %in% proxy_b &
-                            !edges[, "v"] %in% confounders ) | # "proxy_b"
-                          ( edges[, "v"] %in% proxy_c &
-                              !edges[, "v"] %in% confounders &
-                              !edges[, "v"] %in% mediators ) ] <- "proxy"
-
   edges$ancestor_collider[edges[, "v"] %in% colliders] <- "collider"
 
   edges$ancestor_latent[edges$v %in% latent_vars] <- "latent"
@@ -323,12 +266,6 @@ extract_unique_node_roles <- function(dag){
 
   edges$descendant_competing_exposure[edges[, "w"] %in% competing_exposure &
                                         !edges[, "w"] %in% proxy_c ] <- "competing_exposure"
-
-  edges$descendant_proxy[ ( edges[, "w"] %in% proxy_b &
-                              !edges[, "w"] %in% confounders ) | # "proxy_b"
-                            ( edges[, "w"] %in% proxy_c &
-                                !edges[, "w"] %in% confounders &
-                                !edges[, "w"] %in% mediators ) ] <- "proxy"
 
   edges$descendant_collider[edges[, "w"] %in% colliders] <- "collider"
 
@@ -373,7 +310,9 @@ extract_node_roles <- function(dag){
   outcome_parents <- dagitty::parents(dag, outcomes)
   treatment_children <- dagitty::children(dag, treatments)
 
-  nodes_trt_to_y <- get_nodes_between_treatment_and_outcome(dag, treatments, outcomes)
+  nodes_trt_to_y <- get_nodes_between_treatment_and_outcome(dag = dag,
+                                                            treatments = treatments,
+                                                            outcomes = outcomes)
 
   mediators <- outcome_parents[ ( outcome_parents %in% treatment_children | outcome_parents %in% nodes_trt_to_y ) ]
 
@@ -395,14 +334,14 @@ extract_node_roles <- function(dag){
 
   proxy_b <- suppressWarnings( treatment_parents[ treatment_parents %in% latent_children &
                                                     !treatment_parents %in% latent_vars &
-                                                    !treatment_parents %in% treatments ] )# proxy_b
+                                                    !treatment_parents %in% treatments ] )# proxy_b (type b confounder)
 
-  proxy_c <- outcome_parents[ outcome_parents %in% latent_children & # proxy_c
+  proxy_c <- outcome_parents[ outcome_parents %in% latent_children & # proxy_c (type c confounder)
                                 !outcome_parents %in% treatments &
                                 !outcome_parents %in% mediators &
                                 !outcome_parents %in% latent_vars &
                                 !outcome_parents %in% outcomes ]
-  proxy <- c(proxy_b, proxy_c)
+  confounders <- c(confounders, proxy_b, proxy_c) # add to confounders
 
   # collider
   outcome_children <- dagitty::children(dag, outcomes)
@@ -435,7 +374,6 @@ extract_node_roles <- function(dag){
 
   observed <- all_vars[!all_vars %in% treatments &
                          !all_vars %in% colliders &
-                         !all_vars %in% proxy &
                          !all_vars %in% competing_exposure &
                          !all_vars %in% mediators &
                          !all_vars %in% moc &
@@ -461,12 +399,6 @@ extract_node_roles <- function(dag){
   edges$ancestor_competing_exposure[edges[, "v"] %in% competing_exposure &
                                       !edges[, "v"] %in% proxy_c ] <- "competing_exposure"
 
-  edges$ancestor_proxy[ ( edges[, "v"] %in% proxy_b &
-                            !edges[, "v"] %in% confounders ) | # "proxy_b"
-                          ( edges[, "v"] %in% proxy_c &
-                              !edges[, "v"] %in% confounders &
-                              !edges[, "v"] %in% mediators ) ] <- "proxy"
-
   edges$ancestor_collider[edges[, "v"] %in% colliders] <- "collider"
 
   edges$ancestor_latent[edges$v %in% latent_vars] <- "latent"
@@ -490,12 +422,6 @@ extract_node_roles <- function(dag){
   edges$descendant_competing_exposure[edges[, "w"] %in% competing_exposure &
                                         !edges[, "w"] %in% proxy_c ] <- "competing_exposure"
 
-  edges$descendant_proxy[ ( edges[, "w"] %in% proxy_b &
-                              !edges[, "w"] %in% confounders ) | # "proxy_b"
-                            ( edges[, "w"] %in% proxy_c &
-                                !edges[, "w"] %in% confounders &
-                                !edges[, "w"] %in% mediators ) ] <- "proxy"
-
   edges$descendant_collider[edges[, "w"] %in% colliders] <- "collider"
 
   edges$descendant_latent[edges$w %in% latent_vars] <- "latent"
@@ -518,14 +444,14 @@ edges_longer <- function(edges){
 
   edges$id <- 1:nrow(edges)
 
-  edges_ancestors <- edges[,1:14]
-  edges_descendants <- edges[,c(1:3,15:25)]
+  edges_ancestors <- edges[,1:13]
+  edges_descendants <- edges[,c(1:3,14:23)]
 
-  edges_ancestors <- na.omit( reshape(edges_ancestors, varying = list(4:14), idvar = "id",
+  edges_ancestors <- na.omit( reshape(edges_ancestors, varying = list(4:13), idvar = "id",
                                       v.names = "ancestor_role", direction = "long")[,c("v", "e", "w", "ancestor_role", "id")] )
   edges_ancestors <- edges_ancestors[order(edges_ancestors$id), ][,c("v", "e", "w", "ancestor_role")]
 
-  edges_descendants <- na.omit( reshape(edges_descendants, varying = list(4:14), idvar = "id",
+  edges_descendants <- na.omit( reshape(edges_descendants, varying = list(4:13), idvar = "id",
                                         v.names = "descendant_role", direction = "long")[,c("v", "e", "w", "descendant_role", "id")] )
   edges_descendants <- edges_descendants[order(edges_descendants$id), ][,c("v", "e", "w", "descendant_role")]
 
@@ -556,16 +482,16 @@ roles_longer <- function(dag){
   edges_wide <- extract_node_roles(dag) # extract node roles from daggity object (wide format)
 
   ## ancestor node edges to list ##
-  edges_ancestors <- edges_wide[,1:14]
-  edges_ancestors <- na.omit( reshape(edges_ancestors, varying = list(4:14), idvar = "id",
+  edges_ancestors <- edges_wide[,1:13]
+  edges_ancestors <- na.omit( reshape(edges_ancestors, varying = list(4:13), idvar = "id",
                                       v.names = "role", direction = "long")[,c("v", "w", "role")] )
   names(edges_ancestors)[1:2] <- c("ancestor", "descendant")
 
   edges_ancestors$node_id <- "ancestor"
 
   ## descendant node edges to list ##
-  edges_descendants <- edges_wide[,c(1:3,15:25)]
-  edges_descendants <- na.omit( reshape(edges_descendants, varying = list(4:14), idvar = "id",
+  edges_descendants <- edges_wide[,c(1:3,14:23)]
+  edges_descendants <- na.omit( reshape(edges_descendants, varying = list(4:13), idvar = "id",
                                         v.names = "role", direction = "long")[,c("v", "w", "role")] )
   names(edges_descendants)[1:2] <- c("ancestor", "descendant")
 
@@ -1312,12 +1238,12 @@ copy_nodes_helper <- function(dag,
 
   }, warning = function(w){
     message(paste("Warning:", w, "\n Using alternative function to generate dag coordinates."))
-    dag <- add_coords_helper(dag, coords_spec = coords_spec[ complete.cases(coords_spec) ] )
+    dag <- add_coords_helper(dag)
     return(dag)
 
   }, error = function(e){
     message(paste("Error:", e, "\n Using alternative function to generate dag coordinates."))
-    dag <- add_coords_helper(dag, coords_spec = coords_spec[ complete.cases(coords_spec) ] )
+    dag <- add_coords_helper(dag)
     return(dag)
 
   }, finally = return(dag)
@@ -1377,12 +1303,12 @@ copy_nodes_helper2 <- function(dag,
 
   }, warning = function(w){
     message(paste("Warning:", w, "\n Using alternative function to generate dag coordinates."))
-    dag <- add_coords_helper(dag, coords_spec = coords_spec[ complete.cases(coords_spec) ] )
+    dag <- add_coords_helper(dag)
     return(dag)
 
   }, error = function(e){
     message(paste("Error:", e, "\n Using alternative function to generate dag coordinates."))
-    dag <- add_coords_helper(dag, coords_spec = coords_spec[ complete.cases(coords_spec) ] )
+    dag <- add_coords_helper(dag)
     return(dag)
 
   }, finally = return(dag)
@@ -2344,4 +2270,110 @@ handle_simultaneous_edges <- function(edges){
 
 }
 
+
+#' node names in path from treatment to outcome
+#'
+#' @importFrom ggdag dag_paths
+#' @importFrom data.table as.data.table data.table
+#' @param dag A dagitty object
+#' @param treatments A vector of treatment node names
+#' @param outcomes A vector of outcome node names
+#' @param output_list TRUE or FALSE to output a list (default FALSE returns a vector)
+#' @returns Vector of nodes in path from treatment to outcome
+#' @noRd
+get_nodes_between_treatment_and_outcome <- function(dag,
+                                                    treatments,
+                                                    outcomes,
+                                                    output_list = FALSE){
+  .datatable.aware <- TRUE
+  nodes <- c()
+  treatments <- unlist(treatments)
+  outcomes <- unlist(outcomes)
+
+  if( length(treatments) > 0 & length(outcomes) > 0 ){
+
+    paths_trt_to_y <- lapply(1:length(treatments), function(x){
+
+      paths_trt_to_y <- lapply(1:length(outcomes), function(y){
+
+        tryCatch({
+          paths_trt_to_y <- ggdag::dag_paths(dag,
+                                             from = treatments[x],
+                                             to = outcomes[y],
+                                             directed = TRUE,
+                                             paths_only = TRUE)[["data"]]
+          paths_trt_to_y <- as.vector(unlist(unique( paths_trt_to_y[ complete.cases(paths_trt_to_y["direction"]), "name" ])))
+          paths_trt_to_y <- paths_trt_to_y[ !paths_trt_to_y %in% treatments]
+        }, warning = function(w){
+          paths_trt_to_y[[x]][y] <- NA
+        }, error = function(e){
+          paths_trt_to_y[[x]][y] <- NA
+        }
+        )
+
+
+      })
+
+      names(paths_trt_to_y) <- outcomes
+      paths_trt_to_y
+    })
+
+    names(paths_trt_to_y) <- treatments
+
+
+    if(output_list == TRUE){
+
+      return(paths_trt_to_y)
+
+    }
+
+    paths_trt_to_y <- as.vector(unlist(unique(paths_trt_to_y)))
+
+    paths_trt_to_y <- paths_trt_to_y[ complete.cases(paths_trt_to_y) ]
+
+  }
+
+  return(paths_trt_to_y)
+
+}
+
+#' node names in path from treatment to outcome
+#'
+#' @importFrom ggdag dag_paths
+#' @importFrom data.table as.data.table data.table
+#' @param dag A dagitty object
+#' @param output_list TRUE or FALSE to output a list (default TRUE returns a list)
+#' @returns Vector of nodes in path from treatment to outcome
+#' @noRd
+get_where_need_proxy <- function(dag, output_list = TRUE){
+  treatments <- dagitty::exposures(dag)
+  outcomes <- dagitty::outcomes(dag)
+  latent_variables <- dagitty::latents(dag)
+
+  mediators_list <- get_nodes_between_treatment_and_outcome(dag,
+                                                            treatments = treatments,
+                                                            outcomes = outcomes,
+                                                            output_list = output_list)
+  # outcome_parents
+  #outcome_parents <- dagitty::parents(dag, outcomes)
+  latents_need_proxies <- lapply(1:length(treatments), function(x){
+
+    latents_need_proxies <- lapply(1:length(outcomes), function(y){
+
+      mediators_list[[x]][[y]] <- mediators_list[[x]][[y]][
+        mediators_list[[x]][[y]] %in% dagitty::parents(dag, outcomes[y]) ]
+
+      mediators_list[[x]][[y]] <- mediators_list[[x]][[y]][
+        mediators_list[[x]][[y]] %in% latent_variables  ]
+
+    })
+    names(latents_need_proxies) <- outcomes
+    latents_need_proxies
+  })
+
+  names(latents_need_proxies) <- treatments
+
+
+  return(latents_need_proxies)
+}
 

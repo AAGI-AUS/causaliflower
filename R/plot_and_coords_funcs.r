@@ -44,7 +44,6 @@ plot_dagitty <- function(dag,
            "mediator"="darkorchid1",
            "mediator_outcome_confounder"="magenta4",
            "instrumental"="deeppink1",
-           "proxy"="darkorange",
            "competing_exposure"="darkseagreen4",
            "collider"="darkred",
            "latent"="grey",
@@ -56,7 +55,6 @@ plot_dagitty <- function(dag,
              "mediator"=19,
              "mediator_outcome_confounder"=19,
              "instrumental"=19,
-             "proxy"=19,
              "collider"=19,
              "competing_exposure"=19,
              "latent"=1,
@@ -69,7 +67,6 @@ plot_dagitty <- function(dag,
                  "mediator",
                  "mediator_outcome_confounder",
                  "instrumental",
-                 "proxy",
                  "competing_exposure",
                  "collider",
                  "latent",
@@ -233,7 +230,16 @@ add_coords <- function(dag,
 #' @param lambda adjusts sensitivity of node placement. Higher lambda introduces more volatility in confounder nodes and treatment along the y-axis.
 #' @return dagitty objecty with coordinates.
 #' @noRd
-add_coordinates <- function(dag, treatments, outcomes, confounders, mediators, instrumental_variables, mediator_outcome_confounders, competing_exposures, latent_variables, colliders,
+add_coordinates <- function(dag,
+                            treatments,
+                            outcomes,
+                            confounders,
+                            mediators,
+                            instrumental_variables,
+                            mediator_outcome_confounders,
+                            competing_exposures,
+                            latent_variables,
+                            colliders,
                             lambda = 1,
                             observed = NA
 ){
@@ -566,7 +572,6 @@ renew_coords <- function(dag,
   mediators <- node_roles$mediator
   mediator_outcome_confounders <- node_roles$mediator_outcome_confounder
   instrumental_variables <- node_roles$instrumental
-  proxy_variables <- node_roles$proxy
   competing_exposures <- node_roles$competing_exposure
   colliders <- node_roles$collider
   latent_variables <- node_roles$latent
@@ -591,7 +596,7 @@ renew_coords <- function(dag,
 
       var_order <- c(confounders, instrumental_variables, mediator_outcome_confounders,
                      treatments, observed, competing_exposures,
-                     proxy_variables, latent_variables, mediators,
+                     latent_variables, mediators,
                      outcomes, colliders)
 
       var_order <- var_order[complete.cases(var_order)]
@@ -783,51 +788,6 @@ renew_coords <- function(dag,
         x = c(existing_coordinates$x[ names(existing_coordinates$x) %in% mediator_outcome_confounders ],
               coordinates$x),
         y = c(existing_coordinates$y[ names(existing_coordinates$y) %in% mediator_outcome_confounders ],
-              coordinates$y)
-      )
-
-    }
-
-  }
-
-  if( all( complete.cases(proxy_variables) ) ){
-
-    ## proxy_variables
-    new_node_name_vec <- new_node_names[ new_node_names %in% proxy_variables ]
-
-    if(  keep_existing_coords == FALSE ){
-
-      new_node_name_vec <- c( proxy_variables, new_node_name_vec )
-      new_node_name_vec <- new_node_name_vec[ !duplicated(new_node_name_vec) ]
-
-    }
-
-    num_nodes <- length(new_node_name_vec)
-
-    if( num_nodes > 0 ){
-
-      # new node coordinates (without outcomes)
-      coordinates_x <- coordinates$x[ !names(coordinates$x) %in% c(outcomes)]
-      coordinates_y <- coordinates$y[ !names(coordinates$y) %in% c(outcomes)]
-
-      coordinates <- suppressWarnings( merged_node_coords_helper(dag,
-                                                                 new_node_name_vec = new_node_name_vec,
-                                                                 num_nodes = num_nodes,
-                                                                 coordinates_x = coordinates_x,
-                                                                 coordinates_y = coordinates_y,
-                                                                 outcomes = outcomes,
-                                                                 num_vars = num_vars,
-                                                                 lambda = lambda,
-                                                                 threshold = threshold)
-      )
-
-
-    }else{
-
-      coordinates <- list(
-        x = c(existing_coordinates$x[ names(existing_coordinates$x) %in% proxy_variables ],
-              coordinates$x),
-        y = c(existing_coordinates$y[ names(existing_coordinates$y) %in% proxy_variables ],
               coordinates$y)
       )
 

@@ -7,14 +7,14 @@
 get_edges(
   dag,
   selected_nodes = c("outcome", "treatment", "confounder", "mediator",
-    "mediator_outcome_confounder", "instrumental", "proxy", "competing_exposure",
-    "collider", "latent", "observed")
+    "mediator_outcome_confounder", "instrumental", "competing_exposure", "collider",
+    "latent", "observed")
 )
 }
 \arguments{
 \item{dag}{A dagitty object.}
 
-\item{selected_nodes}{Nodes to return edges. Defaults to NULL, or can be a character or vector combination of any of the following: c("outcome", "treatment", "confounder", "mediator", "mediator_outcome_confounder", "instrumental", "proxy", "competing_exposure", "collider", "latent", "observed"))}
+\item{selected_nodes}{Nodes to return edges. Defaults to NULL, or can be a character or vector combination of any of the following: c("outcome", "treatment", "confounder", "mediator", "mediator_outcome_confounder", "instrumental", "competing_exposure", "collider", "latent", "observed"))}
 }
 \value{
 A data frame, data table, or list of edges for the roles specified in selected_nodes.

@@ -544,12 +544,12 @@ add_nodes <- function(dag,
     dagitty::coordinates(dag) <- new_coordinates
   }, warning = function(w){
     message(paste("Warning:", w, "\n Using alternative function to generate dag coordinates."))
-    dag <- add_coords_helper(dag, coords_spec = coords_spec[1][ complete.cases(coords_spec) ] )
+    dag <- add_coords_helper(dag)
     return(dag)
 
   }, error = function(e){
     message(paste("Error:", e, "\n Using alternative function to generate dag coordinates."))
-    dag <- add_coords_helper(dag, coords_spec = coords_spec[1][ complete.cases(coords_spec) ] )
+    dag <- add_coords_helper(dag)
     return(dag)
 
   }, finally = return(dag)
@@ -776,35 +776,14 @@ join_graphs <- function(dag,
   dag <- rebuild_dag(dag, edges)
 
 
-  num_nodes <- length(length(new_node_names))
-  time_limit <- num_nodes + num_nodes*coords_spec[1]
+  coordinates <- renew_coords(dag = dag,
+                              new_node_names = new_node_names,
+                              coordinates = coordinates,
+                              coords_spec = coords_spec[ complete.cases(coords_spec) ] )
 
-  setTimeLimit(cpu = time_limit, elapsed = time_limit, transient = TRUE)
+  dagitty::coordinates(dag) <- coordinates
 
-  on.exit( {
-    setTimeLimit(cpu = Inf, elapsed = Inf, transient = FALSE)
-  } )
-
-  tryCatch({
-    coordinates <- renew_coords(dag = dag,
-                                new_node_names = new_node_names,
-                                coordinates = coordinates,
-                                coords_spec = coords_spec[ complete.cases(coords_spec) ] )
-
-    dagitty::coordinates(dag) <- coordinates
-
-    }, warning = function(w){
-      message(paste("Warning:", w, "\n Using alternative function to generate dag coordinates."))
-      dag <- add_coords_helper(dag, coords_spec = coords_spec[ complete.cases(coords_spec) ] )
-      return(dag)
-
-    }, error = function(e){
-      message(paste("Error:", e, "\n Using alternative function to generate dag coordinates."))
-      dag <- add_coords_helper(dag, coords_spec = coords_spec[ complete.cases(coords_spec) ] )
-      return(dag)
-
-    }, finally = return(dag)
-  )
+  return(dag)
 
 }
 
