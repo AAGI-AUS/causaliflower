@@ -2,24 +2,26 @@
 % Please edit documentation in R/get_funcs.r
 \name{get_diff_roles}
 \alias{get_diff_roles}
-\title{dagitty node names, ancestor/descendant roles}
+\title{Compare dagitty object node roles}
 \usage{
-get_diff_roles(dag1, dag2)
+get_diff_roles(dag1, dag2, compare_all = TRUE, nodes_in_common = FALSE)
 }
 \arguments{
 \item{dag1}{A dagitty object.}
 
 \item{dag2}{A dagitty object.}
 
-\item{compare_all}{Return all different edges (compare_all = TRUE) or only a subset, e.g. dag1 edges missing in dag2 (compare_all = FAlSE). Defaults to compare_all = TRUE.k}
+\item{compare_all}{Compare and return mutually all exclusive edges  (compare_all = TRUE) e.g. dag1 edges not in dag2 AND dag2 edges not in dag1, or set compare_all = FALSE to return only dag1 mutually exclusive edges, e.g. dag1 edges not in dag2. Defaults to compare_all = TRUE.}
+
+\item{nodes_in_common}{Determines whether to include only the nodes found in both DAGs. Defaults to nodes_in_common = FALSE (returns all nodes).}
 }
 \value{
-Data table of edges.
+A list of nodes.
 }
 \description{
-node_structure() is a dagitty wrapper function that returns a list of node names extrated from a dagitty object, including the name and role of their ancestor and descendant nodes.
+Compare dagitty object node roles
 }
 \examples{
-get_diff(dag)
+get_diff_roles(dag)
 
 }

@@ -5,10 +5,12 @@
 \title{Label DAG nodes
 Extract node initials to use as labels in plot_dagitty, or dag plots using ggdag and ggplot2. This is essentially a wrapper function for ggdag::dag_label().}
 \usage{
-get_labels(dag)
+get_labels(dag, label_type)
 }
 \arguments{
 \item{dag}{A dagittyy object.}
+
+\item{label_type}{Defaults to using the node names of the inputted dag, or 'initials' if specified. Labels are only assigned by plot_dagitty() if nodes are not already labelled, using a 'ggdag::dag_label()' wrapper..}
 }
 \value{
 Labelled vector of node names from the dagitty object

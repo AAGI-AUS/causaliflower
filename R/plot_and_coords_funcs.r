@@ -74,27 +74,13 @@ plot_dagitty <- function(dag,
 
   if( is.null(labels) ){
 
-    if(label_type == "name"){
+    labels <- get_labels(dag, label_type)
 
-      labels <- as.data.frame(unique(suppressWarnings(ggdag::dag_label(dag)$data["name"])))
-      labels <- as.vector(labels$name)
-      names(labels) <- labels
+  }
 
-    }else if(label_type == "initials"){
+  if(!is.null(labels) & length(labels) != length(names(dag))){
 
-
-      labels <- get_labels(dag)
-
-
-    }else{
-
-      stop("Invalid label_type input. Please use 'initials' or the default 'name'.")
-
-    }
-
-  }else if(!is.null(labels) & length(labels) != length(names(dag))){
-
-    stop("The length of supplied labels does not equal the number of nodes in the graph. Please check labels and try again.")
+    stop("The length of supplied labels does not equal the number of nodes in the graph. Please check labels input and try again.")
 
   }
 

@@ -307,30 +307,99 @@ get_structure <- function(dag){
 #' Extract node initials to use as labels in plot_dagitty, or dag plots using ggdag and ggplot2. This is essentially a wrapper function for ggdag::dag_label().
 #' @importFrom ggdag dag_label
 #' @param dag A dagittyy object.
+#' @param label_type Defaults to using the node names of the inputted dag, or 'initials' if specified. Labels are only assigned by plot_dagitty() if nodes are not already labelled, using a 'ggdag::dag_label()' wrapper..
 #' @return Labelled vector of node names from the dagitty object
 #' @export
-get_labels <- function(dag){
+get_labels <- function(dag, label_type){
 
-  names <- as.data.frame(unique(suppressWarnings(ggdag::dag_label(dag)$data["name"])))
-  names <- as.vector(names$name)
-  labels <- gsub("(\\b[A-Z])[^A-Z]+", "\\1", names)
+  if(label_type == "name"){
+
+    labels <- as.data.frame(unique(suppressWarnings(ggdag::dag_label(dag)$data["name"])))
+    labels <- as.vector(labels$name)
+    names(labels) <- labels
+
+    return(labels)
+  }
+
+  names <- as.vector(unlist(unique(suppressWarnings(ggdag::dag_label(dag)$data["name"]))))
+
+  if( length(names) > length( unique(names)) ){
+    stop("Identical node names found. Please ensure the dagitty object contains unique names for each node.")
+  }
+
+  names_list <- strsplit(names, split = "_")
+
+  if( label_type == "short" ){
+
+    initials_list <- unlist( get_label_helper(names_list) )
+
+  }else if( label_type == "initials" ){
+
+    initials_list <- lapply( names_list, function(x) paste( substr(x, 1, 1), collapse = "" ) )
+
+  }else{
+
+    stop("Invalid label_type input. Please use 'initials' or the default 'name'.")
+
+  }
+
+  if( length(unique(unlist(names))) > length(unique(unlist(initials_list))) ){
+
+    if( label_type == "initials" ){
+
+      replace_initials_list <- unlist( get_label_helper(names_list) )
+    }
+
+    new_initials <- lapply(1:length(initials_list), function(x) {
+
+      new_initials <- lapply(1:length(initials_list), function(y) {
+
+        if( initials_list[[x]] == initials_list[[y]] & x != y ){
+
+          if( label_type == "initials" ){
+
+            initials_list[x] <- replace_initials_list[x]
+
+          }else{
+
+            initials_list[x] <- names[x]
+          }
+
+        }else{
+
+          initials_list[x] <- NA
+        }
+
+        Filter(Negate(is.na), initials_list[[x]])
+
+        unlist(initials_list[[x]])
+      })
+
+      new_initials <- Filter(Negate(is.na), unlist(new_initials, recursive = FALSE))
+    })
+
+    initials_list <- Map(c, new_initials, initials_list)
+    initials_list <- lapply(initials_list, "[[", 1)
+  }
+
+  labels <- unlist(initials_list)
+
   names(labels) <- names
 
   return(labels)
 }
 
-#' dagitty node names, ancestor/descendant roles
-#'
-#' node_structure() is a dagitty wrapper function that returns a list of node names extrated from a dagitty object, including the name and role of their ancestor and descendant nodes.
+
+#' Compare dagitty object edges
 #'
 #' @importFrom data.table setDT
 #' @param dag1 A dagitty object.
 #' @param dag2 A dagitty object.
-#' @param compare_all Return all different edges (compare_all = TRUE) or only a subset, e.g. dag1 edges missing in dag2 (compare_all = FAlSE). Defaults to compare_all = TRUE.
-#' @param include_roles Determines whether to include edges with different node roles. Defaults to include_roles = FALSE, e.g. returns different irrespective of causal structure.
+#' @param compare_all Return mutually exclusive edges in both dag1 and dag2 (compare_all = TRUE) e.g. dag1 edges not in dag2 AND dag2 edges not in dag1, or only dag1 mutually exclusive edges (compare_all = FALSE), e.g. dag1 edges not in dag2. Defaults to compare_all = TRUE.
+#' @param include_roles Determines whether to include node roles in addition to node names and edge direction. Defaults to include_roles = FALSE, e.g. only considers edges where descendant/ancestor node names and edge direction are different.
 #' @return Data table of edges.
 #' @examples
-#' get_diff(dag)
+#' get_diff_edges(dag)
 #'
 #' @export
 get_diff_edges <- function(dag1, dag2, compare_all = TRUE,  include_roles = FALSE){
@@ -360,42 +429,48 @@ get_diff_edges <- function(dag1, dag2, compare_all = TRUE,  include_roles = FALS
 }
 
 
-#' dagitty node names, ancestor/descendant roles
+#' Compare dagitty object node roles
 #'
-#' node_structure() is a dagitty wrapper function that returns a list of node names extrated from a dagitty object, including the name and role of their ancestor and descendant nodes.
-#'
-#' @importFrom data.table setDT
 #' @param dag1 A dagitty object.
 #' @param dag2 A dagitty object.
-#' @return Data table of edges.
+#' @param compare_all Compare and return mutually all exclusive edges  (compare_all = TRUE) e.g. dag1 edges not in dag2 AND dag2 edges not in dag1, or set compare_all = FALSE to return only dag1 mutually exclusive edges, e.g. dag1 edges not in dag2. Defaults to compare_all = TRUE.
+#' @param nodes_in_common Determines whether to include only the nodes found in both DAGs. Defaults to nodes_in_common = FALSE (returns all nodes).
+#' @return A list of nodes.
 #' @examples
-#' get_diff(dag)
+#' get_diff_roles(dag)
 #'
 #' @export
-get_diff_roles <- function(dag1, dag2){
+get_diff_roles <- function(dag1,
+                           dag2,
+                           compare_all = TRUE,
+                           nodes_in_common = FALSE
+                           ){
   .datatable.aware <- TRUE
 
-  edges <- get_edges(dag1)
-  edges2 <- get_edges(dag2)
+  roles <- get_roles(dag1)
+  roles_y <- get_roles(dag2)
 
-  col_names <- names(edges)
+  diff_list <- list()
 
-  all_edges <- merge(edges, edges2,
-                      by = col_names,
-                      all = TRUE)
+  diff_list <- lapply(1:length(roles), function(x){
 
-  edges_comb <- data.table::setDT(edges)[edges2, on = col_names]
-  edges2 <- data.table::setDT(edges2)[edges, on = col_names]
+    diff_list[[x]] <- roles[[x]][ !roles[[x]] %in% roles_y[[x]] ]
 
-  edges_comb <- merge(edges_comb, edges2,
-                      by = col_names,
-                      all = TRUE)
+    if( compare_all == TRUE){
+      diff_list[[x]] <- c( diff_list[[x]], roles_y[[x]][ !roles_y[[x]] %in% roles[[x]] ] )
+    }
+    if( nodes_in_common == TRUE){
+      dag_names <- names(dag1)
+      dag2_names <- names(dag2)
+      diff_list[[x]] <- diff_list[[x]][ diff_list[[x]] %in% dag_names &
+                                          diff_list[[x]] %in% dag2_names ]
+    }
+    diff_list[[x]]
+  })
 
-  edges_diff <- data.table::setDT(all_edges)[!edges_comb, on = col_names]
+  names(diff_list) <- c("outcome", "treatment", "confounder", "mediator", "mediator_outcome_confounder", "instrumental", "competing_exposure", "collider", "latent", "observed")
 
-  if( nrow(edges_diff) == 0 ){
-    message("No different node roles were identified among common edges.")
-  }
+  diff_list <- Filter(function(x) length(x) > 0, diff_list)
 
-  return(edges_diff)
+  return(diff_list)
 }
