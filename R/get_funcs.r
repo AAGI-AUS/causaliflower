@@ -474,3 +474,66 @@ get_diff_roles <- function(dag1,
 
   return(diff_list)
 }
+
+
+
+#' Extract ancestor node edges
+#'
+#' ancestor_edges() returns a list of edges grouped by node names for an inputted dagitty object.
+#'
+#' @importFrom dagitty edges
+#' @param dag A dagitty object.
+#' @returns Named list of edges.
+#' @export
+get_ancestor_edges <- function(dag){
+  .datatable.aware <- TRUE
+
+  edges <- pdag_to_dag_edges(dag)
+
+  ## group by nodes
+  unique_ancestors <- unique( edges[,"v"] )
+  num_unique_ancestors <- nrow(unique_ancestors)
+
+
+  edges_list <- list()
+
+  # edges_to_assess grouped by each unique node in a list
+  edges_list <- suppressWarnings( lapply(1:num_unique_ancestors, function(x){
+
+    edges[ unlist(edges[,"v"]) %in% unlist(unique_ancestors[x]), ]
+
+
+  }) )
+
+  names(edges_list) <- unlist(unique_ancestors)
+
+  return(edges_list)
+
+}
+
+
+
+#' nodes in path from treatment to outcome
+#'
+#' get_nodes_between_treatment_and_outcome() is a dagitty and ggdag::dag_paths() wrapper function, intended for use with multiple treatments and outcomes.
+#'
+#' @importFrom ggdag dag_paths
+#' @importFrom data.table as.data.table data.table
+#' @param dag A dagitty object
+#' @param output_list TRUE or FALSE to output a list (default FALSE returns a vector).
+#' @returns Vector or list of  nodes in the path from treatment to outcome.
+#' @export
+get_nodes_between_treatment_and_outcome <- function(dag,
+                                                    output_list = FALSE
+                                                    ){
+  .datatable.aware <- TRUE
+
+  treatments <- dagitty::exposures(dag)
+  outcomes <- dagitty::outcomes(dag)
+
+  paths_trt_to_y <- nodes_between_treatment_and_outcome(dag = dag,
+                                                        treatments = treatments,
+                                                        outcomes = outcomes,
+                                                        output_list = output_list)
+  return(paths_trt_to_y)
+}

@@ -22,7 +22,7 @@ mediators <- function(dag){
   outcome_parents <- dagitty::parents(dag, outcomes)
   treatment_children <- dagitty::children(dag, treatments)
 
-  nodes_trt_to_y <- get_nodes_between_treatment_and_outcome(dag = dag,
+  nodes_trt_to_y <- nodes_between_treatment_and_outcome(dag = dag,
                                                             treatments = treatments,
                                                             outcomes = outcomes)
 
@@ -86,7 +86,7 @@ mediator_outcome_confounders <- function(dag){
   outcome_parents <- dagitty::parents(dag, outcomes)
   treatment_children <- dagitty::children(dag, treatments)
 
-  nodes_trt_to_y <- get_nodes_between_treatment_and_outcome(dag = dag,
+  nodes_trt_to_y <- nodes_between_treatment_and_outcome(dag = dag,
                                                             treatments = treatments,
                                                             outcomes = outcomes)
 
@@ -130,7 +130,7 @@ competing_exposures <- function(dag){
   outcome_parents <- dagitty::parents(dag, outcomes)
   treatment_children <- dagitty::children(dag, treatments)
 
-  nodes_trt_to_y <- get_nodes_between_treatment_and_outcome(dag = dag,
+  nodes_trt_to_y <- nodes_between_treatment_and_outcome(dag = dag,
                                                             treatments = treatments,
                                                             outcomes = outcomes)
 
@@ -177,7 +177,7 @@ proxies <- function(dag){
   outcome_parents <- dagitty::parents(dag, outcomes)
   treatment_children <- dagitty::children(dag, treatments)
 
-  nodes_trt_to_y <- get_nodes_between_treatment_and_outcome(dag = dag,
+  nodes_trt_to_y <- nodes_between_treatment_and_outcome(dag = dag,
                                                             treatments = treatments,
                                                             outcomes = outcomes)
 

@@ -129,7 +129,7 @@ extract_unique_node_roles <- function(dag){
   outcome_parents <- dagitty::parents(dag, outcomes)
   treatment_children <- dagitty::children(dag, treatments)
 
-  nodes_trt_to_y <- get_nodes_between_treatment_and_outcome(dag = dag,
+  nodes_trt_to_y <- nodes_between_treatment_and_outcome(dag = dag,
                                                             treatments = treatments,
                                                             outcomes = outcomes)
 
@@ -292,7 +292,7 @@ extract_node_roles <- function(dag){
   outcome_parents <- dagitty::parents(dag, outcomes)
   treatment_children <- dagitty::children(dag, treatments)
 
-  nodes_trt_to_y <- get_nodes_between_treatment_and_outcome(dag = dag,
+  nodes_trt_to_y <- nodes_between_treatment_and_outcome(dag = dag,
                                                             treatments = treatments,
                                                             outcomes = outcomes)
 
@@ -336,7 +336,8 @@ extract_node_roles <- function(dag){
                                                       outcomes = outcomes,
                                                       latent_vars = latent_vars,
                                                       colliders = colliders,
-                                                      outcome_parents)
+                                                      outcome_parents = outcome_parents,
+                                                      nodes_trt_to_y = nodes_trt_to_y)
 
   # filter latent variables
   latent_vars <- latent_vars[  !latent_vars %in% treatments &
@@ -473,41 +474,6 @@ roles_longer <- function(dag){
   edges_long <- rbind(edges_ancestors, edges_descendants)
 
   return(edges_long)
-
-}
-
-
-#' Extract ancestor node edges
-#'
-#' ancestor_edges() is a dagitty wrapper function that returns a list of node names and edges in a dagitty object.
-#'
-#' @importFrom dagitty edges
-#' @param dag A dagitty object.
-#' @returns Named list of edges.
-#' @noRd
-get_ancestor_edges <- function(dag){
-  .datatable.aware <- TRUE
-
-  edges <- pdag_to_dag_edges(dag)
-
-  ## group by nodes
-  unique_ancestors <- unique( edges[,"v"] )
-  num_unique_ancestors <- nrow(unique_ancestors)
-
-
-  edges_list <- list()
-
-  # edges_to_assess grouped by each unique node in a list
-  edges_list <- suppressWarnings( lapply(1:num_unique_ancestors, function(x){
-
-    edges[ unlist(edges[,"v"]) %in% unlist(unique_ancestors[x]), ]
-
-
-  }) )
-
-  names(edges_list) <- unlist(unique_ancestors)
-
-  return(edges_list)
 
 }
 
@@ -2244,71 +2210,6 @@ handle_simultaneous_edges <- function(edges){
 }
 
 
-#' node names in path from treatment to outcome
-#'
-#' @importFrom ggdag dag_paths
-#' @importFrom data.table as.data.table data.table
-#' @param dag A dagitty object
-#' @param treatments A vector of treatment node names
-#' @param outcomes A vector of outcome node names
-#' @param output_list TRUE or FALSE to output a list (default FALSE returns a vector)
-#' @returns Vector of nodes in path from treatment to outcome
-#' @noRd
-get_nodes_between_treatment_and_outcome <- function(dag,
-                                                    treatments,
-                                                    outcomes,
-                                                    output_list = FALSE){
-  .datatable.aware <- TRUE
-  nodes <- c()
-  treatments <- unlist(treatments)
-  outcomes <- unlist(outcomes)
-
-  if( length(treatments) > 0 & length(outcomes) > 0 ){
-
-    paths_trt_to_y <- lapply(1:length(treatments), function(x){
-
-      paths_trt_to_y <- lapply(1:length(outcomes), function(y){
-
-        tryCatch({
-          paths_trt_to_y <- ggdag::dag_paths(dag,
-                                             from = treatments[x],
-                                             to = outcomes[y],
-                                             directed = TRUE,
-                                             paths_only = TRUE)[["data"]]
-          paths_trt_to_y <- as.vector(unlist(unique( paths_trt_to_y[ complete.cases(paths_trt_to_y["direction"]), "name" ])))
-          paths_trt_to_y <- paths_trt_to_y[ !paths_trt_to_y %in% treatments]
-        }, warning = function(w){
-          paths_trt_to_y[[x]][y] <- NA
-        }, error = function(e){
-          paths_trt_to_y[[x]][y] <- NA
-        }
-        )
-
-
-      })
-
-      names(paths_trt_to_y) <- outcomes
-      paths_trt_to_y
-    })
-
-    names(paths_trt_to_y) <- treatments
-
-
-    if(output_list == TRUE){
-
-      return(paths_trt_to_y)
-
-    }
-
-    paths_trt_to_y <- as.vector(unlist(unique(paths_trt_to_y)))
-
-    paths_trt_to_y <- paths_trt_to_y[ complete.cases(paths_trt_to_y) ]
-
-  }
-
-  return(paths_trt_to_y)
-
-}
 
 #' node names in path from treatment to outcome
 #'
@@ -2323,7 +2224,7 @@ find_where_need_proxy <- function(dag, output_list = TRUE){
   outcomes <- dagitty::outcomes(dag)
   latent_variables <- dagitty::latents(dag)
 
-  mediators_list <- get_nodes_between_treatment_and_outcome(dag,
+  mediators_list <- nodes_between_treatment_and_outcome(dag,
                                                             treatments = treatments,
                                                             outcomes = outcomes,
                                                             output_list = output_list)
@@ -2472,7 +2373,7 @@ instrumental_variables_helper <- function(dag, treatments, outcomes){
   })
 
 
-  nodes_trt_to_outcome <- get_nodes_between_treatment_and_outcome(dag, treatments = treatments, outcomes = outcomes, output_list = TRUE)
+  nodes_trt_to_outcome <- nodes_between_treatment_and_outcome(dag, treatments = treatments, outcomes = outcomes, output_list = TRUE)
 
   instrumental_variables <- list()
   associated_with_treatment <- list()
@@ -2531,3 +2432,74 @@ instrumental_variables_helper <- function(dag, treatments, outcomes){
 
   return(instrumental_variables)
 }
+
+
+#' node names in path from treatment to outcome
+#'
+#' nodes_between_treatment_and_outcome() is a ggdag::dag_paths() wrapper intended for use with multiple treatments and outcomes.
+#'
+#' @importFrom ggdag dag_paths
+#' @importFrom data.table as.data.table data.table
+#' @param dag A dagitty object
+#' @param treatments A vector of treatment node names.
+#' @param outcomes A vector of outcome node names.
+#' @param output_list TRUE or FALSE to output a list (default FALSE returns a vector).
+#' @returns Vector or list of  nodes in the path from treatment to outcome.
+#' @export
+nodes_between_treatment_and_outcome <- function(dag,
+                                                treatments,
+                                                outcomes,
+                                                output_list = FALSE
+                                                ){
+  .datatable.aware <- TRUE
+  nodes <- c()
+  treatments <- unlist(treatments)
+  outcomes <- unlist(outcomes)
+
+  if( length(treatments) > 0 & length(outcomes) > 0 ){
+
+    paths_trt_to_y <- lapply(1:length(treatments), function(x){
+
+      paths_trt_to_y <- lapply(1:length(outcomes), function(y){
+
+        tryCatch({
+          paths_trt_to_y <- ggdag::dag_paths(dag,
+                                             from = treatments[x],
+                                             to = outcomes[y],
+                                             directed = TRUE,
+                                             paths_only = TRUE)[["data"]]
+          paths_trt_to_y <- as.vector(unlist(unique( paths_trt_to_y[ complete.cases(paths_trt_to_y["direction"]), "name" ])))
+          paths_trt_to_y <- paths_trt_to_y[ !paths_trt_to_y %in% treatments]
+        }, warning = function(w){
+          paths_trt_to_y[[x]][y] <- NA
+        }, error = function(e){
+          paths_trt_to_y[[x]][y] <- NA
+        }
+        )
+
+
+      })
+
+      names(paths_trt_to_y) <- outcomes
+      paths_trt_to_y
+    })
+
+    names(paths_trt_to_y) <- treatments
+
+
+    if(output_list == TRUE){
+
+      return(paths_trt_to_y)
+
+    }
+
+    paths_trt_to_y <- as.vector(unlist(unique(paths_trt_to_y)))
+
+    paths_trt_to_y <- paths_trt_to_y[ complete.cases(paths_trt_to_y) ]
+
+  }
+
+  return(paths_trt_to_y)
+
+}
+
