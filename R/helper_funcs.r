@@ -52,9 +52,9 @@ extract_instrumental_variables <- function(dag, treatments, outcomes, latent_var
   outcome_latent_parents <- dagitty::parents(dag, latent_vars)
 
   associated_with_treatment <- list()
+  children_associated_with_outcome <- list()
 
   associated_with_treatment <- lapply(1:length(treatments), function(x){
-
     associated_with_treatment[[x]] <- lapply(1:length(node_names), function(n){
 
       parents_associated_with_treatment <- unique(dagitty::paths(dag, treatments[x], node_names[n], directed = TRUE)$open == TRUE)
@@ -62,11 +62,15 @@ extract_instrumental_variables <- function(dag, treatments, outcomes, latent_var
 
       associated_with_treatment <- c(parents_associated_with_treatment, children_associated_with_treatment)
 
-      children_associated_with_outcome <- length(unique(dagitty::paths(dag, outcomes[x], node_names[n], directed = TRUE)$open == TRUE))>0
+      children_associated_with_outcome <- lapply(1:length(outcomes), function(y){
+      children_associated_with_outcome <- length(unique(dagitty::paths(dag, outcomes[y], node_names[n], directed = TRUE)$open == TRUE))>0
+      })
 
-      associated_with_treatment <- length(associated_with_treatment)>0 & children_associated_with_outcome==FALSE
+      associated_with_treatment <- length(associated_with_treatment)>0 & all( unlist(children_associated_with_outcome)==FALSE)
+      associated_with_treatment
 
     })
+
 
     names(associated_with_treatment[[x]]) <- node_names
     associated_with_treatment[[x]] <- Filter(function(m) m==TRUE,
