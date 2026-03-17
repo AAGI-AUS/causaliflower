@@ -4,14 +4,16 @@
 \alias{join_graphs}
 \title{Merge two dagitty objects}
 \usage{
-join_graphs(dag, new_dag, coords_spec = c(lambda = 0.1, threshold = 0.5))
+join_graphs(dag, new_dag, coords_spec = 0.1, threshold = 0.5)
 }
 \arguments{
 \item{dag}{First dagitty object.}
 
 \item{new_dag}{Second dagitty object, added to the first.}
 
-\item{coords_spec}{Adjust node placement with lambda; a higher value increases volatility and results in more extreme DAG structures. Threshold controls the closeness of nodes.}
+\item{coords_spec}{Adjust node placement when generating coordinates with a numeric value > 0 (recommended < 10).}
+
+\item{threshold}{Set the allowed closeness of nodes in newly generated coordinates. Numeric value between 0 and 1 for the minimum distance allowed when generating coordinates.}
 }
 \value{
 A dagitty object

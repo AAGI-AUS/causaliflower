@@ -17,51 +17,53 @@ quality_check_merged_node_coords_helper <- function(new_node_name_vec_x,
   num_vars_x <- length(existing_coordinates_x)
   num_vars_y <- length(existing_coordinates_y)
 
-
   ## internal check against other generated coords ##
+  if( num_nodes_x == 1 ){
 
-  # x-coords
-  if( num_nodes_x > 0 ){
+    keep_coord_names_x <- new_node_name_vec_x
 
-    coords_df <- data.table::as.data.table(
+  } else{
+    # x-coords
+    if( num_nodes_x > 0 ){
 
-      sapply(1:num_nodes_x, function(a){
-        sapply(1:num_nodes_x, function(b){
+      coords_df <- data.table::as.data.table(
+        sapply(1:num_nodes_x, function(a){
+          sapply(1:num_nodes_x, function(b){
+            sqrt( diff( range( c(new_x_coords[a],
+                                 new_x_coords[b]) ) ) )**2
+          })
+        }) + diag(nrow = num_nodes_x, ncol = num_nodes_x) )
 
-          sqrt( diff( range( c(new_x_coords[a],
-                               new_x_coords[b]) ) ) )**2
 
-        })
-      }) + diag(nrow = num_nodes_x, ncol = num_nodes_x) )
+      coords_df$ID <- 1:num_nodes_x
+      coords_df <- coords_df[apply(coords_df >= threshold, 1, all)]
 
-
-    coords_df$ID <- 1:num_nodes_x
-    coords_df <- coords_df[apply(coords_df >= threshold, 1, all)]
-
-    keep_coord_names_x <- new_node_name_vec_x[ coords_df$ID ]
-
+      keep_coord_names_x <- new_node_name_vec_x[ coords_df$ID ]
+    }
   }
 
-  # y-coords
-  if( num_nodes_y > 0 ){
+  if( num_nodes_y == 1 ){
 
-    coords_df <-  data.table::as.data.table(
+    keep_coord_names_y <- new_node_name_vec_y
 
-      sapply(1:num_nodes_y, function(a){
-        sapply(1:num_nodes_y, function(b){
-          sqrt( diff( range( c(new_y_coords[a],
-                               new_y_coords[b]) ) ) )**2
+  } else {
+    # y-coords
+    if( num_nodes_y > 0 ){
 
-        })
-      }) + diag(nrow = num_nodes_y, ncol = num_nodes_y) )
+      coords_df <-  data.table::as.data.table(
+        sapply(1:num_nodes_y, function(a){
+          sapply(1:num_nodes_y, function(b){
+            sqrt( diff( range( c(new_y_coords[a],
+                                 new_y_coords[b]) ) ) )**2
+          })
+        }) + diag(nrow = num_nodes_y, ncol = num_nodes_y) )
 
-    coords_df$ID <- 1:num_nodes_y
-    coords_df <- coords_df[apply(coords_df >= threshold, 1, all)]
+      coords_df$ID <- 1:num_nodes_y
+      coords_df <- coords_df[apply(coords_df >= threshold, 1, all)]
 
-    keep_coord_names_y <- new_node_name_vec_y[ coords_df$ID ]
-
+      keep_coord_names_y <- new_node_name_vec_y[ coords_df$ID ]
+    }
   }
-
 
   ## check against existing coordinates ##
   if( length(existing_coordinates_x) > 0 ){
@@ -74,13 +76,12 @@ quality_check_merged_node_coords_helper <- function(new_node_name_vec_x,
           sapply(1:num_nodes_x, function(b){
             sqrt( diff( range( c(existing_coordinates_x[a],
                                  new_x_coords[b]) ) ) )**2
-
           })
         }) )
 
       if( num_nodes_x == 1 ){
 
-        new_x_coords <- new_x_coords[ sum(coords_df) / length( existing_coordinates_x ) >= threshold ]
+        new_x_coords <- new_x_coords[ nrow( coords_df[ unlist(coords_df[,"V1"]) <= threshold/2, ] ) < (num_vars_x/2) ]
 
       }else{
 
@@ -92,11 +93,8 @@ quality_check_merged_node_coords_helper <- function(new_node_name_vec_x,
         new_x_coords <- new_x_coords[ names(new_x_coords) %in% keep_coord_names_x]
 
       }
-
     }
-
   }
-
 
   if( length(existing_coordinates_y) > 0 ){
 
@@ -114,7 +112,11 @@ quality_check_merged_node_coords_helper <- function(new_node_name_vec_x,
 
       if( num_nodes_y == 1 ){
 
-        new_y_coords <- new_y_coords[ sum(coords_df) / length( existing_coordinates_y ) >= threshold ]
+        if( any(unname(unlist(coords_df)) < threshold) ){
+
+          new_y_coords <- NULL
+
+        }
 
       }else{
 
@@ -126,16 +128,13 @@ quality_check_merged_node_coords_helper <- function(new_node_name_vec_x,
         new_y_coords <- new_y_coords[ names(new_y_coords) %in% keep_coord_names_y]
 
       }
-
     }
-
   }
 
 
   new_coordinates <- list( x = c(existing_coordinates_x, new_x_coords),  y = c(existing_coordinates_y, new_y_coords) )
 
   return(new_coordinates)
-
 }
 
 
@@ -147,7 +146,13 @@ quality_check_merged_node_coords_helper <- function(new_node_name_vec_x,
 #' @param existing_coordinates vector of latent variable nodes.
 #' @return dagitty objecty with coordinates.
 #' @noRd
-quality_check_new_coordinates_helper <- function(dag, grouped_nodes, num_nodes, new_coordinates, existing_coords, threshold = 1){
+quality_check_new_coordinates_helper <- function(dag,
+                                                 grouped_nodes,
+                                                 num_nodes,
+                                                 new_coordinates,
+                                                 existing_coords,
+                                                 threshold = 0.5
+                                                 ){
   #existing_coords <- coordinates # used for debugging new_node_coordinates()
   #grouped_nodes <- new_node_names # used for debugging new_node_coordinates()
   #grouped_nodes <- latent_variables # used for debugging generate_latent_coordinates()

@@ -5,7 +5,7 @@
 #'
 #' @importFrom data.table data.table
 #' @param dag A dagitty object.
-#' @param selected_nodes Nodes to return edges. Defaults to NULL, or can be a character or vector combination of any of the following: c("outcome", "treatment", "confounder", "mediator", "mediator_outcome_confounder", "instrumental", "competing_exposure", "collider", "latent", "observed"))
+#' @param selected_nodes Nodes to return edges. Defaults to NULL, or can be a character or vector combination of any of the following: c("outcome", "treatment", "confounder", "mediator", "mediator_outcome_confounder", "instrument", "competing_exposure", "collider", "latent", "observed"))
 #' @returns A data frame, data table, or list of edges for the roles specified in selected_nodes.
 #' @examples
 #' edges <- get_edges(dag)
@@ -17,7 +17,7 @@ get_edges <- function(dag,
                                          "confounder",
                                          "mediator",
                                          "mediator_outcome_confounder",
-                                         "instrumental",
+                                         "instrument",
                                          "competing_exposure",
                                          "collider",
                                          "latent",
@@ -25,7 +25,7 @@ get_edges <- function(dag,
                       ){
   .datatable.aware <- TRUE
 
-  all_roles <- c("outcome", "treatment", "confounder", "mediator", "mediator_outcome_confounder", "instrumental", "competing_exposure", "collider", "latent", "observed")
+  all_roles <- c("outcome", "treatment", "confounder", "mediator", "mediator_outcome_confounder", "instrument", "competing_exposure", "collider", "latent", "observed")
   if( identical(selected_nodes, all_roles) ){
     # seems unnecessary but putting this if-statement first prevents unnecessary checks, assuming the selected_nodes input is predominantly left blank
   }else if( any(grepl("!", selected_nodes)) ){
@@ -74,7 +74,7 @@ get_roles <- function(dag, multiple_roles = FALSE){
 
   }
 
-  node_roles <- c("outcome", "treatment", "confounder", "mediator", "mediator_outcome_confounder", "instrumental", "competing_exposure", "collider", "latent", "observed")
+  node_roles <- c("outcome", "treatment", "confounder", "mediator", "mediator_outcome_confounder", "instrument", "competing_exposure", "collider", "latent", "observed")
   num_roles <- length(node_roles)
 
   ## ancestor node edges to list ##
@@ -155,7 +155,7 @@ get_nodes <- function(dag){
   unique_ancestors <- unique( unlist( edges_ancestors[,"ancestor"] ) )# vector of unique node names
   num_unique_ancestors <- length(unique_ancestors) # count of unique node names
 
-  all_roles <- c("outcome", "treatment", "confounder", "mediator", "mediator_outcome_confounder", "instrumental", "competing_exposure", "collider", "latent", "observed")
+  all_roles <- c("outcome", "treatment", "confounder", "mediator", "mediator_outcome_confounder", "instrument", "competing_exposure", "collider", "latent", "observed")
 
   # edges grouped by each unique node in a list
   edges_ancestor_list <- c()
@@ -468,7 +468,7 @@ get_diff_roles <- function(dag1,
     diff_list[[x]]
   })
 
-  names(diff_list) <- c("outcome", "treatment", "confounder", "mediator", "mediator_outcome_confounder", "instrumental", "competing_exposure", "collider", "latent", "observed")
+  names(diff_list) <- c("outcome", "treatment", "confounder", "mediator", "mediator_outcome_confounder", "instrument", "competing_exposure", "collider", "latent", "observed")
 
   diff_list <- Filter(function(x) length(x) > 0, diff_list)
 

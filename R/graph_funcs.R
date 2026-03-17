@@ -88,7 +88,7 @@ build_graph <- function(variables = NA,
 
     mediator_vec <- mediators <- node_roles$mediator
 
-    instrumental_variables <- node_roles$instrumental
+    instrumental_variables <- node_roles$instrument
 
     collider_vec <- colliders <- node_roles$collider
 
@@ -464,11 +464,12 @@ keep_edges <- function(dag,
 #' @importFrom dagitty edges
 #' @param dag A dagitty object. Must include exposure and outcome nodes.
 #' @param new_nodes Inputted vector of node names to be added to the graph.
-#' @param node_role Determines which nodes will be connected, defaults to "confounder". Options include the following: c("confounder", "treatment", "outcome", "mediator", "mediator_outcome_confounder", "instrumental", "competing_exposure", "collider", "latent", "observed").
+#' @param node_role Determines which nodes will be connected, defaults to "confounder". Options include the following: c("confounder", "treatment", "outcome", "mediator", "mediator_outcome_confounder", "instrument", "competing_exposure", "collider", "latent", "observed").
 #' @param type Type of graph generated. Defaults to 'full' (fully connected graph) with arrows drawn between confounders (both directions) and from confounders to mediators. If type ='saturated', a similar saturated graph is produced except confounders are not connected to mediators, featuring bi-directional arrows between each of the confounders (follows the ESC-DAGs Mapping Stage in Ferguson et al. (2020)). When type = 'first' or 'last', inputted new_nodes are ordered first or last if a confounder, mediator, or treatment node_role is selected.
 #' @param temporal_reference_node Supply an alternative reference, or simply leave blank. Default settings uses dagitty::topologicalOrdering() and selects the first of the inputted node_role (e.g., first confounder) as the temporal point of reference. If type = 'last', the last node is used.
 #' @param print_edges Print new edges in console, defaults to TRUE.
-#' @param coords_spec Adjust node placement with lambda, a higher value increases volatility and results in more extreme DAG structures. Threshold controls the closeness of nodes.
+#' @param coords_spec Adjust node placement when generating coordinates with a numeric value > 0 (recommended < 10).
+#' @param threshold Set the allowed closeness of new node coordinates. Numeric value between 0 and 1 for the minimum distance allowed when generating coordinates.
 #' @returns A dagitty object.
 #' @examples
 #' dag <- add_nodes(dag, new_nodes, node_role)
@@ -481,7 +482,8 @@ add_nodes <- function(dag,
                       node_role = NULL,
                       type = NULL,
                       print_edges = TRUE,
-                      coords_spec = c(lambda = 0.1, threshold = 0.5)
+                      coords_spec = 0.1,
+                      threshold = 0.5
                       ){
   .datatable.aware <- TRUE
 
@@ -540,7 +542,8 @@ add_nodes <- function(dag,
     new_coordinates <- renew_coords(dag = dag,
                                 new_node_names = new_node_names,
                                 coordinates = coordinates,
-                                coords_spec = coords_spec[ complete.cases(coords_spec) ] )
+                                coords_spec = coords_spec,
+                                threshold = threshold)
     dagitty::coordinates(dag) <- new_coordinates
   }, warning = function(w){
     message(paste("Warning:", w, "\n Using alternative function to generate dag coordinates."))
@@ -567,7 +570,7 @@ add_nodes <- function(dag,
 #' @importFrom dagitty edges latents exposures outcomes
 #' @param dag A dagitty object. Must include exposure and outcome nodes.
 #' @param nodes Inputted vector of node names to be added to the graph.
-#' @param node_role Determines which nodes will be connected, default fully connects new node to all existing nodes. Other options include the following: c("confounder", "treatment", "outcome", "mediator", "mediator_outcome_confounder", "instrumental", "competing_exposure", "collider", "latent", "observed").
+#' @param node_role Determines which nodes will be connected, default fully connects new node to all existing nodes. Other options include the following: c("confounder", "treatment", "outcome", "mediator", "mediator_outcome_confounder", "instrument", "competing_exposure", "collider", "latent", "observed").
 #' @param type Type of graph generated. Defaults to 'full' (fully connected graph) with arrows drawn between confounders (both directions) and from confounders to mediators. If type ='saturated', a similar saturated graph is produced except confounders are not connected to mediators, featuring bi-directional arrows between each of the confounders (follows the ESC-DAGs Mapping Stage in Ferguson et al. (2020)). When type = 'first' or 'last', inputted nodes are ordered first or last if a confounder, mediator, or treatment node_role is selected.
 #' @param print_edges Print new edges in console, defaults to TRUE.
 #' @returns A dagitty object.
@@ -648,7 +651,8 @@ saturate_nodes <- function(dag,
 #' @param new_node_type A suffix added to each of the new node names, e.g. "post_treatment", or "t" (a number is added for each repeat if num_repeats is specified)
 #' @param temporal_reference_node Supply an alternative reference, or simply leave blank. Default settings use treatment as the temporal point of reference for adding new (post-treatment) nodes, but if other node types are specified it can be useful to specify the existing node name.
 #' @param num_repeats Number of additional copies of nodes, such as time points. Each repeat number is included at the end of new node names (new_new_t1, new_node_t2, etc.).
-#' @param coords_spec Adjust node placement with lambda, a higher value increases volatility and results in more extreme DAG structures. Threshold controls the closeness of nodes.
+#' @param coords_spec Adjust node placement when generating coordinates with a numeric value > 0 (recommended < 10).
+#' @param threshold Set the allowed closeness of nodes in newly generated coordinates. Numeric value between 0 and 1 for the minimum distance allowed when generating coordinates.
 #' @returns A dagitty object.
 #' @examples
 #' dag <- copy_nodes(dag, existing_nodes)
@@ -660,7 +664,8 @@ copy_nodes <- function(dag,
                        new_node_type = "post_treatment",
                        temporal_reference_node = NA,
                        num_repeats = NA,
-                       coords_spec = c(lambda = 0.1, threshold = 0.5)
+                       coords_spec = 0.1,
+                       threshold = 0.5
                        ){
   ###### NOTE: this was written before add_nodes() and saturate_nodes()
   ###### needs to be updated before adding @export
@@ -675,16 +680,17 @@ copy_nodes <- function(dag,
 
   if( dagitty::is.dagitty(existing_nodes) ){   # check for an existing dag (inputted as existing_nodes)
 
-    dag <- copy_nodes_helper2(dag,
-                         edges,
-                         node_names,
-                         existing_nodes,
-                         treatments,
-                         outcomes,
-                         latent_vec,
-                         coordinates,
-                         coords_spec
-    )
+    dag <- copy_nodes_helper2(dag = dag,
+                         edges = edges,
+                         node_names = node_names,
+                         new_dag = existing_nodes,
+                         treatments = treatments,
+                         outcomes = outcomes,
+                         latent_vec = latent_vec,
+                         coordinates = coordinates,
+                         coords_spec = coords_spec,
+                         threshold = threshold
+                         )
 
   }else if( length( node_names[ node_names %in% existing_nodes] ) != length( existing_nodes ) ){  # checks that all specified reference nodes are in the dag
 
@@ -692,20 +698,21 @@ copy_nodes <- function(dag,
 
   }else{ # copy existing nodes to a new graph
 
-    dag <- copy_nodes_helper(dag,
-                                 edges,
-                                 node_names,
-                                 treatments,
-                                 outcomes,
-                                 latent_vec,
-                                 coordinates,
-                                 existing_nodes,
-                                 existing_node_type,
-                                 new_node_type,
-                                 temporal_reference_node,
-                                 num_repeats,
-                                 coords_spec
-    )
+    dag <- copy_nodes_helper(dag = dag,
+                             edges = edges,
+                             node_names = node_names,
+                             treatments = treatments,
+                             outcomes = outcomes,
+                             latent_vec = latent_vec,
+                             coordinates = coordinates,
+                             existing_nodes = existing_nodes,
+                             existing_node_type = existing_node_type,
+                             new_node_type = new_node_type,
+                             temporal_reference_node = temporal_reference_node,
+                             num_repeats = num_repeats,
+                             coords_spec = coords_spec,
+                             threshold = threshold
+                             )
 
   }
 
@@ -722,7 +729,8 @@ copy_nodes <- function(dag,
 #' @importFrom dagitty dagitty edges exposures outcomes latents coordinates
 #' @param dag First dagitty object.
 #' @param new_dag Second dagitty object, added to the first.
-#' @param coords_spec Adjust node placement with lambda; a higher value increases volatility and results in more extreme DAG structures. Threshold controls the closeness of nodes.
+#' @param coords_spec Adjust node placement when generating coordinates with a numeric value > 0 (recommended < 10).
+#' @param threshold Set the allowed closeness of nodes in newly generated coordinates. Numeric value between 0 and 1 for the minimum distance allowed when generating coordinates.
 #' @returns A dagitty object
 #' @examples
 #' new_graph <- join_graphs(dag, new_dag)
@@ -730,7 +738,8 @@ copy_nodes <- function(dag,
 #' @export
 join_graphs <- function(dag,
                         new_dag,
-                        coords_spec = c(lambda = 0.1, threshold = 0.5)
+                        coords_spec = 0.1,
+                        threshold = 0.5
                         ){
   .datatable.aware <- TRUE
 
@@ -766,7 +775,7 @@ join_graphs <- function(dag,
 
 
   coordinates_new_dag <- dagitty::coordinates(new_dag) # extract new dag coordinates
-  new_node_coords_y <- coordinates_new_dag$y[ names(coordinates_new_dag$y)  %in% new_node_names] # saves duplicate node names
+  new_node_coords_y <- coordinates_new_dag$y[ names(coordinates_new_dag$y)%in% new_node_names] # saves duplicate node names
   new_node_names <- names( new_node_coords_y[ order(new_node_coords_y) ] ) # existing dag node names in ascending y-coords order
 
   node_names <- c(node_names, new_node_names) # combine both dag node names
@@ -775,11 +784,11 @@ join_graphs <- function(dag,
 
   dag <- rebuild_dag(dag, edges)
 
-
   coordinates <- renew_coords(dag = dag,
                               new_node_names = new_node_names,
                               coordinates = coordinates,
-                              coords_spec = coords_spec[ complete.cases(coords_spec) ] )
+                              coords_spec = coords_spec,
+                              threshold = threshold)
 
   dagitty::coordinates(dag) <- coordinates
 

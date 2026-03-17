@@ -9,7 +9,10 @@ plot_dagitty(
   coords_spec = 0.1,
   labels = NULL,
   label_type = "name",
-  label_placement = "label_repel"
+  label_placement = "text_box",
+  seed = NULL,
+  include_legend = c("outcome", "treatment", "confounder", "mediator", "instrument",
+    "competing_exposure", "collider", "latent")
 )
 }
 \arguments{
@@ -21,7 +24,11 @@ plot_dagitty(
 
 \item{label_type}{Defaults to using the node names of the inputted dag, or 'initials' if specified. Labels are only assigned by plot_dagitty() if nodes are not already labelled, using a 'ggdag::dag_label()' wrapper..}
 
-\item{label_placement}{Labels are placed in a text box adjacent each node by default, or can be placed inside each node using 'label_node'. It is recommended to also specify label_type = 'initials' where label_placement = 'label_node' is used.}
+\item{label_placement}{Labels are placed in a text box adjacent each node by default (label_placement = "text_box"), or can be placed inside each node using 'node'. It is recommended to also specify label_type = 'initials' where label_placement = 'label_node' is used.}
+
+\item{seed}{Numeric input, sets seed for label placement (passed to ggdag::geom_dag_label_repel() seed parameter).}
+
+\item{include_legend}{Node roles to include in legend. This parameter controls the DAG node colour scale and can be overridden by setting include_legend = FALSE. To include all possible node roles use include_legend = c("outcome", "treatment", "confounder", "mediator", "mediator_outcome_confounder", "instrument", "competing_exposure", "collider", "latent", "observed")}
 }
 \value{
 ggdag plot
@@ -33,6 +40,6 @@ Essentially a wrapper for dagitty and ggdag plotting functions with added featur
 \examples{
 plot_dagitty(dag)
 
-plot_dagitty(dag, coords_spec = 3) # increasing spec for more variation in node placement
+plot_dagitty(dag, coords_spec = 0.1) # increasing spec for more variation in node placement
 
 }

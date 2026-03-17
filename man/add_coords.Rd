@@ -4,7 +4,7 @@
 \alias{add_coords}
 \title{Generate new dag coordinates}
 \usage{
-add_coords(dag, coords_spec = 0.1)
+add_coords(dag, coords_spec = 0.1, threshold = 0.8)
 }
 \arguments{
 \item{dag}{Dagitty object, with at least a treatment and outcome set. Nodes are automatically placed in the following categories: treatment, outcome, confounder, mediator, latent variable, mediator-outcome-confounder, or instrumental variable.}
@@ -20,7 +20,7 @@ dagitty object with coordinates.
 Generate new dag coordinates
 }
 \examples{
-dag <- add_coords(dag, coords_spec = 3) # update dagitty object node coordinates
+dag <- add_coords(dag, coords_spec = 0.1) # update dagitty object node coordinates
 
 plot_dagitty(dag) # check coordinates
 
