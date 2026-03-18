@@ -4,12 +4,12 @@
 \alias{keep_edges}
 \title{Remove dagitty object edges}
 \usage{
-keep_edges(dag, edges_to_keep = NA)
+keep_edges(edges_to_keep, dag)
 }
 \arguments{
-\item{dag}{A saturated graph dagitty object. Exposure and outcome must be indicated, and optionally can include assigned coordinates.}
-
 \item{edges_to_keep}{A vector of directed arrows to be kept between (non-treatment and non-outcome) variables, e.g. c("Z1 -> Z2", "Z2 -> Z3"), c("y", "n", "y"), or c(TRUE, FALSE, TRUE).}
+
+\item{dag}{A saturated graph dagitty object. Exposure and outcome must be indicated, and optionally can include assigned coordinates.}
 }
 \value{
 A dagitty object, with directed arrows removed based on edges_to_keep.

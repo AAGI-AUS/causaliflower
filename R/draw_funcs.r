@@ -161,6 +161,11 @@ draw_confounder_edges <- function(type,
                                   e
                                   ){
 
+  constant <- 0
+  if( length(confounders) > 1 ){
+    constant <- 1
+  }
+
   if( all( complete.cases(confounder_vec) ) ){
 
     ## confounder edges ##
@@ -186,13 +191,13 @@ draw_confounder_edges <- function(type,
 
       outcomes <- outcomes[1] # only the first outcome will be connected to confounders
 
-      confounder_list <- suppressWarnings( lapply(1:(length(confounders) - 1), function(x){
+      confounder_list <- suppressWarnings( lapply(1:(length(confounders) - constant), function(x){
 
         lapply(1:length(confounders[[x]]), function(y){
 
-          confounder_list[[x]] <- sapply(1:length(confounders[[x+1]]), function(z){
+          confounder_list[[x]] <- sapply(1:length(confounders[[x+constant]]), function(z){
 
-            list( c( ancestor = confounders[[x]][y], edge = "->", descendant = confounders[[x+1]][z]) )
+            list( c( ancestor = confounders[[x]][y], edge = "->", descendant = confounders[[x+constant]][z]) )
 
           })
 
@@ -209,9 +214,9 @@ draw_confounder_edges <- function(type,
 
         len_confounders <- length(confounders)
 
-        confounder_list <- suppressWarnings( lapply(1:(length(confounders) - 1), function(x){
+        confounder_list <- suppressWarnings( lapply(1:(length(confounders) - constant), function(x){
 
-          nodes_after_x <- unlist( confounders[(x+1):len_confounders]) # nodes occurring after current position (x)
+          nodes_after_x <- unlist( confounders[(x+constant):len_confounders]) # nodes occurring after current position (x)
 
           lapply(1:length(confounders[[x]]), function(y){
 
@@ -479,6 +484,11 @@ draw_outcome_edges <- function(type,
                                collider_vec,
                                e
                                ){
+  constant <- 0
+  if( length(outcomes) > 1 ){
+    constant <- 1
+  }
+
   ## outcome edges ##
   outcome_list <- c()
   outcome_vec <- unlist(outcomes)
@@ -489,13 +499,13 @@ draw_outcome_edges <- function(type,
 
     # connect all outcomes (fully connected or saturated graph type)
     if( length(outcomes) > 1 ){
-      outcome_list <- suppressWarnings( lapply(1:(length(outcomes) - 1), function(x){
+      outcome_list <- suppressWarnings( lapply(1:(length(outcomes) - constant), function(x){
 
         lapply(1:length(outcomes[[x]]), function(y){
 
-          outcome_list[[x]] <- sapply(1:length(outcomes[[x+1]]), function(z){
+          outcome_list[[x]] <- sapply(1:length(outcomes[[x+constant]]), function(z){
 
-            list( c( ancestor = outcomes[[x]][y], edge = "->", descendant = outcomes[[x+1]][z]) )
+            list( c( ancestor = outcomes[[x]][y], edge = "->", descendant = outcomes[[x+constant]][z]) )
 
           })
 
@@ -515,9 +525,9 @@ draw_outcome_edges <- function(type,
     }else if( (type == "full" | type == "saturated") & length(outcomes) > 1 ){ # connect all node positions to each other
       len_outcomes <- length(outcomes)
 
-      outcome_list <- suppressWarnings( lapply(1:(length(outcomes) - 1), function(x){
+      outcome_list <- suppressWarnings( lapply(1:(length(outcomes) - constant), function(x){
 
-        nodes_after_x <- unlist( outcomes[(x+1):len_outcomes]) # nodes occurring after current position (x)
+        nodes_after_x <- unlist( outcomes[(x+constant):len_outcomes]) # nodes occurring after current position (x)
 
         lapply(1:length(outcomes[[x]]), function(y){
 

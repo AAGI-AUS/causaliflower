@@ -68,7 +68,7 @@ build_graph <- function(variables = NA,
                        mediator_outcome_confounders = NA,
                        competing_exposures = NA,
                        colliders = NA,
-                       type = "ordered"
+                       type = "full"
                        ){
 
   # check for an existing dag (inputted as confounders)
@@ -177,280 +177,6 @@ build_graph <- function(variables = NA,
                          treatments,
                          outcomes,
                          latent_vec)
-
-  return(dag)
-
-}
-
-#' Assess dagitty object edges
-#'
-#' assess_edges() provides ways to assess connected edges based on causal criteria and/or user inputs.
-#'
-#' @importFrom data.table as.data.table is.data.table data.table
-#' @importFrom dagitty edges
-#' @param dag A dagitty object. Must include exposure and outcome nodes.
-#' @param edges_to_assess Defaults to "all" edges, "bidirectional" includes only the edges where nodes are connected in both directions.
-#' @param edges_to_keep A vector of directed arrows to be kept between (non-treatment and non-outcome) variables, e.g. c("Z1 -> Z2", "Z2 -> Z3"), c("y", "n", "y"), or c(TRUE, FALSE, TRUE).
-#' @param assess_causal_criteria Defaults to FALSE. If TRUE, the user is guided through a sequence that assesses each pair of connected nodes using causal criteria. Based on the Evidence Synthesis for Constructing Directed Acyclic Graphs (ESC-DAGs) from Ferguson et al. (2020).
-#' @param causal_criteria = Default "ESCDAGs" (Ferguson et al., 2020) causal criteria considers temporality, face-validity, and recourse to theory. Other causal criteria can be supplied as a data.frame, see summary(ESCDAGs) for column names.
-#' @param causal_criteria_answers = NULL,
-#' @returns A list or vector of edges.
-#' @examples
-#' ## initial dag
-#' {
-#'   variables <- c("Z1", "Z2", "Z3") # these are treated as confounders
-#'   treatments <- "X"
-#'   outcomes <- "Y"
-#'   type <- "ordered"
-#'
-#'   dag <- build_graph(type = type,
-#'                      variables = variables,
-#'                      treatments = treatments,
-#'                      outcomes = outcomes)
-#' }
-#'
-#' ## Using a saturated graph as an example, created from an existing dag
-#' saturated_graph <- build_graph(type = c('full', 'saturated'), # choose a type
-#'                                variables = dag) # existing dagitty object inputted
-#'
-#' ## Option 1: existing dag as edges to keep
-#' edges <- assess_edges(saturated_graph, edges_to_keep = dag)
-#'
-#' ## Option 2: guided causal criteria sequence (rule out edges already included in existing dag)
-#' edges_to_keep <- assess_edges(saturated_graph, edges_to_keep = dag,
-#'                               assess_causal_criteria = TRUE)
-#'
-#' @export
-assess_edges <- function(dag,
-                         edges_to_assess = "all",
-                         edges_to_keep = NA,
-                         assess_causal_criteria = FALSE,
-                         causal_criteria = ESCDAGs,
-                         causal_criteria_answers = NULL
-                         ){
-  .datatable.aware <- TRUE
-  # debugging: edges_to_keep <- initial_dag # dag <- saturated_graph
-
-  # get dag edges
-  edges <- pdag_to_dag_edges(dag) # also checks for bi-directional edges "--" (pdag) or "<->" and changes to "->", adding rows for each edge
-
-  if( dagitty::is.dagitty(edges_to_keep) ){
-
-    edges_to_keep <- pdag_to_dag_edges(edges_to_keep)
-
-    edges <-  edges[!edges_to_keep, on = c("v", "e", "w")]
-
-  }else if( all( complete.cases( unlist(edges_to_keep) ) ) ){
-
-    if(is.vector( edges_to_keep ) ){
-
-      edges_to_keep <- data.table::as.data.table( do.call( rbind, strsplit(edges_to_keep, " ") ) )
-
-      colnames(edges_to_keep) <- c("v", "e", "w")
-
-    }
-
-    if( is.data.frame(edges_to_keep) | data.table::is.data.table(edges_to_keep) ){
-
-      edges <-  edges[!edges_to_keep, on = c("v", "e", "w")]
-
-    }else{
-
-      stop("'edges_to_keep' must be a data frame, data table, vector, or dagitty object. Please check inputs and try again.")
-
-    }
-
-  }
-
-
-  if( assess_causal_criteria == TRUE ){
-
-    if( edges_to_assess == "bidirectional" ){ # if use inputs edges_to_assess = "bidirectional"
-
-      # identify all bidirectional edges
-      edges_to_assess <- suppressWarnings( lapply( 1:nrow(edges), function(x){
-
-        lapply( 1:nrow(edges), function(y){
-
-          if( ( identical( edges$v[x], edges$w[y] ) & identical( edges$w[x], edges$v[y] ) ) ){
-
-            edges_to_assess[x] <- edges[x, ]
-
-          }
-
-        } )
-
-      } ) )
-
-
-      edges_to_assess <- do.call(rbind, unlist(edges_to_assess, recursive = FALSE) ) # expand list elements as dataframe rows
-
-      # remove edges_to_assess from dag edges
-      edges <- data.table::setDT(edges)[!edges_to_assess, on = c("v", "e", "w")]
-
-      if( all( complete.cases( edges_to_keep ) ) ){ # check if edges_to_keep specified
-
-        # combine unidirectional edges and edges_to_keep
-        edges_to_keep <- rbind(edges, edges_to_keep)
-
-      }else{ # otherwise unidirectional edges become edges_to_keep
-
-        edges_to_keep <- edges
-      }
-
-    }else{ # edges_to_assess = all
-
-      edges_to_assess <- edges
-    }
-
-    edges <- causal_criteria_sequence(edges = edges_to_assess,
-                                      check_skip_sequence = FALSE,
-                                      edges_to_keep = edges_to_keep,
-                                      causal_criteria = causal_criteria,
-                                      causal_criteria_answers = causal_criteria_answers)
-
-    return(edges)
-
-  }
-
-  if( nrow(edges) != 0 ){
-
-
-    if( all( complete.cases( unlist(edges_to_keep) ) ) ){
-
-      ## collapse edges_to_keep to a vector
-      num_edges <- nrow(edges_to_keep)
-
-      edges_to_keep <- suppressWarnings( sapply(1:num_edges, function(x){
-
-        edges_to_keep <- paste( edges_to_keep[x,], collapse=" ")
-
-      }) )
-
-    }
-
-    # group edges by unique node names
-    edges_list <- print_edges_helper(edges)
-
-    cat( paste("c(", paste( unlist(edges_list), collapse=",\n\n" ), ")", sep = "\n", collapse = "") )
-
-  }else{
-
-    stop("There are no edges to assess. Please check the supplied dagitty object and try again.")
-
-
-  }
-
-
-
-  if( !all( complete.cases(edges_to_keep) ) & assess_causal_criteria == FALSE ){
-
-    edges <- suppressWarnings( sapply(1:nrow(edges), function(x){
-
-      edges <- paste( edges[x,], collapse=" ")
-
-    }) )
-
-    message("\nOutputted and printed edges to assess - copy and paste in a .R file to use as a vector object.")
-
-    return(edges)
-
-  }
-
-  edges_list <- list(
-    edges_to_assess = edges,
-    edges_to_keep = edges_to_keep
-
-  )
-
-  message("\nOutputted edges list contains 'edges_to_assess' and 'edges_to_keep'.
-          \n\nPrinted edges to assess - copy and paste in a .R file to use as a vector object.")
-
-  return(edges_list)
-
-}
-
-
-#' Remove dagitty object edges
-#'
-#' keep_edges() removes edges based on user inputs.
-#'
-#' @importFrom data.table as.data.table is.data.table data.table
-#' @importFrom dagitty edges exposures outcomes latents coordinates dagitty isAcyclic
-#' @param dag A saturated graph dagitty object. Exposure and outcome must be indicated, and optionally can include assigned coordinates.
-#' @param edges_to_keep A vector of directed arrows to be kept between (non-treatment and non-outcome) variables, e.g. c("Z1 -> Z2", "Z2 -> Z3"), c("y", "n", "y"), or c(TRUE, FALSE, TRUE).
-#' @returns A dagitty object, with directed arrows removed based on edges_to_keep.
-#' @examples
-#' ## initial dag
-#' {
-#'   variables <- c("Z1", "Z2", "Z3") # these are treated as confounders
-#'   treatments <- "X"
-#'   outcomes <- "Y"
-#'   type <- "ordered"
-#'
-#'   dag <- build_graph(type = type,
-#'                      variables = variables,
-#'                      treatments = treatments,
-#'                      outcomes = outcomes)
-#' }
-#'
-#' ## Using a saturated graph as an example, created from an existing dag
-#' saturated_graph <- build_graph(type = c('full', 'saturated'), # choose a type
-#'                                variables = dag) # existing dagitty object inputted
-#'
-#' ## guided causal criteria sequence (rule out edges already included in existing dag)
-#' edges_to_keep <- assess_edges(saturated_graph, edges_to_keep = dag,
-#'                               assess_causal_criteria = TRUE)
-#'
-#' dag <- keep_edges(saturated_graph, edges_to_keep)
-#'
-#' @export
-keep_edges <- function(dag,
-                       edges_to_keep = NA
-                       ){
-  .datatable.aware <- TRUE
-
-  edges <- pdag_to_dag_edges(dag)
-
-  if( dagitty::is.dagitty(edges_to_keep)){
-
-    edges_to_keep <- pdag_to_dag_edges(edges_to_keep)
-
-  }else if( is.vector( edges_to_keep ) ){
-
-    edges_to_keep <- data.table::as.data.table( do.call( rbind, strsplit(edges_to_keep, " ") ) )
-
-    colnames(edges_to_keep) <- c("v", "e", "w")
-
-  }
-
-  if( all(is.null(edges_to_keep)) | all(is.na(edges_to_keep)) ){
-
-    stop("No edges to keep were supplied.")
-
-  }
-
-
-  if( all( !is.na(edges_to_keep) )){
-
-    if( ( is.data.frame(edges_to_keep) | data.table::is.data.table(edges_to_keep) ) ){
-
-      edges <-  edges[ edges_to_keep, on = c("v", "e", "w")]
-
-
-    }else{
-
-      stop("Edges_to_keep must be a data frame, data table, vector, or dagitty object. Please check inputs and try again.")
-
-    }
-  }
-
-  dag <- rebuild_dag(dag, edges)
-
-
-  if(dagitty::isAcyclic(dag) == FALSE){
-    warning("The outputted graph contains cycles, and is therefore not a directed acyclic graph (DAG). Relationships may need to be further assessed.")
-  }
 
   return(dag)
 
@@ -797,8 +523,281 @@ join_graphs <- function(dag,
 }
 
 
-#' Assess graph edges using causal criteria
+#' Assess dagitty object edges
 #'
+#' assess_edges() provides ways to assess connected edges based on causal criteria and/or user inputs.
+#'
+#' @importFrom data.table as.data.table is.data.table data.table
+#' @importFrom dagitty edges
+#' @param dag A dagitty object. Must include exposure and outcome nodes.
+#' @param edges_to_assess Defaults to "all" edges, "bidirectional" includes only the edges where nodes are connected in both directions.
+#' @param edges_to_keep A vector of directed arrows to be kept between (non-treatment and non-outcome) variables, e.g. c("Z1 -> Z2", "Z2 -> Z3"), c("y", "n", "y"), or c(TRUE, FALSE, TRUE).
+#' @param assess_causal_criteria Defaults to FALSE. If TRUE, the user is guided through a sequence that assesses each pair of connected nodes using causal criteria. Based on the Evidence Synthesis for Constructing Directed Acyclic Graphs (ESC-DAGs) from Ferguson et al. (2020).
+#' @param causal_criteria = Default "ESCDAGs" (Ferguson et al., 2020) causal criteria considers temporality, face-validity, and recourse to theory. Other causal criteria can be supplied as a data.frame, see summary(ESCDAGs) for column names.
+#' @param save_answers = NULL,
+#' @returns A list or vector of edges.
+#' @examples
+#' ## initial dag
+#' {
+#'   variables <- c("Z1", "Z2", "Z3") # these are treated as confounders
+#'   treatments <- "X"
+#'   outcomes <- "Y"
+#'   type <- "ordered"
+#'
+#'   dag <- build_graph(type = type,
+#'                      variables = variables,
+#'                      treatments = treatments,
+#'                      outcomes = outcomes)
+#' }
+#'
+#' ## Using a saturated graph as an example, created from an existing dag
+#' saturated_graph <- build_graph(type = c('full', 'saturated'), # choose a type
+#'                                variables = dag) # existing dagitty object inputted
+#'
+#' ## Option 1: existing dag as edges to keep
+#' edges <- assess_edges(saturated_graph, edges_to_keep = dag)
+#'
+#' ## Option 2: guided causal criteria sequence (rule out edges already included in existing dag)
+#' edges_to_keep <- assess_edges(saturated_graph, edges_to_keep = dag,
+#'                               assess_causal_criteria = TRUE)
+#'
+#' @export
+assess_edges <- function(dag,
+                         edges_to_assess = "all",
+                         edges_to_keep = NA,
+                         assess_causal_criteria = FALSE,
+                         save_answers = NULL,
+                         causal_criteria = ESCDAGs
+){
+  .datatable.aware <- TRUE
+  # debugging: edges_to_keep <- initial_dag # dag <- saturated_graph
+
+  # get dag edges
+  edges <- pdag_to_dag_edges(dag) # also checks for bi-directional edges "--" (pdag) or "<->" and changes to "->", adding rows for each edge
+
+  if( dagitty::is.dagitty(edges_to_keep) ){
+
+    edges_to_keep <- pdag_to_dag_edges(edges_to_keep)
+
+    edges <-  edges[!edges_to_keep, on = c("v", "e", "w")]
+
+  }else if( all( complete.cases( unlist(edges_to_keep) ) ) ){
+
+    if(is.vector( edges_to_keep ) ){
+
+      edges_to_keep <- data.table::as.data.table( do.call( rbind, strsplit(edges_to_keep, " ") ) )
+
+      colnames(edges_to_keep) <- c("v", "e", "w")
+
+    }
+
+    if( is.data.frame(edges_to_keep) | data.table::is.data.table(edges_to_keep) ){
+
+      edges <-  edges[!edges_to_keep, on = c("v", "e", "w")]
+
+    }else{
+
+      stop("'edges_to_keep' must be a data frame, data table, vector, or dagitty object. Please check inputs and try again.")
+
+    }
+
+  }
+
+
+  if( assess_causal_criteria == TRUE ){
+
+    if( edges_to_assess == "bidirectional" | edges_to_assess == "bidirected" |
+        edges_to_assess == "bi-directional" | edges_to_assess == "bi-directed" ){ # if use inputs edges_to_assess = "bidirectional"
+
+      # identify all bidirectional edges
+      edges_to_assess <- suppressWarnings( lapply( 1:nrow(edges), function(x){
+
+        lapply( 1:nrow(edges), function(y){
+
+          if( ( identical( edges$v[x], edges$w[y] ) & identical( edges$w[x], edges$v[y] ) ) ){
+
+            edges_to_assess[x] <- edges[x, ]
+
+          }
+
+        } )
+
+      } ) )
+
+
+      edges_to_assess <- do.call(rbind, unlist(edges_to_assess, recursive = FALSE) ) # expand list elements as dataframe rows
+
+      # remove edges_to_assess from dag edges
+      edges <- data.table::setDT(edges)[!edges_to_assess, on = c("v", "e", "w")]
+
+      if( all( complete.cases( edges_to_keep ) ) ){ # check if edges_to_keep specified
+
+        # combine unidirectional edges and edges_to_keep
+        edges_to_keep <- rbind(edges, edges_to_keep)
+
+      }else{ # otherwise unidirectional edges become edges_to_keep
+
+        edges_to_keep <- edges
+      }
+
+    }
+
+    edges <- causal_criteria_sequence(edges = edges,
+                                      check_skip_sequence = FALSE,
+                                      edges_to_keep = edges_to_keep,
+                                      causal_criteria = causal_criteria,
+                                      save_answers = save_answers)
+
+    return(edges)
+
+  }
+
+  if( nrow(edges) != 0 ){
+
+
+    if( all( complete.cases( unlist(edges_to_keep) ) ) ){
+
+      ## collapse edges_to_keep to a vector
+      num_edges <- nrow(edges_to_keep)
+
+      edges_to_keep <- suppressWarnings( sapply(1:num_edges, function(x){
+
+        edges_to_keep <- paste( edges_to_keep[x,], collapse=" ")
+
+      }) )
+
+    }
+
+    # group edges by unique node names
+    edges_list <- print_edges_helper(edges)
+
+    cat( paste("c(", paste( unlist(edges_list), collapse=",\n\n" ), ")", sep = "\n", collapse = "") )
+
+  }else{
+
+    stop("There are no edges to assess. Please check the supplied dagitty object and try again.")
+
+
+  }
+
+
+
+  if( !all( complete.cases(edges_to_keep) ) & assess_causal_criteria == FALSE ){
+
+    edges <- suppressWarnings( sapply(1:nrow(edges), function(x){
+
+      edges <- paste( edges[x,], collapse=" ")
+
+    }) )
+
+    message("\nOutputted and printed edges to assess - copy and paste in a .R file to use as a vector object.")
+
+    return(edges)
+
+  }
+
+  edges_list <- list(
+    edges_to_assess = edges,
+    edges_to_keep = edges_to_keep
+
+  )
+
+  message("\nOutputting list containing 'edges_to_assess' and 'edges_to_keep'.
+          \n\nPrinted edges to assess - copy and paste in a .R file to use as a vector object.")
+
+  return(edges_list)
+
+}
+
+
+#' Remove dagitty object edges
+#'
+#' keep_edges() removes edges based on user inputs.
+#'
+#' @importFrom data.table as.data.table is.data.table data.table
+#' @importFrom dagitty edges exposures outcomes latents coordinates dagitty isAcyclic
+#' @param dag A saturated graph dagitty object. Exposure and outcome must be indicated, and optionally can include assigned coordinates.
+#' @param edges_to_keep A vector of directed arrows to be kept between (non-treatment and non-outcome) variables, e.g. c("Z1 -> Z2", "Z2 -> Z3"), c("y", "n", "y"), or c(TRUE, FALSE, TRUE).
+#' @returns A dagitty object, with directed arrows removed based on edges_to_keep.
+#' @examples
+#' ## initial dag
+#' {
+#'   variables <- c("Z1", "Z2", "Z3") # these are treated as confounders
+#'   treatments <- "X"
+#'   outcomes <- "Y"
+#'   type <- "ordered"
+#'
+#'   dag <- build_graph(type = type,
+#'                      variables = variables,
+#'                      treatments = treatments,
+#'                      outcomes = outcomes)
+#' }
+#'
+#' ## Using a saturated graph as an example, created from an existing dag
+#' saturated_graph <- build_graph(type = c('full', 'saturated'), # choose a type
+#'                                variables = dag) # existing dagitty object inputted
+#'
+#' ## guided causal criteria sequence (rule out edges already included in existing dag)
+#' edges_to_keep <- assess_edges(saturated_graph, edges_to_keep = dag,
+#'                               assess_causal_criteria = TRUE)
+#'
+#' dag <- keep_edges(saturated_graph, edges_to_keep)
+#'
+#' @export
+keep_edges <- function(edges_to_keep,
+                       dag
+){
+  .datatable.aware <- TRUE
+
+  edges <- pdag_to_dag_edges(dag)
+
+  if( dagitty::is.dagitty(edges_to_keep)){
+
+    edges_to_keep <- pdag_to_dag_edges(edges_to_keep)
+
+  }else if( is.vector( edges_to_keep ) ){
+
+    edges_to_keep <- data.table::as.data.table( do.call( rbind, strsplit(edges_to_keep, " ") ) )
+
+    colnames(edges_to_keep) <- c("v", "e", "w")
+
+  }
+
+  if( all(is.null(edges_to_keep)) | all(is.na(edges_to_keep)) ){
+
+    stop("No edges to keep were supplied.")
+
+  }
+
+
+  if( all( !is.na(edges_to_keep) )){
+
+    if( ( is.data.frame(edges_to_keep) | data.table::is.data.table(edges_to_keep) ) ){
+
+      edges <-  edges[ edges_to_keep, on = c("v", "e", "w")]
+
+
+    }else{
+
+      stop("Edges_to_keep must be a data frame, data table, vector, or dagitty object. Please check inputs and try again.")
+
+    }
+  }
+
+  dag <- rebuild_dag(dag, edges)
+
+
+  if(dagitty::isAcyclic(dag) == FALSE){
+    warning("The outputted graph contains cycles, and is therefore not a directed acyclic graph (DAG). Relationships may need to be further assessed.")
+  }
+
+  return(dag)
+
+}
+
+
+#' Assess graph edges using causal criteria
+#' @importFrom data.table data.table
 #' @param edges vector of edges whose relationships are to be assessed
 #' @param num_edges number of edges to be assessed
 #' @param check_skip_sequence TRUE or FALSE depending on prior inputs
@@ -808,9 +807,35 @@ causal_criteria_sequence <- function(edges,
                                      check_skip_sequence,
                                      edges_to_keep,
                                      causal_criteria,
-                                     causal_criteria_answers
+                                     save_answers
                                      ){
-  # debugging: edges <- edges_to_assess # check_skip_sequence <- FALSE # edges_to_keep <- NA
+  .datatable.aware <- TRUE
+
+  if( length(save_answers) >= 3 ){
+    if( nrow(save_answers) == nrow(edges) ){
+      len_answers <- length(save_answers)
+      if( all( save_answers[,1:3] == edges ) & len_answers == (nrow(causal_criteria) + 3) ){
+
+        answers <- save_answers[,4:len_answers]
+        cols_required <- causal_criteria[,"name"][causal_criteria[, "required" ] == "yes"]
+        answers <- answers[, ..cols_required]
+
+        edges <- lapply(1:nrow(save_answers), function(x){
+          edges <- edges[x,][all((answers == "y")[x,]), ]
+        })
+        edges <- do.call( rbind, edges)
+
+        if( all(complete.cases(edges_to_keep)) & length(edges_to_keep) == 3 ){
+          edges <- rbind(edges_to_keep, edges)
+        }
+        message("\nOutputting edges. Causal criteria decision log printed.")
+        print(criteria_answers)
+        return(edges)
+      }
+    }
+    stop("Length of answers does not match the causal criteria provided. Please check inputs and try again.")
+  }
+
   if(check_skip_sequence == FALSE) {
 
     num_edges <- nrow(edges)
@@ -846,6 +871,8 @@ causal_criteria_sequence <- function(edges,
       }
 
     }
+
+
 
     removed_arrows <- c()
     arrow_count <- 1
@@ -929,8 +956,6 @@ causal_criteria_sequence <- function(edges,
         arrow_count <- arrow_count + 1
       }
 
-
-
     if(num_arrow_to_remove > 0){
 
       criteria_answers <- cbind(edges, criteria_answers)
@@ -943,22 +968,36 @@ causal_criteria_sequence <- function(edges,
 
       }
 
+      if( length(save_answers) == 0 ){
+        message("\nOutputting edges. Causal criteria decision log printed.")
+        print(criteria_answers)
+        return(edges)
+      }
+
+
       edges <- list(edges = edges,
-                    causal_criteria_answers = criteria_answers)
+                    answers = criteria_answers)
 
-      message("\nOutputted list containing 'edges' and 'causal_criteria_answers'.")
-
+      message("\nOutputting list containing 'edges' and 'answers'.")
       return(edges)
 
     }else{
 
       message( "No arrows were removed." )
 
-      edges_list <- list(edges = rbind(edges_to_keep, edges),
-                         causal_criteria_answers = criteria_answers)
+      if( all(complete.cases(edges_to_keep)) & length(edges_to_keep) == 3 ){
+        edges <- rbind(edges_to_keep, edges)
+      }
 
-      message("\nOutputted list containing 'edges' and 'causal_criteria_answers'.")
+      if( length(save_answers) == 0 ){
+        print(criteria_answers)
+        return(edges)
+      }
 
+      edges_list <- list(edges = edges,
+                         answers = criteria_answers)
+
+      message("\nOutputting list containing 'edges' and 'answers'.")
       return(edges_list)
 
     }

@@ -25,11 +25,11 @@
 #'
 #' @export
 plot_dagitty <- function(dag,
+                         seed = NULL,
                          coords_spec =  0.1,
                          labels = NULL,
                          label_type = "name",
                          label_placement = "text_box",
-                         seed = NULL,
                          include_legend = c("outcome",
                                             "treatment",
                                             "confounder",

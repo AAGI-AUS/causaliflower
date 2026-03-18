@@ -14,7 +14,7 @@ build_graph(
   mediator_outcome_confounders = NA,
   competing_exposures = NA,
   colliders = NA,
-  type = "ordered"
+  type = "full"
 )
 }
 \arguments{
