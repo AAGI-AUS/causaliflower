@@ -2345,44 +2345,37 @@ nodes_between_treatment_and_outcome <- function(dag,
 
     paths_trt_to_y <- lapply(1:length(treatments), function(x){
 
-      paths_trt_to_y <- lapply(1:length(outcomes), function(y){
+      paths_trt_to_y[[x]] <- lapply(1:length(outcomes), function(y){
 
         tryCatch({
-          paths_trt_to_y <- ggdag::dag_paths(dag,
-                                             from = treatments[x],
-                                             to = outcomes[y])[["data"]]
-          paths_trt_to_y <- as.vector(unlist(unique( paths_trt_to_y[ complete.cases(paths_trt_to_y["direction"]), "name" ])))
-          paths_trt_to_y <- paths_trt_to_y[ !paths_trt_to_y %in% treatments]
-        }, warning = function(w){
-          paths_trt_to_y[[x]][y] <- NA
+          paths <- NULL
+          paths <- ggdag::dag_paths(dag,
+                                    from = treatments[x],
+                                    to = outcomes[y])[["data"]]
+          if(length(paths) > 0 ){
+            paths <- as.vector(unlist(unique( paths[ complete.cases(paths["direction"]), "name" ])))
+            paths_trt_to_y[[y]] <- paths[ !paths %in% treatments]
+          }
         }, error = function(e){
-          paths_trt_to_y[[x]][y] <- NA
-        }
-        )
-
-
+          paths_trt_to_y[[y]] <- NULL
+        })
       })
-
-      names(paths_trt_to_y) <- outcomes
+      names(paths_trt_to_y[[x]]) <- outcomes
       paths_trt_to_y
     })
 
     names(paths_trt_to_y) <- treatments
 
-
     if(output_list == TRUE){
 
       return(paths_trt_to_y)
-
     }
 
-    paths_trt_to_y <- as.vector(unlist(unique(paths_trt_to_y)))
+    paths_trt_to_y <- as.vector(unique(unlist(paths_trt_to_y)))
 
     paths_trt_to_y <- paths_trt_to_y[ complete.cases(paths_trt_to_y) ]
-
   }
 
   return(paths_trt_to_y)
-
 }
 
