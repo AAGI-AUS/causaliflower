@@ -557,31 +557,39 @@ add_nodes_helper <- function(dag,
   ## get initial dag roles
   dag_roles <- get_roles(dag)
 
-  outcomes  <- dag_roles$outcome
-  treatments <- dag_roles$treatment
-  confounder_vec <- dag_roles$confounder
-  m_o_confounder_vec <- dag_roles$mediator_outcome_confounder
-  mediator_vec <- dag_roles$mediator
-  instrumental_variables <- dag_roles$instrument
-  competing_exposure_vec <- dag_roles$competing_exposure
-  latent_vec <- dag_roles$latent
-  collider_vec <- dag_roles$collider
-  observed <- dag_roles$observed
+  nodes_ordered <- sort( unlist( dagitty::topologicalOrdering(dag) ) ) # ggdag estimated temporal order of new nodes
+
+  dag_roles <- lapply(dag_roles, function(x) {
+    x[order(match(x, names(nodes_ordered)))]
+  })
+
+  dag_roles <- lapply(dag_roles, function(x) {
+    if( identical( x[complete.cases(x)], logical(0) ) ) NA_character_ else x[complete.cases(x)]
+  })
+
+  outcomes  <- dag_roles$outcome[complete.cases(dag_roles$outcome)]
+  treatments <- dag_roles$treatment[complete.cases(dag_roles$treatment)]
+  confounder_vec <- dag_roles$confounder[complete.cases(dag_roles$confounder)]
+  m_o_confounder_vec <- dag_roles$mediator_outcome_confounder[complete.cases(dag_roles$mediator_outcome_confounder)]
+  mediator_vec <- dag_roles$mediator[complete.cases(dag_roles$mediator)]
+  instrumental_variables <- dag_roles$instrument[complete.cases(dag_roles$instrument)]
+  competing_exposure_vec <- dag_roles$competing_exposure[complete.cases(dag_roles$competing_exposure)]
+  latent_vec <- dag_roles$latent[complete.cases(dag_roles$latent)]
+  collider_vec <- dag_roles$collider[complete.cases(dag_roles$collider)]
+  observed <- dag_roles$observed[complete.cases(dag_roles$observed)]
 
   ##variable names
   observed_node_names <- unique( c(confounder_vec, m_o_confounder_vec, mediator_vec, competing_exposure_vec, collider_vec, instrumental_variables, observed) )
   observed_node_names <- Filter(Negate(anyNA), observed_node_names)
   observed_node_names <- observed_node_names[ !observed_node_names %in% latent_vec ]
 
-  nodes_ordered <- sort( unlist( dagitty::topologicalOrdering(dag) ) ) # ggdag estimated temporal order of new nodes
+
 
   if( length( node_role) > 1 | length( node_role) == 0 ){
 
     stop("add_nodes() currently only supports single node_role character inputs.")
 
   }else if( node_role %in% "confounder" ){
-    confounder_occurrance <- as.numeric(order(match(nodes, nodes)))
-
     ## confounder edges ##
     new_edges <- draw_confounder_edges(type = type,
                                            confounders = confounders,
@@ -592,7 +600,6 @@ add_nodes_helper <- function(dag,
                                            mediator_vec = mediator_vec,
                                            latent_vec = latent_vec,
                                            e = e)
-
 
     # connect all confounders (fully connected or saturated graph type)
     if( type == "full" | type == "saturated" ){
@@ -975,13 +982,13 @@ return(output_list)
 
 #' Fully connect new nodes to others
 #'
-#' saturate_nodes_helper() is a helper function for saturate_nodes() that connects new and existing nodes, drawing edges in both directions.
+#' connect_nodes_helper() is a helper function for connect_nodes() that connects new and existing nodes, drawing edges in both directions.
 #'
 #' @importFrom data.table as.data.table
 #' @param dag An existing dagitty object.
 #' @param nodes A vector of new nodes.
 #' @noRd
-saturate_nodes_helper <- function(dag, nodes, dag_node_names, type){
+connect_nodes_helper <- function(dag, nodes, dag_node_names, type){
   .datatable.aware <- TRUE
 
   ## get node names
@@ -992,7 +999,7 @@ saturate_nodes_helper <- function(dag, nodes, dag_node_names, type){
 
   outcomes  <- dag_roles$outcome
   treatments <- dag_roles$treatment
-  confounder_vec <- dag_roles$confounder
+  confounders <- dag_roles$confounder
   m_o_confounder_vec <- dag_roles$mediator_outcome_confounder
   mediator_vec <- dag_roles$mediator
   instrumental_variables <- dag_roles$instrument
@@ -1002,26 +1009,23 @@ saturate_nodes_helper <- function(dag, nodes, dag_node_names, type){
   collider_vec <- dag_roles$collider
   observed <- dag_roles$observed
 
-  confounder_occurrance <- as.numeric(order(match(nodes, nodes)))
-
   ## get variable names ##
-  observed_node_names <- unique( as.vector( c(confounder_vec, m_o_confounder_vec, mediator_vec, competing_exposure_vec, collider_vec, instrumental_variables) ) )
+  observed_node_names <- unique( as.vector( c(confounders, m_o_confounder_vec, mediator_vec, competing_exposure_vec, collider_vec, instrumental_variables) ) )
   observed_node_names <- Filter(Negate(anyNA), observed_node_names)
 
-  edges <- draw_edges(observed_node_names = observed_node_names,
-                      type = type,
-                      outcomes = outcomes,
-                      treatments = treatments,
-                      confounder_vec = confounder_vec,
-                      m_o_confounder_vec = m_o_confounder_vec,
-                      mediator_vec = mediator_vec,
-                      instrumental_variables = instrumental_variables,
-                      competing_exposure_vec = competing_exposure_vec,
-                      latent_vec = latent_vec,
-                      latent_variables = latent_variables,
-                      collider_vec = collider_vec,
-                      observed = observed,
-                      confounder_occurrance = confounder_occurrance,
+  edges <- draw_edges(confounders,
+                      treatments,
+                      outcomes,
+                      mediator_vec,
+                      latent_vec,
+                      latent_variables,
+                      instrumental_variables,
+                      m_o_confounder_vec,
+                      competing_exposure_vec,
+                      collider_vec,
+                      observed,
+                      type,
+                      observed_node_names,
                       existing_dag = dag)
 
   colnames(edges) <- c("v", "e", "w")
@@ -1706,35 +1710,42 @@ latent_new_coordinates_helper <- function(dag = dag,
                                           coords_spec = 0.1,
                                           threshold = 0.9){
 
-  outcomes <- dagitty::outcomes(dag)
+  if( length(latent_variables) > 0 ){
 
-  ## latent_variables
-  new_node_name_vec <- as.vector( unlist( latent_variables ) ) # new node names as vector
-  num_nodes <- length( new_node_name_vec ) # number of new nodes
-  dag_node_names <- names(dag)
-  num_vars <- length( dag_node_names ) # total number of nodes (combined dag)
+    outcomes <- dagitty::outcomes(dag)
 
-  lambda <- coords_spec[1]/(num_nodes + (num_vars)) # calc lambda value (controls volatility of generated coordinates)
-  threshold <- threshold
+    ## latent_variables
+    new_node_name_vec <- as.vector( unlist( latent_variables ) ) # new node names as vector
+    num_nodes <- length( new_node_name_vec ) # number of new nodes
+    dag_node_names <- names(dag)
+    num_vars <- length( dag_node_names ) # total number of nodes (combined dag)
 
-  if( num_nodes > 0 ){
+    lambda <- coords_spec[1]/(num_nodes + (num_vars)) # calc lambda value (controls volatility of generated coordinates)
+    threshold <- threshold
 
-    # new node coordinates
-    coordinates_x <- coordinates$x
-    coordinates_y <- coordinates$y
+    if( num_nodes > 0 ){
 
-    coordinates <- suppressWarnings( merged_node_coords_helper(dag,
-                                                               new_node_name_vec = new_node_name_vec,
-                                                               num_nodes = num_nodes,
-                                                               coordinates_x = coordinates_x,
-                                                               coordinates_y = coordinates_y,
-                                                               outcomes = outcomes,
-                                                               post_outcome = FALSE,
-                                                               num_vars = num_vars,
-                                                               lambda = lambda,
-                                                               threshold = threshold)
-    )
+      n <- 1
+      for(n in 1:num_nodes){
+        # new node coordinates
+        coordinates_x <- coordinates$x
+        coordinates_y <- coordinates$y
 
+        coordinates <- suppressWarnings( merged_node_coords_helper(dag,
+                                                                   new_node_name_vec = new_node_name_vec[n],
+                                                                   num_nodes = length(new_node_name_vec[n]),
+                                                                   coordinates_x = coordinates_x,
+                                                                   coordinates_y = coordinates_y,
+                                                                   outcomes = outcomes,
+                                                                   post_outcome = FALSE,
+                                                                   num_vars = num_vars,
+                                                                   lambda = lambda,
+                                                                   threshold = threshold)
+        )
+        n <- n + 1
+      }
+
+    }
 
   }
 
@@ -1955,6 +1966,26 @@ add_coords_helper <- function(dag,
 }
 
 
+#' convert pdag to dag
+#'
+#' pdag_to_dag()
+#'
+#' @importFrom data.table as.data.table
+#' @param dag A dagitty object, must use dag{} instead of pdag{}.
+#' @returns A data frame of edges.
+#' @noRd
+pdag_to_dag <- function(dag){
+  .datatable.aware <- TRUE
+
+  edges <- pdag_to_dag_edges(dag)
+
+  dag <- rebuild_dag(dag, edges)
+
+  return(dag)
+
+}
+
+
 #' convert pdag edges to dag
 #'
 #' pdag_to_dag_edges()
@@ -1968,7 +1999,7 @@ pdag_to_dag_edges <- function(dag){
   .datatable.aware <- TRUE
   edges <- data.table::as.data.table(dagitty::edges(dag))[, c("v", "e", "w")]
 
-  edges <- pdag_to_dag_edges_helper(edges)
+  edges <- pdag_edges_to_dag_edges(edges)
 
   return(edges)
 
@@ -1976,14 +2007,14 @@ pdag_to_dag_edges <- function(dag){
 
 #' convert pdag edges to dag edges
 #'
-#' pdag_to_dag_edges_helper()
+#' pdag_edges_to_dag_edges()
 #'
 #' @importFrom data.table as.data.table
 #' @importFrom dagitty edges
 #' @param edges A dagitty object, must use dag{} instead of pdag{}.
 #' @returns A data frame of edges.
 #' @noRd
-pdag_to_dag_edges_helper <- function(edges){
+pdag_edges_to_dag_edges <- function(edges){
   .datatable.aware <- TRUE
   # check if any bi-directional edges are "--" instead of "<->" (pdag)
   if( any( edges$e == "--" | edges$e == "<->" ) ){
@@ -2003,41 +2034,6 @@ pdag_to_dag_edges_helper <- function(edges){
 
 }
 
-
-#' convert pdag to dag
-#'
-#' pdag_to_dag()
-#'
-#' @importFrom data.table as.data.table
-#' @importFrom dagitty edges
-#' @param dag A dagitty object, must use dag{} instead of pdag{}.
-#' @returns A data frame of edges.
-#' @noRd
-pdag_to_dag <- function(dag){
-  .datatable.aware <- TRUE
-  edges <- data.table::as.data.table(dagitty::edges(dag))[, c("v", "e", "w")]
-
-  # check if any bi-directional edges are "--" instead of "<->" (pdag)
-  if( any( edges$e == "--" | edges$e == "<->" ) ){
-
-    pdag_edges <- edges[ ( edges$e == "--" | edges$e == "<->"), ]
-    dag_edges <- edges[ !( edges$e == "--" | edges$e == "<->" ), ]
-
-    pdag_edges <- data.frame( v = c(pdag_edges$v, pdag_edges$w),
-                              e = "->",
-                              w = c(pdag_edges$w, pdag_edges$v) )
-
-    edges <- rbind(dag_edges, pdag_edges)
-
-    dag <- rebuild_dag(dag, edges)
-
-    return(dag)
-
-  }
-
-  return(dag)
-
-}
 
 #' detect simultaneous edges to combine arrows where possible
 #'
@@ -2298,7 +2294,7 @@ instrumental_variables_helper <- function(dag, treatments, outcomes){
       nodes_trt_to_outcome_children <- dagitty::children(dag, nodes_trt_to_outcome[[x]][[y]])
 
       instrumental_variables[[y]] <- associated_with_treatment[[x]][  !associated_with_treatment[[x]] %in% outcome_parents[[y]] &
-                                                                        !associated_with_treatment[[x]] %in% outcome_parents_children[[y]] &
+                                                                        #!associated_with_treatment[[x]] %in% outcome_parents_children[[y]] &
                                                                         !associated_with_treatment[[x]] %in% outcome_latent_parents_children[[y]] &
                                                                         !associated_with_treatment[[x]] %in% outcome_latent_parents_parents[[y]] &
                                                                         !associated_with_treatment[[x]] %in% nodes_trt_to_outcome_children &
@@ -2312,9 +2308,9 @@ instrumental_variables_helper <- function(dag, treatments, outcomes){
   instrumental_variables
 
   i <- 1
-  for(i in 1:length(treatments)){ ## only way I could get this to work
-    names(instrumental_variables[[i]]) <- outcomes ## I wish it wasn't
-    i <- i + 1 ## I really wish it didn't have to be this way
+  for(i in 1:length(treatments)){ ## I wish this wasn't the only way I could get this to work
+    names(instrumental_variables[[i]]) <- outcomes
+    i <- i + 1
   }
 
   return(instrumental_variables)
@@ -2343,6 +2339,8 @@ nodes_between_treatment_and_outcome <- function(dag,
   treatments <- unlist(treatments)
   outcomes <- unlist(outcomes)
 
+  paths_trt_to_y <- list()
+
   if( length(treatments) > 0 & length(outcomes) > 0 ){
 
     paths_trt_to_y <- lapply(1:length(treatments), function(x){
@@ -2352,9 +2350,7 @@ nodes_between_treatment_and_outcome <- function(dag,
         tryCatch({
           paths_trt_to_y <- ggdag::dag_paths(dag,
                                              from = treatments[x],
-                                             to = outcomes[y],
-                                             directed = TRUE,
-                                             paths_only = TRUE)[["data"]]
+                                             to = outcomes[y])[["data"]]
           paths_trt_to_y <- as.vector(unlist(unique( paths_trt_to_y[ complete.cases(paths_trt_to_y["direction"]), "name" ])))
           paths_trt_to_y <- paths_trt_to_y[ !paths_trt_to_y %in% treatments]
         }, warning = function(w){

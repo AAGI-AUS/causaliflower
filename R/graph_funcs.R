@@ -206,7 +206,7 @@ add_nodes <- function(dag,
                       ancestors = NULL,
                       descendants = NULL,
                       node_role = NULL,
-                      type = NULL,
+                      type = "saturated",
                       print_edges = TRUE,
                       coords_spec = 0.1,
                       threshold = 0.5
@@ -265,17 +265,12 @@ add_nodes <- function(dag,
   } )
 
   tryCatch({
-    new_coordinates <- renew_coords(dag = dag,
+    new_coordinates <- suppressWarnings( renew_coords(dag = dag,
                                 new_node_names = new_node_names,
                                 coordinates = coordinates,
                                 coords_spec = coords_spec,
-                                threshold = threshold)
+                                threshold = threshold) )
     dagitty::coordinates(dag) <- new_coordinates
-  }, warning = function(w){
-    message(paste("Warning:", w, "\n Using alternative function to generate dag coordinates."))
-    dag <- add_coords_helper(dag)
-    return(dag)
-
   }, error = function(e){
     message(paste("Error:", e, "\n Using alternative function to generate dag coordinates."))
     dag <- add_coords_helper(dag)
@@ -301,10 +296,10 @@ add_nodes <- function(dag,
 #' @param print_edges Print new edges in console, defaults to TRUE.
 #' @returns A dagitty object.
 #' @examples
-#' dag <- saturate_nodes(dag, nodes)
+#' dag <- connect_nodes(dag, nodes)
 #'
 #' @export
-saturate_nodes <- function(dag,
+connect_nodes <- function(dag,
                            nodes = NULL,
                            node_role = NULL,
                            type = "full",
@@ -322,7 +317,7 @@ saturate_nodes <- function(dag,
   }
 
   if( length(node_role) == 0 ){
-    new_edges <- saturate_nodes_helper(dag, nodes, dag_node_names, type)
+    new_edges <- connect_nodes_helper(dag, nodes, dag_node_names, type)
     # treatment
     treatments <- dagitty::exposures(dag)
     # outcome
@@ -340,6 +335,8 @@ saturate_nodes <- function(dag,
 
   ## pre-process before merging
   new_edges <- new_edges[ complete.cases(new_edges), ] # remove NAs
+
+  new_edges <- pdag_edges_to_dag_edges(new_edges)
 
   ## merge new and existing dag edges
   edges <- merge(edges, new_edges,
@@ -393,7 +390,7 @@ copy_nodes <- function(dag,
                        coords_spec = 0.1,
                        threshold = 0.5
                        ){
-  ###### NOTE: this was written before add_nodes() and saturate_nodes()
+  ###### NOTE: this was written before add_nodes() and connect_nodes()
   ###### needs to be updated before adding @export
   .datatable.aware <- TRUE
   edges <- pdag_to_dag_edges(dag) # get dag edges

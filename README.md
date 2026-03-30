@@ -32,51 +32,79 @@ Some examples are included below, however an in-depth tutorial will be provided 
 ### Example code
 
 
-- Build and plot a basic graph (dagitty object)
+- Build and a basic graph (dagitty object)
 
 ```R
+
 variables <- c("Z3", "Z2", "Z1")
 treatments <- "X"
 outcomes <- "Y"
 
+
 dag <- build_graph(variables = variables,
                    treatments = treatments,
-                   outcomes = outcomes)
+                   outcomes = outcomes,
+                   type = "ordered")
+                   
 ```
 
-- Plot dagitty objects (ggdag wrapper with custom causaliflower presets):
+- Plot dagitty objects:
 
 ```R
 
-plot_dagitty(dag) # This generates coordinates based on the dag structure
-
-# You can also add coordinates directly:
-dag <- add_coords(dag, 
-                  coords_spec = 0.9) # make sure this value is between 0 and 1!
-
-```
-
-- Create a fully connected graph 
-
-```R
-
-fc_graph <- saturate_nodes(dag)
-plot_dagitty(fc_graph)
-
-```
-
-
-- Assess implied causal relationships to remove edges using a set of causal criteria:
-
-```R
-
-edges <- assess_edges(fc_graph, edges_to_keep = dag,
-                      assess_causal_criteria = TRUE) # guided causal criteria sequence
-
-dag <- keep_edges(fc_graph, edges$edges)
 plot_dagitty(dag)
 
+# Add coordinates to a dagitty object (more detail below)
+dag <- add_coords(dag)
+
 ```
+
+- Generate new coordinates
+
+```R
+
+# Changing the input parameters affects how coordinates are generated
+dag <- add_coords(dag,
+                  coords_spec = 0.2, # >1 increases node placement volatility
+                  threshold = 0.9) # controls the spacing/closeness allowed between nodes
+
+```
+
+- Connect graph edges in a fully connected or saturated graph:
+
+```R
+
+fc_graph <- connect_nodes(dag) # default connects all nodes in both directions (type = "full")
+fc_graph |> plot_dagitty()
+
+saturated_graph <- connect_nodes(dag, type = "saturated", print_edges = TRUE) # saturated graph connects earlier nodes to default connects all nodes in both directions
+
+```
+
+
+- Assess graph edges using causal criteria:
+
+```R
+## Assess edges to keep and build a new graph
+new_graph <- fc_graph |> 
+  assess_edges(edges_to_keep = dag, 
+               assess_causal_criteria = TRUE) |> # guided causal criteria sequence
+  keep_edges(dag = fc_graph)
+  
+  
+plot_dagitty(new_graph)
+
+## Or, save answers to causal criteria in a list
+edges_list <- fc_graph |> 
+  assess_edges(edges_to_keep = dag, 
+               assess_causal_criteria = TRUE,
+               save_answers = TRUE) # saves answers to causal criteria, output becomes a list
+               
+edges_list$edges_to_keep
+edges_list$answers
+  
+```
+
 
 - Join two dagitty objects, keeping the coordinates of the first:
 
@@ -91,8 +119,8 @@ new_dag <- build_graph(treatments = treatments,
 new_dag <- add_coords(new_dag, coords_spec = 0.9)
 plot_dagitty(new_dag)
 
-merged_dag <- join_graphs(dag, new_dag)
-plot_dagitty(merged_dag)
+dag <- join_graphs(dag, new_dag)
+plot_dagitty(dag)
 
 ```
 
@@ -111,10 +139,10 @@ minimal_sets(dag, effect = "direct")
 ```R
 
 new_nodes <- c("Z4", "Z5")
-descendants <- names(merged_dag)
+descendants <- names(dag)
 
-new_dag <- add_nodes(merged_dag, new_nodes, descendants = descendants)
-plot_dagitty(new_dag)
+dag <- add_nodes(dag, new_nodes, descendants = descendants)
+plot_dagitty(dag)
 
 ```
 
@@ -124,17 +152,25 @@ plot_dagitty(new_dag)
 ```R
 get_edges(dag)
 
+get_ancestor_edges(dag)
+
+get_structure(dag)
+
 get_nodes(dag)  
 
 get_roles(dag)
 
-get_structure(dag)
+get_diff_roles(dag, new_dag)
+
+get_diff_edges(dag, new_dag)
 ```
 
 
 - Other utility functions:
 
 ```R
+get_nodes_from_treatment_to_outcome(dag)
+
 colliders(dag)  
 
 competing_exposures(dag) 
@@ -145,7 +181,7 @@ confounders(dag)
 
 mediators(dag)  
 
-instrumental_variables(dag) 
+instruments(dag) 
 
 proxies(dag)
 ```

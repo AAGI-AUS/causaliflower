@@ -571,12 +571,14 @@ add_coordinates <- function(dag,
 
   }
 
-  # generate coords for latent nodes
-  coords_list <- latent_new_coordinates_helper(dag = dag,
-                                               latent_variables = latent_variables,
-                                               coordinates = coords_list,
-                                               coords_spec = 0.1,
-                                               threshold = 0.9)
+  if( all( complete.cases(latent_variables) ) ){
+    # generate coords for latent nodes
+    coords_list <- latent_new_coordinates_helper(dag = dag,
+                                                 latent_variables = latent_variables,
+                                                 coordinates = coords_list,
+                                                 coords_spec = 0.1,
+                                                 threshold = 0.9)
+  }
 
   dagitty::coordinates(dag) <- coords_list
 
@@ -630,7 +632,7 @@ renew_coords <- function(dag,
   mediators <- mediators(dag)
   mediators <- mediators[ !mediators %in% outcomes ] # remove outcomes
   mediator_outcome_confounders <- mediator_outcome_confounders(dag)
-  instrumental_variables <- unique(unlist(instrumental_variables(dag)))
+  instrumental_variables <- unique(unlist(instruments(dag)))
   competing_exposures <- competing_exposures(dag)
   colliders <- colliders(dag)
 
@@ -642,6 +644,7 @@ renew_coords <- function(dag,
   ordered_nodes <- unlist( dagitty::topologicalOrdering(dag) )
   ordered_nodes <- order(ordered_nodes)
   new_node_names <- new_node_names[ordered_nodes]
+  new_node_names <- new_node_names[ complete.cases(new_node_names) ]
 
   if( all( complete.cases(confounders) ) ){
     ## confounders
@@ -665,25 +668,18 @@ renew_coords <- function(dag,
                                                                    num_vars = num_vars,
                                                                    lambda = lambda,
                                                                    threshold = threshold)
+
+
         )
         n <- n + 1
       }
-
-    }else{
-
-      coordinates <- list(
-        x = c(existing_coordinates$x[ names(existing_coordinates$x) %in% confounders ],
-              coordinates$x),
-        y = c(existing_coordinates$y[ names(existing_coordinates$y) %in% confounders ],
-              coordinates$y)
-      )
-
+      coordinates <-  list(x = c( existing_coordinates$x[ !names(existing_coordinates$x) %in% names(coordinates$x) ], coordinates$x ),
+                           y = c( existing_coordinates$y[ !names(existing_coordinates$y) %in% names(coordinates$y) ], coordinates$y ))
     }
-
 
   }
 
-  if( all( complete.cases(treatments) ) ){
+  if( all( length(treatments) > 0 ) ){
     ## treatments
     new_node_name_vec <- new_node_names[ new_node_names %in% treatments ]
     num_nodes <- length(new_node_name_vec)
@@ -708,16 +704,8 @@ renew_coords <- function(dag,
         )
         n <- n + 1
       }
-
-    }else{
-
-      coordinates <- list(
-        x = c(existing_coordinates$x[ names(existing_coordinates$x) %in% treatments ],
-              coordinates$x),
-        y = c(existing_coordinates$y[ names(existing_coordinates$y) %in% treatments ],
-              coordinates$y)
-      )
-
+      coordinates <-  list(x = c( existing_coordinates$x[ !names(existing_coordinates$x) %in% names(coordinates$x) ], coordinates$x ),
+                           y = c( existing_coordinates$y[ !names(existing_coordinates$y) %in% names(coordinates$y) ], coordinates$y ))
     }
 
   }
@@ -747,16 +735,8 @@ renew_coords <- function(dag,
         )
         n <- n + 1
       }
-
-    }else{
-
-      coordinates <- list(
-        x = c(existing_coordinates$x[ names(existing_coordinates$x) %in% instrumental_variables ],
-              coordinates$x),
-        y = c(existing_coordinates$y[ names(existing_coordinates$y) %in% instrumental_variables ],
-              coordinates$y)
-      )
-
+      coordinates <-  list(x = c( existing_coordinates$x[ !names(existing_coordinates$x) %in% names(coordinates$x) ], coordinates$x ),
+                           y = c( existing_coordinates$y[ !names(existing_coordinates$y) %in% names(coordinates$y) ], coordinates$y ))
     }
 
   }
@@ -787,16 +767,8 @@ renew_coords <- function(dag,
         )
         n <- n + 1
       }
-
-    }else{
-
-      coordinates <- list(
-        x = c(existing_coordinates$x[ names(existing_coordinates$x) %in% mediator_outcome_confounders ],
-              coordinates$x),
-        y = c(existing_coordinates$y[ names(existing_coordinates$y) %in% mediator_outcome_confounders ],
-              coordinates$y)
-      )
-
+      coordinates <-  list(x = c( existing_coordinates$x[ !names(existing_coordinates$x) %in% names(coordinates$x) ], coordinates$x ),
+                           y = c( existing_coordinates$y[ !names(existing_coordinates$y) %in% names(coordinates$y) ], coordinates$y ))
     }
 
   }
@@ -827,16 +799,8 @@ renew_coords <- function(dag,
         )
         n <- n + 1
       }
-
-    }else{
-
-      coordinates <- list(
-        x = c(existing_coordinates$x[ names(existing_coordinates$x) %in% competing_exposures ],
-              coordinates$x),
-        y = c(existing_coordinates$y[ names(existing_coordinates$y) %in% competing_exposures ],
-              coordinates$y)
-      )
-
+      coordinates <-  list(x = c( existing_coordinates$x[ !names(existing_coordinates$x) %in% names(coordinates$x) ], coordinates$x ),
+                           y = c( existing_coordinates$y[ !names(existing_coordinates$y) %in% names(coordinates$y) ], coordinates$y ))
     }
 
   }
@@ -867,16 +831,8 @@ renew_coords <- function(dag,
         )
         n <- n + 1
       }
-
-    }else{
-
-      coordinates <- list(
-        x = c(existing_coordinates$x[ names(existing_coordinates$x) %in% observed ],
-              coordinates$x),
-        y = c(existing_coordinates$y[ names(existing_coordinates$y) %in% observed ],
-              coordinates$y)
-      )
-
+      coordinates <-  list(x = c( existing_coordinates$x[ !names(existing_coordinates$x) %in% names(coordinates$x) ], coordinates$x ),
+                           y = c( existing_coordinates$y[ !names(existing_coordinates$y) %in% names(coordinates$y) ], coordinates$y ))
     }
 
   }
@@ -907,16 +863,8 @@ renew_coords <- function(dag,
         )
         n <- n + 1
       }
-
-    }else{
-
-      coordinates <- list(
-        x = c(existing_coordinates$x[ names(existing_coordinates$x) %in% latent_variables ],
-              coordinates$x),
-        y = c(existing_coordinates$y[ names(existing_coordinates$y) %in% latent_variables ],
-              coordinates$y)
-      )
-
+      coordinates <-  list(x = c( existing_coordinates$x[ !names(existing_coordinates$x) %in% names(coordinates$x) ], coordinates$x ),
+                           y = c( existing_coordinates$y[ !names(existing_coordinates$y) %in% names(coordinates$y) ], coordinates$y ))
     }
 
   }
@@ -947,21 +895,13 @@ renew_coords <- function(dag,
         )
         n <- n + 1
       }
-
-    }else{
-
-      coordinates <- list(
-        x = c(existing_coordinates$x[ names(existing_coordinates$x) %in% mediators ],
-              coordinates$x),
-        y = c(existing_coordinates$y[ names(existing_coordinates$y) %in% mediators ],
-              coordinates$y)
-      )
-
+      coordinates <-  list(x = c( existing_coordinates$x[ !names(existing_coordinates$x) %in% names(coordinates$x) ], coordinates$x ),
+                           y = c( existing_coordinates$y[ !names(existing_coordinates$y) %in% names(coordinates$y) ], coordinates$y ))
     }
 
   }
 
-  if( all( complete.cases(outcomes) ) ){
+  if( all( length(outcomes) > 0 ) ){
     ## outcomes
     new_node_name_vec <- new_node_names[ new_node_names %in% outcomes ]
     num_nodes <- length(new_node_name_vec)
@@ -987,16 +927,10 @@ renew_coords <- function(dag,
         )
         n <- n + 1
       }
-
-    }else{
-
-      coordinates <- list(
-        x = c(existing_coordinates$x[ names(existing_coordinates$x) %in% outcomes ],
-              coordinates$x),
-        y = c(existing_coordinates$y[ names(existing_coordinates$y) %in% outcomes ],
-              coordinates$y)
-      )
+      coordinates <-  list(x = c( existing_coordinates$x[ !names(existing_coordinates$x) %in% names(coordinates$x) ], coordinates$x ),
+                           y = c( existing_coordinates$y[ !names(existing_coordinates$y) %in% names(coordinates$y) ], coordinates$y ))
     }
+
   }
 
   if( all( complete.cases(colliders) ) ){
@@ -1025,16 +959,10 @@ renew_coords <- function(dag,
         )
         n <- n + 1
       }
-
-    }else{
-
-      coordinates <- list(
-        x = c(existing_coordinates$x[ names(existing_coordinates$x) %in% colliders ],
-              coordinates$x),
-        y = c(existing_coordinates$y[ names(existing_coordinates$y) %in% colliders ],
-              coordinates$y)
-      )
+      coordinates <-  list(x = c( existing_coordinates$x[ !names(existing_coordinates$x) %in% names(coordinates$x) ], coordinates$x ),
+                           y = c( existing_coordinates$y[ !names(existing_coordinates$y) %in% names(coordinates$y) ], coordinates$y ))
     }
+
   }
 
   ## equal y-coords for bi-directional edges
@@ -1045,9 +973,18 @@ renew_coords <- function(dag,
     pdag_coords_y <- coordinates$y[ names(coordinates$y) %in% c(unlist(pdag_edges[,"v"]), unlist(pdag_edges[,"w"])) ]
 
     pdag_coords_y_new <- c()
+
     pdag_coords_y_new <- lapply(1:nrow(pdag_edges), function(x){
       lhs_coords <- pdag_coords_y[ names(pdag_coords_y) %in% unname(pdag_edges[x,"v"])]
+      lhs_coords_names <- unique(names(lhs_coords))
+      lhs_coords <- unique(lhs_coords)
+      names(lhs_coords) <- lhs_coords_names
+
       rhs_coords <- pdag_coords_y[ names(pdag_coords_y) %in% unname(pdag_edges[x,"w"])]
+      rhs_coords_names <- unique(names(rhs_coords))
+      rhs_coords <- unique(rhs_coords)
+      names(rhs_coords) <- rhs_coords_names
+
       if( lhs_coords > rhs_coords ){
         new_coord <- lhs_coords
         names(new_coord) <- names(rhs_coords)
@@ -1062,24 +999,16 @@ renew_coords <- function(dag,
     })
 
     pdag_coords_y_new <- unlist(pdag_coords_y_new)
-    coordinates$y <- coordinates$y[ !names(coordinates$y) %in% names(pdag_coords_y_new) ]
-    coordinates$y <- c(coordinates$y, pdag_coords_y_new)
 
-    # x-coordinates
-    pdag_coords_x <- coordinates$x[ names(coordinates$x) %in% c(unlist(pdag_edges[,"v"]), unlist(pdag_edges[,"w"])) ]
-    pdag_coords_x_new <- c()
-    pdag_coords_x_new <- lapply(1:nrow(pdag_edges), function(x){
-      lhs_coords <- pdag_coords_x[ names(pdag_coords_x) %in% unname(pdag_edges[x,"v"])]
-      rhs_coords <- pdag_coords_x[ names(pdag_coords_x) %in% unname(pdag_edges[x,"w"])]
-      new_coord <- rhs_coords + threshold*2
-      names(new_coord) <- names(lhs_coords)
-      new_coord
-    })
+    unique_pdag_coords <- pdag_coords_y_new[!duplicated(names(pdag_coords_y_new), fromLast = TRUE)]
 
-    pdag_coords_x_new <- unlist(pdag_coords_x_new)
-    coordinates$x <- coordinates$x[ !names(coordinates$x) %in% names(pdag_coords_x_new) ]
-    coordinates$x <- c(coordinates$x, pdag_coords_x_new)
+    coordinates$y <- coordinates$y[ !names(coordinates$y) %in% names(unique_pdag_coords) ]
+    coordinates$y <- c(coordinates$y, unique_pdag_coords)
+
   }
+
+  coordinates$y <- coordinates$y[!duplicated(names(coordinates$y))]
+  coordinates$x <- coordinates$x[!duplicated(names(coordinates$x))]
 
   coordinates <- list(x = round( coordinates$x[order(names(coordinates$x))], 3), y = round( coordinates$y[order(names(coordinates$y))], 3) )
 

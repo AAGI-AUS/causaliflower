@@ -241,10 +241,10 @@ colliders <- function(dag){
 #' @param dag A dagitty object.
 #' @returns List of instrumental variable names.
 #' @examples
-#' instrumental_variables(dag)
+#' instruments(dag)
 #'
 #' @export
-instrumental_variables <- function(dag){
+instruments <- function(dag){
 
   # treatment
   treatments <- dagitty::exposures(dag)
@@ -257,6 +257,7 @@ instrumental_variables <- function(dag){
   return(instrumental_vars)
 
 }
+
 
 #' Minimal sufficient adjustment sets
 #'

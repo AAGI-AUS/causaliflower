@@ -10,7 +10,7 @@ add_nodes(
   ancestors = NULL,
   descendants = NULL,
   node_role = NULL,
-  type = NULL,
+  type = "saturated",
   print_edges = TRUE,
   coords_spec = 0.1,
   threshold = 0.5

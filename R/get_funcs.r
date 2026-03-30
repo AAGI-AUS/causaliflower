@@ -515,7 +515,7 @@ get_ancestor_edges <- function(dag){
 
 #' nodes in path from treatment to outcome
 #'
-#' get_nodes_between_treatment_and_outcome() is a dagitty and ggdag::dag_paths() wrapper function, intended for use with multiple treatments and outcomes.
+#' get_nodes_from_treatment_to_outcome() is a dagitty and ggdag::dag_paths() wrapper function, intended for use with multiple treatments and outcomes.
 #'
 #' @importFrom ggdag dag_paths
 #' @importFrom data.table as.data.table data.table
@@ -523,9 +523,9 @@ get_ancestor_edges <- function(dag){
 #' @param output_list TRUE or FALSE to output a list (default FALSE returns a vector).
 #' @returns Vector or list of  nodes in the path from treatment to outcome.
 #' @export
-get_nodes_between_treatment_and_outcome <- function(dag,
-                                                    output_list = FALSE
-                                                    ){
+get_nodes_from_treatment_to_outcome <- function(dag,
+                                                output_list = FALSE
+                                                ){
   .datatable.aware <- TRUE
 
   treatments <- dagitty::exposures(dag)
