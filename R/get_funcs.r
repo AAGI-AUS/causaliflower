@@ -67,7 +67,7 @@ get_roles <- function(dag, multiple_roles = FALSE){
   if(multiple_roles == FALSE){
 
     edges_wide <- extract_unique_node_roles(dag)
-
+    edges <- extract_unique_node_roles(dag)
   }else{
 
     edges_wide <- extract_node_roles(dag)
@@ -82,31 +82,32 @@ get_roles <- function(dag, multiple_roles = FALSE){
   ancestor_roles <- na.omit( reshape(ancestor_roles, varying = list(4:13), idvar = "id",
                                       v.names = "role", direction = "long")[,c("v", "e", "w", "role", "id")] )
   ancestor_roles <- ancestor_roles[order(ancestor_roles$id), c(1,4)]
-  names(ancestor_roles)[1] <- "node"
-
-  ## group by nodes
-  unique_ancestors <- unique( ancestor_roles[,"node"] ) # vector of unique node names
-  num_unique_ancestors <- nrow(unique_ancestors) # count of unique node names
 
   ## descendant node edges to list ##
   descendant_roles <- edges_wide[,c(1:3,14:23)]
   descendant_roles <- na.omit( reshape(descendant_roles, varying = list(4:13), idvar = "id",
                                         v.names = "role", direction = "long")[,c("v", "e", "w", "role", "id")] )
   descendant_roles <- descendant_roles[order(descendant_roles$id), c(3,4)]
-  names(descendant_roles)[1] <- "node"
 
-  ## find missing edges
+  ## find missing edges ##
   outcomes <- unique( descendant_roles[ descendant_roles$role == "outcome", ] )
   colliders <- unique( descendant_roles[ descendant_roles$role == "collider", ] )
   observed <- unique( descendant_roles[ descendant_roles$role == "observed", ] )
   latent <- unique( descendant_roles[ descendant_roles$role == "latent", ] )
+  instruments <- unique( descendant_roles[ descendant_roles$role == "instrument", ] )
+
+  # group by nodes
+  names(ancestor_roles)[1] <- "w"
+  unique_ancestors <- unique( ancestor_roles[,"w"] ) # vector of unique node names
+  num_unique_ancestors <- nrow(unique_ancestors) # count of unique node names
 
   missing_outcomes <- outcomes[! unlist(outcomes[,1]) %in% unlist(unique_ancestors), ]
   missing_colliders <- colliders[! unlist(colliders[,1]) %in% unlist(unique_ancestors), ]
   missing_observed <- observed[! unlist(observed[,1]) %in% unlist(unique_ancestors), ]
   missing_latent <- latent[! unlist(latent[,1]) %in% unlist(unique_ancestors), ]
+  missing_instruments <- instruments[! unlist(instruments[,1]) %in% unlist(unique_ancestors), ]
 
-  all_roles <- rbind(ancestor_roles, missing_outcomes, missing_colliders, missing_observed, missing_latent)
+  all_roles <- rbind(ancestor_roles, missing_outcomes, missing_colliders, missing_observed, missing_latent, missing_instruments)
 
   # edges grouped by each unique node in a list
   roles_list <- c()
@@ -181,13 +182,15 @@ get_nodes <- function(dag){
   colliders <- unique( edges_descendants[ edges_descendants$role_descendant == "collider", ] )
   observed <- unique( edges_descendants[ edges_descendants$role_descendant == "observed", ] )
   latent <- unique( edges_descendants[ edges_descendants$role_descendant == "latent", ] )
+  instruments <- unique( edges_descendants[ edges_descendants$role_descendant == "instrument", ] )
 
   missing_outcomes <- outcomes[! unlist(outcomes[,1]) %in% unlist(unique_ancestors), ]
   missing_colliders <- colliders[! unlist(colliders[,1]) %in% unlist(unique_ancestors), ]
   missing_observed <- observed[! unlist(observed[,1]) %in% unlist(unique_ancestors), ]
-  missing_latent <- latent[! unlist(latent[,1]) %in% unlist(unique_ancestors), ]
+  missing_latents <- latent[! unlist(latent[,1]) %in% unlist(unique_ancestors), ]
+  missing_instruments <- instruments[! unlist(instruments[,1]) %in% unlist(unique_ancestors), ]
 
-  missing_descendant_edges <- rbind(missing_outcomes, missing_colliders, missing_observed, missing_latent)
+  missing_descendant_edges <- rbind(missing_outcomes, missing_colliders, missing_observed, missing_latents, missing_instruments)
 
   unique_descendants <- unique(unlist(missing_descendant_edges[,1]))
   num_unique_descendants <- length(unique_descendants)
@@ -235,7 +238,7 @@ get_structure <- function(dag){
 
   edges_wide <- extract_node_roles(dag) # extract node roles from daggity object (wide format)
 
-  unique_nodes <- unname(unlist(  unique(edges_wide[,1]) ))
+  unique_nodes <- unname(unlist(  unique(c(edges_wide[,1],edges_wide[,3])) ))
   num_unique_nodes <- length(unique_nodes)
 
   ## ancestor node edges to list ##
@@ -245,8 +248,8 @@ get_structure <- function(dag){
   names(edges_ancestors)[1:2] <- c("ancestor", "descendant")
   edges_ancestors <- edges_ancestors[order(edges_ancestors$id), ][,c(1:3)]
 
-  unique_ancestors <- unname(unlist( unique(edges_ancestors[,1]) ))
-  num_unique_ancestors <- length(unique_nodes)
+  #unique_ancestors <- unname(unlist( unique(edges_ancestors[,1]) ))
+  #num_unique_ancestors <- length(unique_nodes)
 
   ## descendant node edges to list ##
   edges_descendants <- edges_wide[,c(1:3,14:23)]
@@ -255,20 +258,20 @@ get_structure <- function(dag){
   names(edges_descendants)[1:2] <- c("ancestor", "descendant")
   edges_descendants <- edges_descendants[order(edges_descendants$id), ][,c(1:3)]
 
-  unique_descendant <- unname(unlist(  unique(edges_descendants[,1]) ))
-  num_unique_descendant <- length(unique_nodes)
+  #unique_descendant <- unname(unlist(  unique(c(edges_descendants[,1], edges_descendants[,2])) ))
+  #num_unique_descendant <- length(unique_nodes)
 
   # ancestor edges grouped by each unique node in a list
-  edges_ancestor_list <- suppressWarnings( lapply(1:num_unique_ancestors, function(x){
+  edges_ancestor_list <- suppressWarnings( lapply(1:num_unique_nodes, function(x){
 
-    edges_ancestors[ unlist(edges_ancestors[,"ancestor"]) %in% unlist(unique_ancestors[x]), ]
+    edges_ancestors[ unlist(edges_ancestors[,"ancestor"]) %in% unlist(unique_nodes[x]), ]
 
   }) )
 
   # descendant edges grouped by each unique node in a list
-  edges_descendant_list <- suppressWarnings( lapply(1:num_unique_ancestors, function(x){
+  edges_descendant_list <- suppressWarnings( lapply(1:num_unique_nodes, function(x){
 
-    edges_descendants[ unlist(edges_descendants[,"descendant"]) %in% unlist(unique_ancestors[x]), ]
+    edges_descendants[ unlist(edges_descendants[,"descendant"]) %in% unlist(unique_nodes[x]), ]
 
   }) )
 
@@ -282,7 +285,7 @@ get_structure <- function(dag){
   ## next create list with each node as an element
   edges_structure_list <- c()
 
-  edges_structure_list <- suppressWarnings( lapply( 1:num_unique_ancestors , function(x){
+  edges_structure_list <- suppressWarnings( lapply( 1:num_unique_nodes , function(x){
 
     edges_structure_list <- lapply(1:2, function(n){ # edges grouped by unique node name
 
@@ -296,7 +299,7 @@ get_structure <- function(dag){
 
   } ) )
 
-  names(edges_structure_list) <- unlist(unique_ancestors) # assign ancestor node role to name of each element in edges list
+  names(edges_structure_list) <- unlist(unique_nodes) # assign ancestor node role to name of each element in edges list
 
   return(edges_structure_list)
 
