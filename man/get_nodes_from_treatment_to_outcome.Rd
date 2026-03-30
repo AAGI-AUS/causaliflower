@@ -4,7 +4,7 @@
 \alias{get_nodes_from_treatment_to_outcome}
 \title{nodes in path from treatment to outcome}
 \usage{
-get_nodes_from_treatment_to_outcome(dag, output_list = FALSE)
+get_nodes_from_treatment_to_outcome(dag, output_list = FALSE, directed = FALSE)
 }
 \arguments{
 \item{dag}{A dagitty object}

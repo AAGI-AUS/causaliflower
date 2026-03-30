@@ -2289,9 +2289,14 @@ instrumental_variables_helper <- function(dag, treatments, outcomes){
 
     instrumental_variables[[x]] <- lapply(1:length(outcomes), function(y){
 
-      nodes_trt_to_outcome_parents <- dagitty::parents(dag, nodes_trt_to_outcome[[x]][[y]])
-      parents_of_nodes_trt_to_outcome_parents <- dagitty::parents(dag, nodes_trt_to_outcome_parents)
-      nodes_trt_to_outcome_children <- dagitty::children(dag, nodes_trt_to_outcome[[x]][[y]])
+      nodes_trt_to_outcome_parents <- NA
+      parents_of_nodes_trt_to_outcome_parents <-NA
+      nodes_trt_to_outcome_children <- NA
+      if( all( complete.cases( nodes_trt_to_outcome[[x]][[y]] ) ) ){
+        nodes_trt_to_outcome_parents <- dagitty::parents(dag, nodes_trt_to_outcome[[x]][[y]])
+        parents_of_nodes_trt_to_outcome_parents <- dagitty::parents(dag, nodes_trt_to_outcome_parents)
+        nodes_trt_to_outcome_children <- dagitty::children(dag, nodes_trt_to_outcome[[x]][[y]])
+      }
 
       instrumental_variables[[y]] <- associated_with_treatment[[x]][  !associated_with_treatment[[x]] %in% outcome_parents[[y]] &
                                                                         #!associated_with_treatment[[x]] %in% outcome_parents_children[[y]] &
@@ -2332,7 +2337,8 @@ instrumental_variables_helper <- function(dag, treatments, outcomes){
 nodes_between_treatment_and_outcome <- function(dag,
                                                 treatments,
                                                 outcomes,
-                                                output_list = FALSE
+                                                output_list = FALSE,
+                                                directed = TRUE
                                                 ){
   .datatable.aware <- TRUE
   nodes <- c()
@@ -2348,20 +2354,21 @@ nodes_between_treatment_and_outcome <- function(dag,
       paths_trt_to_y[[x]] <- lapply(1:length(outcomes), function(y){
 
         tryCatch({
-          paths <- NULL
-          paths <- ggdag::dag_paths(dag,
-                                    from = treatments[x],
-                                    to = outcomes[y])[["data"]]
-          if(length(paths) > 0 ){
-            paths <- as.vector(unlist(unique( paths[ complete.cases(paths["direction"]), "name" ])))
-            paths_trt_to_y[[y]] <- paths[ !paths %in% treatments]
+          paths_trt_y <- NA
+          paths_trt_y <- ggdag::dag_paths(dag,
+                                          from = treatments[x],
+                                          to = outcomes[y],
+                                          direccted = directed)[["data"]]
+          if(length(paths_trt_y) > 0 ){
+            paths_trt_y <- as.vector(unlist(unique( paths_trt_y[ complete.cases(paths_trt_y["direction"]), "name" ])))
+            paths_trt_y <- paths_trt_y[ !paths_trt_y %in% treatments]
           }
         }, error = function(e){
-          paths_trt_to_y[[y]] <- NULL
+          paths_trt_y <- NA
         })
       })
       names(paths_trt_to_y[[x]]) <- outcomes
-      paths_trt_to_y
+      paths_trt_to_y[[x]]
     })
 
     names(paths_trt_to_y) <- treatments

@@ -8,7 +8,8 @@ nodes_between_treatment_and_outcome(
   dag,
   treatments,
   outcomes,
-  output_list = FALSE
+  output_list = FALSE,
+  directed = TRUE
 )
 }
 \arguments{

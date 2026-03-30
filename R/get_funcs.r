@@ -524,7 +524,8 @@ get_ancestor_edges <- function(dag){
 #' @returns Vector or list of  nodes in the path from treatment to outcome.
 #' @export
 get_nodes_from_treatment_to_outcome <- function(dag,
-                                                output_list = FALSE
+                                                output_list = FALSE,
+                                                directed = FALSE
                                                 ){
   .datatable.aware <- TRUE
 
@@ -534,6 +535,7 @@ get_nodes_from_treatment_to_outcome <- function(dag,
   paths_trt_to_y <- nodes_between_treatment_and_outcome(dag = dag,
                                                         treatments = treatments,
                                                         outcomes = outcomes,
-                                                        output_list = output_list)
+                                                        output_list = output_list,
+                                                        directed = directed)
   return(paths_trt_to_y)
 }

@@ -23,8 +23,9 @@ mediators <- function(dag){
   treatment_children <- dagitty::children(dag, treatments)
 
   nodes_trt_to_y <- nodes_between_treatment_and_outcome(dag = dag,
-                                                            treatments = treatments,
-                                                            outcomes = outcomes)
+                                                        treatments = treatments,
+                                                        outcomes = outcomes,
+                                                        directed = TRUE)
 
   mediators <- outcome_parents[ ( outcome_parents %in% treatment_children | outcome_parents %in% nodes_trt_to_y ) ]
 
