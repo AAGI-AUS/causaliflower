@@ -65,13 +65,9 @@ get_roles <- function(dag, multiple_roles = FALSE){
   .datatable.aware <- TRUE
 
   if(multiple_roles == FALSE){
-
     edges_wide <- extract_unique_node_roles(dag)
-    edges <- extract_unique_node_roles(dag)
   }else{
-
     edges_wide <- extract_node_roles(dag)
-
   }
 
   node_roles <- c("outcome", "treatment", "confounder", "mediator", "mediator_outcome_confounder", "instrument", "competing_exposure", "collider", "latent", "observed")

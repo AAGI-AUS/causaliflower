@@ -1015,3 +1015,70 @@ renew_coords <- function(dag,
   return(coordinates)
 }
 
+
+
+#' dataframe output from a dagitty object
+#'
+#'Generates a table similar to calling ggdag::tidy_dagitty on a ggdag::dagify object
+#'The benefit of this function is that it automatically identifies exposure, outcome, confounder, observed and latent variables inputted from dagitty.net, whereas ggdag::tidy_dagitty only does this for ggdag::dagify objects.
+#'Output can be used with ggdag to create better looking DAGs from dagitty.net code.
+#'
+#' @importFrom ggdag tidy_dagitty
+#' @param dag dagitty object
+#' @param labels vector of labels for nodes in dagitty object
+#' @return dag_df DAG as a dataframe for use with ggdag to create better looking DAGs
+#' @noRd
+tidy_ggdagitty <- function(dag, labels = NULL){
+  # Cleaning the dags and turning it into a data frame.
+  dag_df <- data.frame(ggdag::tidy_dagitty(dag))
+
+  # flip y axis for ggplot
+  dag_df$y <- dag_df$y*-1
+  dag_df$yend <- dag_df$yend*-1
+
+  if( is.null(labels) ){
+
+    return(dag_df)
+
+  }
+
+  dag_df <- add_labels(dag, dag_df, labels)
+
+  return(dag_df)
+}
+
+
+#' add labels to a dag dataframe
+#'
+#'Generates a table similar to calling ggdag::tidy_dagitty on a ggdag::dagify() object
+#'The benefit of this function is that it automatically identifies exposure, outcome, confounder, observed and latent variables inputted from dagitty.net, whereas ggdag::tidy_dagitty only does this for ggdag::dagify objects.
+#'Output can be used with ggdag to create better looking DAGs from dagitty.net code.
+#'
+#' @param dag dagitty object
+#' @param dag_df a dag object converted to data frame using the ggdag::tidy_dagitty() function, or similar.
+#' @param labels vector of labels for nodes in dagify object
+#' @return dagify DAG as a dataframe for use with ggdag to create better looking DAGs
+#' @noRd
+add_labels <- function(dag, dag_df, labels){
+  .datatable.aware <- TRUE
+
+  # Labeling variables
+
+  dag_df$label <- sapply( seq_along( dag_df$name ),
+                          function(x) if( dag_df$name[x] %in% attr(labels, "names")) attr(labels[ dag_df$name[x] ], "names") )
+
+  node_roles <- get_roles(dag)
+
+  dag_df$role <- sapply( seq_along(dag_df$name), function(x){
+
+    as.vector( unlist( sapply( seq_along(node_roles),
+                               function(n) if( dag_df$name[x] %in% node_roles[[n]] ) names(node_roles[n]) ) ) )
+  } )
+
+  dag_df$role <- lapply(dag_df$role, function(x) if( is.null(x)) NA else x)
+
+  dag_df$role <- unlist(dag_df$role)
+
+  return(dag_df)
+}
+

@@ -23,82 +23,6 @@ get_latent_vec <- function(latent_variables){
 }
 
 
-#' extract_instrumental_variables() is a helper to instrumental_variables()
-#'
-#' @importFrom dagitty parents children
-#' @importFrom data.table data.table
-#' @param dag A dagitty object.
-#' @returns Vector of instrumental variable names.
-#' @noRd
-extract_instrumental_variables <- function(dag, treatments, outcomes, latent_vars, colliders, outcome_parents, nodes_trt_to_y){
-  .datatable.aware <- TRUE
-  ## dag node names
-  node_names <- names(dag)
-
-  outcome_parents_children <- dagitty::children(dag, outcome_parents)
-
-  outcome_latent_parents <- outcome_parents[ outcome_parents %in% latent_vars ]
-
-  outcome_latent_parents_children <- dagitty::children(dag, outcome_latent_parents)
-
-  outcome_latent_parents_parents <- dagitty::parents(dag, outcome_latent_parents)
-
-  nodes_trt_to_y_parents <- dagitty::parents(dag, nodes_trt_to_y)
-
-  parents_of_nodes_trt_to_y_parents <- dagitty::parents(dag, nodes_trt_to_y_parents)
-
-  nodes_trt_to_y_children <- dagitty::children(dag, nodes_trt_to_y)
-
-  outcome_latent_parents <- dagitty::parents(dag, latent_vars)
-
-  associated_with_treatment <- list()
-  children_associated_with_outcome <- list()
-
-  associated_with_treatment <- lapply(1:length(treatments), function(x){
-    associated_with_treatment[[x]] <- lapply(1:length(node_names), function(n){
-
-      parents_associated_with_treatment <- unique(dagitty::paths(dag, treatments[x], node_names[n], directed = TRUE)$open == TRUE)
-      children_associated_with_treatment <- unique(dagitty::paths(dag, node_names[n], treatments[x], directed = TRUE)$open == TRUE)
-
-      associated_with_treatment <- c(parents_associated_with_treatment, children_associated_with_treatment)
-
-      children_associated_with_outcome <- lapply(1:length(outcomes), function(y){
-      children_associated_with_outcome <- length(unique(dagitty::paths(dag, outcomes[y], node_names[n], directed = TRUE)$open == TRUE))>0
-      })
-
-      associated_with_treatment <- length(associated_with_treatment)>0 & all( unlist(children_associated_with_outcome)==FALSE)
-      associated_with_treatment
-
-    })
-
-
-    names(associated_with_treatment[[x]]) <- node_names
-    associated_with_treatment[[x]] <- Filter(function(m) m==TRUE,
-                                             associated_with_treatment[[x]] )
-
-    associated_with_treatment[[x]] <- names(associated_with_treatment[[x]])
-
-  })
-
-  associated_with_treatment <- unique(unlist(associated_with_treatment))
-
-  instrumental_vars <- associated_with_treatment[  !associated_with_treatment %in% latent_vars &
-                                                     !associated_with_treatment %in% colliders  &
-                                                     !associated_with_treatment %in% outcomes  &
-                                                     !associated_with_treatment %in% treatments &
-                                                     !associated_with_treatment %in% outcome_parents &
-                                                     !associated_with_treatment %in% outcome_parents_children &
-                                                     !associated_with_treatment %in% outcome_latent_parents_children &
-                                                     !associated_with_treatment %in% outcome_latent_parents_parents &
-                                                     !associated_with_treatment %in% nodes_trt_to_y_children &
-                                                     !associated_with_treatment %in% nodes_trt_to_y_parents &
-                                                     !associated_with_treatment %in% parents_of_nodes_trt_to_y_parents &
-                                                     !associated_with_treatment %in% nodes_trt_to_y ]
-
-  return(instrumental_vars)
-}
-
-
 #' Extract node roles
 #'
 #' extract_node_roles() is a helper function for get_edges().
@@ -1843,73 +1767,6 @@ parent_node_max_coords <- function(dag, group_node_names, num_group_nodes, coord
 }
 
 
-
-#' dataframe output from a dagitty object
-#'
-#'Generates a table similar to calling ggdag::tidy_dagitty on a ggdag::dagify object
-#'The benefit of this function is that it automatically identifies exposure, outcome, confounder, observed and latent variables inputted from dagitty.net, whereas ggdag::tidy_dagitty only does this for ggdag::dagify objects.
-#'Output can be used with ggdag to create better looking DAGs from dagitty.net code.
-#'
-#' @importFrom ggdag tidy_dagitty
-#' @param dag dagitty object
-#' @param labels vector of labels for nodes in dagitty object
-#' @return dag_df DAG as a dataframe for use with ggdag to create better looking DAGs
-#' @noRd
-tidy_ggdagitty <- function(dag, labels = NULL){
-  # Cleaning the dags and turning it into a data frame.
-  dag_df <- data.frame(ggdag::tidy_dagitty(dag))
-
-  # flip y axis for ggplot
-  dag_df$y <- dag_df$y*-1
-  dag_df$yend <- dag_df$yend*-1
-
-  if( is.null(labels) ){
-
-    return(dag_df)
-
-  }
-
-  dag_df <- add_labels(dag, dag_df, labels)
-
-  return(dag_df)
-}
-
-
-#' add labels to a dag dataframe
-#'
-#'Generates a table similar to calling ggdag::tidy_dagitty on a ggdag::dagify() object
-#'The benefit of this function is that it automatically identifies exposure, outcome, confounder, observed and latent variables inputted from dagitty.net, whereas ggdag::tidy_dagitty only does this for ggdag::dagify objects.
-#'Output can be used with ggdag to create better looking DAGs from dagitty.net code.
-#'
-#' @param dag dagitty object
-#' @param dag_df a dag object converted to data frame using the ggdag::tidy_dagitty() function, or similar.
-#' @param labels vector of labels for nodes in dagify object
-#' @return dagify DAG as a dataframe for use with ggdag to create better looking DAGs
-#' @noRd
-add_labels <- function(dag, dag_df, labels){
-  .datatable.aware <- TRUE
-
-  # Labeling variables
-
-  dag_df$label <- sapply( seq_along( dag_df$name ),
-                          function(x) if( dag_df$name[x] %in% attr(labels, "names")) attr(labels[ dag_df$name[x] ], "names") )
-
-  node_roles <- get_roles(dag)
-
-  dag_df$role <- sapply( seq_along(dag_df$name), function(x){
-
-    as.vector( unlist( sapply( seq_along(node_roles),
-                               function(n) if( dag_df$name[x] %in% node_roles[[n]] ) names(node_roles[n]) ) ) )
-  } )
-
-  dag_df$role <- lapply(dag_df$role, function(x) if( is.null(x)) NA else x)
-
-  dag_df$role <- unlist(dag_df$role)
-
-  return(dag_df)
-}
-
-
 #' Generate new dag coordinates
 #'
 #' @param dag Dagitty object, with at least a treatment and outcome set. Nodes are automatically placed in the following categories: treatment, outcome, confounder, mediator, latent variable, mediator-outcome-confounder, or instrumental variable.
@@ -2210,6 +2067,66 @@ get_label_helper <- function(names_list){
 }
 
 
+#' extract_instrumental_variables() is a helper to instrumental_variables()
+#'
+#' @importFrom dagitty parents children
+#' @importFrom data.table data.table
+#' @param dag A dagitty object.
+#' @returns Vector of instrumental variable names.
+#' @noRd
+extract_instrumental_variables <- function(dag, treatments, outcomes, latent_vars, colliders, outcome_parents, nodes_trt_to_y){
+  .datatable.aware <- TRUE
+  ## dag node names
+  node_names <- names(dag)
+
+  outcome_parents_children <- dagitty::children(dag, outcome_parents)
+
+  outcome_latent_parents <- outcome_parents[ outcome_parents %in% latent_vars ]
+
+  outcome_latent_parents_children <- dagitty::children(dag, outcome_latent_parents)
+
+  outcome_latent_parents_parents <- dagitty::parents(dag, outcome_latent_parents)
+
+  nodes_trt_to_y_parents <- dagitty::parents(dag, nodes_trt_to_y)
+
+  parents_of_nodes_trt_to_y_parents <- dagitty::parents(dag, nodes_trt_to_y_parents)
+
+  nodes_trt_to_y_children <- dagitty::children(dag, nodes_trt_to_y)
+
+  outcome_latent_parents <- dagitty::parents(dag, latent_vars)
+
+  associated_with_treatment <- list()
+  children_associated_with_outcome <- list()
+
+  associated_with_treatment <- lapply(1:length(treatments), function(x){
+    associated_with_treatment[[x]] <- lapply(1:length(node_names), function(n){
+      unique(dagitty::paths(dag, treatments[x], node_names[n], directed = FALSE)$open == TRUE)
+    })
+    names(associated_with_treatment[[x]]) <- node_names
+    associated_with_treatment[[x]] <- Filter(function(m) any(m==TRUE),
+                                             associated_with_treatment[[x]] )
+    associated_with_treatment[[x]] <- names(associated_with_treatment[[x]])
+  })
+
+  associated_with_treatment <- unique(unlist(associated_with_treatment))
+
+  instrumental_vars <- associated_with_treatment[  !associated_with_treatment %in% latent_vars &
+                                                     !associated_with_treatment %in% colliders  &
+                                                     !associated_with_treatment %in% outcomes  &
+                                                     !associated_with_treatment %in% treatments &
+                                                     !associated_with_treatment %in% outcome_parents &
+                                                     #!associated_with_treatment %in% outcome_parents_children &
+                                                     #!associated_with_treatment %in% outcome_latent_parents_children &
+                                                     !associated_with_treatment %in% outcome_latent_parents_parents &
+                                                     !associated_with_treatment %in% nodes_trt_to_y_children &
+                                                     !associated_with_treatment %in% nodes_trt_to_y_parents &
+                                                     !associated_with_treatment %in% parents_of_nodes_trt_to_y_parents &
+                                                     !associated_with_treatment %in% nodes_trt_to_y ]
+
+  return(instrumental_vars)
+}
+
+
 #' node names in path from treatment to outcome
 #'
 #' @importFrom dagitty paths
@@ -2259,36 +2176,18 @@ instrumental_variables_helper <- function(dag, treatments, outcomes){
   associated_with_treatment <- list()
 
   instrumental_variables <- lapply(1:length(treatments), function(x){
-
-
     associated_with_treatment[[x]] <- lapply(1:length(node_names), function(n){
-
-      parents_associated_with_treatment <- unique(dagitty::paths(dag, treatments[x], node_names[n], directed = TRUE)$open == TRUE)
-      children_associated_with_treatment <- unique(dagitty::paths(dag, node_names[n], treatments[x], directed = TRUE)$open == TRUE)
-
-      associated_with_treatment <- c(parents_associated_with_treatment, children_associated_with_treatment)
-
-      children_associated_with_outcome <- lapply(1:length(outcomes), function(y){
-        length(unique(dagitty::paths(dag, outcomes[y], node_names[n], directed = TRUE)$open == TRUE))>0
-      })
-
-      associated_with_treatment <- length(associated_with_treatment)>0 & all(unlist(children_associated_with_outcome)==FALSE)
-
+      unique(dagitty::paths(dag, treatments[x], node_names[n], directed = FALSE)$open == TRUE)
     })
-
     names(associated_with_treatment[[x]]) <- node_names
-    associated_with_treatment[[x]] <- Filter(function(m) m==TRUE,
+    associated_with_treatment[[x]] <- Filter(function(m) any(m==TRUE),
                                              associated_with_treatment[[x]] )
-
     associated_with_treatment[[x]] <- names(associated_with_treatment[[x]])
-
     associated_with_treatment[[x]] <- associated_with_treatment[[x]][ !associated_with_treatment[[x]] %in% latent_vars &
                                                                         !associated_with_treatment[[x]] %in% colliders  &
                                                                         !associated_with_treatment[[x]] %in% outcomes  &
                                                                         !associated_with_treatment[[x]] %in% treatments ]
-
     instrumental_variables[[x]] <- lapply(1:length(outcomes), function(y){
-
       nodes_trt_to_outcome_parents <- NA
       parents_of_nodes_trt_to_outcome_parents <-NA
       nodes_trt_to_outcome_children <- NA
@@ -2300,7 +2199,7 @@ instrumental_variables_helper <- function(dag, treatments, outcomes){
 
       instrumental_variables[[y]] <- associated_with_treatment[[x]][  !associated_with_treatment[[x]] %in% outcome_parents[[y]] &
                                                                         #!associated_with_treatment[[x]] %in% outcome_parents_children[[y]] &
-                                                                        !associated_with_treatment[[x]] %in% outcome_latent_parents_children[[y]] &
+                                                                        #!associated_with_treatment[[x]] %in% outcome_latent_parents_children[[y]] &
                                                                         !associated_with_treatment[[x]] %in% outcome_latent_parents_parents[[y]] &
                                                                         !associated_with_treatment[[x]] %in% nodes_trt_to_outcome_children &
                                                                         !associated_with_treatment[[x]] %in% nodes_trt_to_outcome_parents &
@@ -2310,7 +2209,6 @@ instrumental_variables_helper <- function(dag, treatments, outcomes){
 
   })
   names(instrumental_variables) <- treatments
-  instrumental_variables
 
   i <- 1
   for(i in 1:length(treatments)){ ## I wish this wasn't the only way I could get this to work
@@ -2358,7 +2256,8 @@ nodes_between_treatment_and_outcome <- function(dag,
           paths_trt_y <- ggdag::dag_paths(dag,
                                           from = treatments[x],
                                           to = outcomes[y],
-                                          direccted = directed)[["data"]]
+                                          directed = directed,
+                                          paths_only = TRUE)[["data"]]
           if(length(paths_trt_y) > 0 ){
             paths_trt_y <- as.vector(unlist(unique( paths_trt_y[ complete.cases(paths_trt_y["direction"]), "name" ])))
             paths_trt_y <- paths_trt_y[ !paths_trt_y %in% treatments]
