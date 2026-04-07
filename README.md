@@ -198,8 +198,18 @@ ndvi_df <- getS2_data(bbox, "2023-01-01", "2023-01-10", 0.0001, 0.0001,
                       asset_names = s2_index$NDVI$assets,
                       index_function = s2_index$NDVI$fun)
                       
-## You can also use a convenience function:
+## You can also use a convenience function
 ndvi_df <- getNDVI(bbox, "2023-01-01", "2023-01-10", 0.0001, 0.0001)
+
+## Cloud cover can also be specified
+ndvi_df <- getNDVI(bbox, "2023-01-01", "2023-01-10", 0.0001, 0.0001,
+                   max_cloud_cover = 40) # defaults to 50
+                   
+## The general function allows cloud masking
+ndvi_df <- getS2_data(bbox, "2023-01-01", "2023-01-10", 0.0001, 0.0001,
+                      asset_names = s2_index$NDVI$assets,
+                      index_function = s2_index$NDVI$fun,
+                      scl_classes = c(8, 9, 10)) # defaults to NULL
 ```
 
 
@@ -210,15 +220,22 @@ bbox <- sf::st_bbox(c(xmin = 138.712, xmax = 138.718,
                       ymin = -34.902, ymax = -34.906),
                     crs = sf::st_crs(4326))
                     
-## General function, NDVI:
+## General function (NDVI)
 ndvi_rast <- getS2_raster(bbox, "2023-01-01", "2023-01-10", 0.0001, 0.0001,
                           asset_names = s2_index$NDVI$assets,
                           index_function = s2_index$NDVI$fun)
-## Convenience function, NDVI:
+## Convenience function (NDVI)
 ndvi_rast <- getNDVI_raster(bbox, "2023-01-01", "2023-01-10", 0.0001, 0.0001)
 
-## Plot using terra:
+## Plot with terra
 terra::plot(ndvi_rast)
+
+## Adding cloud masking
+ndvi_rast_m <- getS2_raster(bbox, "2023-01-01", "2023-01-10", 0.0001, 0.0001,
+                      asset_names = s2_index$NDVI$assets,
+                      index_function = s2_index$NDVI$fun,
+                      scl_classes = c(8, 9, 10))
+terra::plot(ndvi_rast_m)
 
 ```
 
