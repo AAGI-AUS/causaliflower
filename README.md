@@ -169,7 +169,11 @@ get_diff_edges(dag, new_dag)
 - Other utility functions:
 
 ```R
-get_nodes_from_treatment_to_outcome(dag)
+confounders(dag)  
+
+mediators(dag)  
+
+instruments(dag) 
 
 colliders(dag)  
 
@@ -177,13 +181,45 @@ competing_exposures(dag)
 
 mediator_outcome_confounders(dag) 
 
-confounders(dag)  
-
-mediators(dag)  
-
-instruments(dag) 
-
 proxies(dag)
+
+get_nodes_from_treatment_to_outcome(dag)
+```
+
+
+- Obtain remote sensing data from Sentinel 2:
+
+```R
+bbox <- sf::st_bbox(c(xmin = 138.712, xmax = 138.718, 
+                      ymin = -34.902, ymax = -34.906),
+                    crs = sf::st_crs(4326))
+## General function for obtaining time series data, NDVI example:
+ndvi_df <- getS2_data(bbox, "2023-01-01", "2023-01-10", 0.0001, 0.0001,
+                      asset_names = s2_index$NDVI$assets,
+                      index_function = s2_index$NDVI$fun)
+                      
+## You can also use a convenience function:
+ndvi_df <- getNDVI(bbox, "2023-01-01", "2023-01-10", 0.0001, 0.0001)
+```
+
+
+- Raster composite of Sentinel 2 data:
+
+```R
+bbox <- sf::st_bbox(c(xmin = 138.712, xmax = 138.718, 
+                      ymin = -34.902, ymax = -34.906),
+                    crs = sf::st_crs(4326))
+                    
+## General function, NDVI:
+ndvi_rast <- getS2_raster(bbox, "2023-01-01", "2023-01-10", 0.0001, 0.0001,
+                          asset_names = s2_index$NDVI$assets,
+                          index_function = s2_index$NDVI$fun)
+## Convenience function, NDVI:
+ndvi_rast <- getNDVI_raster(bbox, "2023-01-01", "2023-01-10", 0.0001, 0.0001)
+
+## Plot using terra:
+terra::plot(ndvi_rast)
+
 ```
 
 If you have any questions, suggestions, or would like to contribute, please let me know!
