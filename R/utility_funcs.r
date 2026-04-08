@@ -236,7 +236,7 @@ colliders <- function(dag){
 
 #' Get instrumental variable names
 #'
-#' instrumental_variables() is a dagitty wrapper function capable of identifying  multiple instrumental variables in multi-treatment and multi-outcome settings.
+#' instruments() is a dagitty wrapper function capable of identifying  multiple instrumental variables in multi-treatment and multi-outcome settings.
 #'
 #' @importFrom dagitty exposures outcomes latents parents children
 #' @param dag A dagitty object.

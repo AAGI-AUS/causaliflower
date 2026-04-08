@@ -13,7 +13,7 @@ instruments(dag)
 List of instrumental variable names.
 }
 \description{
-instrumental_variables() is a dagitty wrapper function capable of identifying  multiple instrumental variables in multi-treatment and multi-outcome settings.
+instruments() is a dagitty wrapper function capable of identifying  multiple instrumental variables in multi-treatment and multi-outcome settings.
 }
 \examples{
 instruments(dag)

@@ -2120,8 +2120,6 @@ extract_instrumental_variables <- function(dag, treatments, outcomes, latent_var
                                                associated_with_treatment[[x]] )
       associated_with_treatment[[x]] <- names(associated_with_treatment[[x]])
     })
-
-
   }
   instrumental_vars <- unique(unlist(associated_with_treatment))
 
@@ -2164,16 +2162,14 @@ instrumental_variables_helper <- function(dag, treatments, outcomes){
   outcome_latent_parents_children <- lapply(1:length(outcomes), function(x){
 
     dagitty::children(dag, outcome_latent_parents[[x]])
-
   })
   outcome_latent_parents_parents <- lapply(1:length(outcomes), function(x){
 
     dagitty::parents(dag, outcome_latent_parents[[x]])
-
   })
-
   nodes_trt_to_outcome <- nodes_between_treatment_and_outcome(dag, treatments = treatments, outcomes = outcomes, output_list = TRUE)
 
+  nodes_associatied <- list()
   nodes_subset_list <- list()
   instrumental_variables <- list()
 
@@ -2182,12 +2178,12 @@ instrumental_variables_helper <- function(dag, treatments, outcomes){
       nodes_trt_to_outcome_parents <- NA
       parents_of_nodes_trt_to_outcome_parents <-NA
       nodes_trt_to_outcome_children <- NA
-      if( all( complete.cases( nodes_trt_to_outcome[[x]][[y]] ) ) ){
+      if( all( complete.cases( nodes_trt_to_outcome[[x]][[y]] ) ) & length(nodes_trt_to_outcome[[x]][[y]] ) > 0 ){
         nodes_trt_to_outcome_parents <- dagitty::parents(dag, nodes_trt_to_outcome[[x]][[y]])
         parents_of_nodes_trt_to_outcome_parents <- dagitty::parents(dag, nodes_trt_to_outcome_parents)
         nodes_trt_to_outcome_children <- dagitty::children(dag, nodes_trt_to_outcome[[x]][[y]])
       }
-      nodes_subset_list[[y]] <- node_names[  !node_names %in% outcome_parents[[y]] &
+      nodes_associatied[[y]] <- node_names[  !node_names %in% outcome_parents[[y]] &
                                                                         #!node_names %in% outcome_parents_children[[y]] &
                                                                         #!node_names %in% outcome_latent_parents_children[[y]] &
                                                                         !node_names %in% outcome_latent_parents_parents[[y]] &
@@ -2195,21 +2191,23 @@ instrumental_variables_helper <- function(dag, treatments, outcomes){
                                                                         !node_names %in% nodes_trt_to_outcome_parents &
                                                                         !node_names %in% parents_of_nodes_trt_to_outcome_parents &
                                                                         !node_names %in% nodes_trt_to_outcome[[x]][[y]] ]
-      if(length(nodes_subset_list[[y]]) > 0){
-        nodes_subset_list[[y]] <- lapply(1:length(nodes_subset_list[[y]]), function(n){
-            association_paths <- unique(dagitty::paths(dag, treatments[x], nodes_subset_list[[y]][[n]], directed = FALSE)$open == TRUE)
+      if( length(nodes_associatied[[y]]) > 0 ){
+        nodes_subset_list[[y]] <- lapply(1:length(nodes_associatied[[y]]), function(n){
+            association_paths <- unique(dagitty::paths(dag, treatments[x], nodes_associatied[[y]][[n]], directed = FALSE)$open == TRUE)
         })
+        names(nodes_subset_list[[y]]) <- nodes_associatied[[y]]
+        nodes_subset_list[[y]] <- Filter( function(m) any(m==TRUE), nodes_subset_list[[y]] )
+        nodes_subset_list[[y]] <- names(nodes_subset_list[[y]])
+        instrumental_variables[[y]] <- nodes_subset_list[[y]][ !nodes_subset_list[[y]] %in% latent_vars &
+                                                                 !nodes_subset_list[[y]] %in% colliders  &
+                                                                 !nodes_subset_list[[y]] %in% outcomes  &
+                                                                 !nodes_subset_list[[y]] %in% treatments ]
+        instrumental_variables[[y]] <- unlist( lapply( instrumental_variables[[y]], function(x) if( identical( x, character(0) ) ) NULL else x ) )
       }
-      names(nodes_subset_list[[y]]) <- nodes_subset_list[[y]]
-      nodes_subset_list[[y]] <- Filter(function(m) any(m==TRUE),
-                                            nodes_subset_list[[y]] )
-      nodes_subset_list[[y]] <- names(nodes_subset_list[[y]])
-      instrumental_variables[[y]] <- nodes_subset_list[[y]][ !nodes_subset_list[[y]] %in% latent_vars &
-                                                                       !nodes_subset_list[[y]] %in% colliders  &
-                                                                       !nodes_subset_list[[y]] %in% outcomes  &
-                                                                       !nodes_subset_list[[y]] %in% treatments ]
+
     })
     names(instrumental_variables[[x]]) <- outcomes
+
     instrumental_variables[[x]]
   })
   names(instrumental_variables) <- treatments
