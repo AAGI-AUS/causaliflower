@@ -1,90 +1,469 @@
-#' Pre-defined Sentinel-2 spectral index definitions
+#' Sentinel-2 spectral indices list
 #'
-#' A named list of index definitions for use with \code{\link{getS2_data}} and
-#' \code{\link{getS2_raster}}. Each entry contains \code{assets} (required band
-#' names) and \code{fun} (the index function). The list name itself serves as
-#' the index identifier.
+#' A named list of spectral indices compatible with the
+#' \href{https://github.com/awesome-spectral-indices/awesome-spectral-indices}{Awesome
+#' Spectral Indices} catalogue, for use with \code{\link{get_rs_data}} and
+#' \code{\link{get_rs_raster}}.
 #'
 #' @format A named list where each element is a list with components:
 #' \describe{
 #'   \item{assets}{Character vector of Sentinel-2 band names.}
 #'   \item{fun}{A function that takes a SpatRaster and returns a single-layer SpatRaster.}
+#'   \item{res}{Recommended resolution (highest integer value used by assets).}
 #' }
 #' @examples
-#' bbox <- sf::st_bbox(c(xmin = 138.712, xmax = 138.718, ymin = -34.902, ymax = -34.906),
-#'                     crs = sf::st_crs(4326))
+#' names(s2_index_list)
 #'
-#' getS2_data(bbox, "2023-01-01", "2023-01-10", 0.0001, 0.0001,
-#'            asset_names = s2_index$NDVI$assets,
-#'            index_function = s2_index$NDVI$fun)
-#'
-#' names(s2_index)
+#' ndvi_df <- get_rs_data(longitude = 138.715,
+#'                       latitude = -34.904,
+#'                       x_metres = 30,
+#'                       y_metres = 30,
+#'                       start_date = "2023-01-01",
+#'                       end_date = "2023-01-10",
+#'                       index_name = "NDVI")
 #'
 #' @export
-s2_index <- list(
+s2_index_list <- list(
   NDVI = list(
     assets = c("B08", "B04"),
-    fun = function(r) (r$B08 - r$B04) / (r$B08 + r$B04) ),
+    fun = function(r) (r$B08 - r$B04) / (r$B08 + r$B04),
+    res = 10 ),
 
-  NIRv = list(
+  DVI = list(
     assets = c("B08", "B04"),
-    fun = function(r) ((r$B08 - r$B04) / (r$B08 + r$B04)) * r$B08 ),
+    fun = function(r) r$B08 - r$B04,
+    res = 10 ),
 
-  NDWI = list(
-    assets = c("B03", "B08"),
-    fun = function(r) (r$B03 - r$B08) / (r$B03 + r$B08) ),
-
-  NDMI = list(
-    assets = c("B8A", "B11"),
-    fun = function(r) (r$B8A - r$B11) / (r$B8A + r$B11) ),
-
-  EVI = list(
-    assets = c("B08", "B04", "B02"),
-    fun = function(r) 2.5 * (r$B08 - r$B04) / (r$B08 + 6 * r$B04 - 7.5 * r$B02 + 1) ),
-
-  SAVI = list(
+  kNDVI = list(
     assets = c("B08", "B04"),
-    fun = function(r) (r$B08 - r$B04) / (r$B08 + r$B04 + 0.5) * 1.5 ),
-
-  MSAVI = list(
-    assets = c("B08", "B04"),
-    fun = function(r) (2 * r$B08 + 1 - sqrt((2 * r$B08 + 1)^2 - 8 * (r$B08 - r$B04))) / 2 ),
+    fun = function(r) tanh( ((r$B08 - r$B04) / (r$B08 + r$B04))^2 ),
+    res = 10 ),
 
   GNDVI = list(
     assets = c("B08", "B03"),
-    fun = function(r) (r$B08 - r$B03) / (r$B08 + r$B03) ),
+    fun = function(r) (r$B08 - r$B03) / (r$B08 + r$B03),
+    res = 10 ),
+
+  BNDVI = list(
+    assets = c("B08", "B02"),
+    fun = function(r) (r$B08 - r$B02) / (r$B08 + r$B02),
+    res = 10 ),
+
+  GBNDVI = list(
+    assets = c("B08", "B03", "B02"),
+    fun = function(r) (r$B08 - (r$B03 + r$B02)) / (r$B08 + (r$B03 + r$B02)),
+    res = 10 ),
+
+  GRNDVI = list(
+    assets = c("B08", "B03", "B04"),
+    fun = function(r) (r$B08 - (r$B03 + r$B04)) / (r$B08 + (r$B03 + r$B04)),
+    res = 10 ),
+
+  NIRv = list(
+    assets = c("B08", "B04"),
+    fun = function(r) ((r$B08 - r$B04) / (r$B08 + r$B04)) * r$B08,
+    res = 10 ),
+
+  NDWI = list(
+    assets = c("B03", "B08"),
+    fun = function(r) (r$B03 - r$B08) / (r$B03 + r$B08),
+    res = 10 ),
+
+  NDMI = list(
+    assets = c("B08", "B11"),
+    fun = function(r) (r$B08 - r$B11) / (r$B08 + r$B11),
+    res = 20 ),
+
+  EVI = list(
+    assets = c("B08", "B04", "B02"),
+    fun = function(r) 2.5 * (r$B08 - r$B04) / (r$B08 + 6 * r$B04 - 7.5 * r$B02 + 1),
+    res = 10 ),
+
+  SAVI = list(
+    assets = c("B08", "B04"),
+    fun = function(r) (r$B08 - r$B04) / (r$B08 + r$B04 + 0.5) * 1.5,
+    res = 10 ),
+
+  MSAVI = list(
+    assets = c("B08", "B04"),
+    fun = function(r) (2 * r$B08 + 1 - sqrt((2 * r$B08 + 1)^2 - 8 * (r$B08 - r$B04))) / 2,
+    res = 10 ),
 
   NDRE = list(
     assets = c("B08", "B05"),
-    fun = function(r) (r$B08 - r$B05) / (r$B08 + r$B05) ),
+    fun = function(r) (r$B08 - r$B05) / (r$B08 + r$B05),
+    res = 20 ),
 
   MTCI = list(
     assets = c("B06", "B05", "B04"),
-    fun = function(r) (r$B06 - r$B05) / (r$B05 - r$B04) ),
+    fun = function(r) (r$B06 - r$B05) / (r$B05 - r$B04),
+    res = 20 ),
 
-  CIre = list(
+  CIre_gitelson = list(
     assets = c("B07", "B05"),
-    fun = function(r) (r$B07 / r$B05) - 1 ),
+    fun = function(r) (r$B07 / r$B05) - 1,
+    res = 20 ),
+
+  CIRE = list(
+    assets = c("B08", "B05"),
+    fun = function(r) (r$B08 / r$B05) - 1,
+    res = 20 ),
 
   PSRI = list(
     assets = c("B06", "B04", "B02"),
-    fun = function(r) (r$B04 - r$B02) / r$B06 ),
+    fun = function(r) (r$B04 - r$B02) / r$B06,
+    res = 20 ),
 
   BSI = list(
     assets = c("B11", "B08", "B04", "B02"),
-    fun = function(r) ((r$B11 + r$B04) - (r$B08 + r$B02)) / ((r$B11 + r$B04) + (r$B08 + r$B02)) )
+    fun = function(r) ((r$B11 + r$B04) - (r$B08 + r$B02)) / ((r$B11 + r$B04) + (r$B08 + r$B02)),
+    res = 20 ),
+
+  SR = list(
+    assets = c("B08", "B04"),
+    fun = function(r) r$B08 / r$B04,
+    res = 10 ),
+
+  EVI2 = list(
+    assets = c("B08", "B04"),
+    fun = function(r) 2.5 * (r$B08 - r$B04) / (r$B08 + 2.4 * r$B04 + 1),
+    res = 10 ),
+
+  OSAVI = list(
+    assets = c("B08", "B04"),
+    fun = function(r) (r$B08 - r$B04) / (r$B08 + r$B04 + 0.16),
+    res = 10 ),
+
+  ARVI = list(
+    assets = c("B08", "B04", "B02"),
+    fun = function(r) (r$B08 - (2 * r$B04 - r$B02)) / (r$B08 + (2 * r$B04 - r$B02)),
+    res = 10 ),
+
+  GARI = list(
+    assets = c("B08", "B03", "B02", "B04"),
+    fun = function(r) (r$B08 - (r$B03 - (r$B02 - r$B04))) / (r$B08 + (r$B03 - (r$B02 - r$B04))),
+    res = 10 ),
+
+  CIG = list(
+    assets = c("B08", "B03"),
+    fun = function(r) (r$B08 / r$B03) - 1,
+    res = 10 ),
+
+  MNDWI = list(
+    assets = c("B03", "B11"),
+    fun = function(r) (r$B03 - r$B11) / (r$B03 + r$B11),
+    res = 20 ),
+
+  NBR = list(
+    assets = c("B08", "B12"),
+    fun = function(r) (r$B08 - r$B12) / (r$B08 + r$B12),
+    res = 20 ),
+
+  NBR2 = list(
+    assets = c("B11", "B12"),
+    fun = function(r) (r$B11 - r$B12) / (r$B11 + r$B12),
+    res = 20 ),
+
+  BAI = list(
+    assets = c("B04", "B08"),
+    fun = function(r) 1 / ((0.1 - r$B04)^2 + (0.06 - r$B08)^2),
+    res = 10 ),
+
+  MCARI = list(
+    assets = c("B05", "B04", "B03"),
+    fun = function(r) ((r$B05 - r$B04) - 0.2 * (r$B05 - r$B03)) * (r$B05 / r$B04),
+    res = 20 ),
+
+  IRECI = list(
+    assets = c("B07", "B04", "B05", "B06"),
+    fun = function(r) (r$B07 - r$B04) / (r$B05 / r$B06),
+    res = 20 )
 )
 
-
-################################################################################
-# Internal helpers
-################################################################################
-
-#' Create a scene-level cloud cover filter
+#' Landsat spectral indices list
 #'
-#' @noRd
-.cloud_filter <- function(max_cloud_cover){
+#' A named list of spectral indices compatible with Landsat 5 & 8 sources.
+#'
+#' @format A named list where each element is a list with components:
+#' \describe{
+#'   \item{assets}{Character vector of Sentinel-2 band names.}
+#'   \item{fun}{A function that takes a SpatRaster and returns a single-layer SpatRaster.}
+#'   \item{res}{Recommended resolution (highest integer value used by assets).}
+#' }
+#' @examples
+#' names(landsat_index_list)
+#'
+#' ndvi_df <- get_rs_data(longitude = 138.715,
+#'                       latitude = -34.904,
+#'                       x_metres = 30,
+#'                       y_metres = 30,
+#'                       start_date = "2023-01-01",
+#'                       end_date = "2023-01-10",
+#'                       index_name = "NDVI")
+#'
+#' @export
+landsat_index_list <- list(
+  NDVI = list(
+    assets = c("nir08", "red"),
+    fun = function(r) (r$nir08 - r$red) / (r$nir08 + r$red),
+    res = 30 ),
 
+  DVI = list(
+    assets = c("nir08", "red"),
+    fun = function(r) r$nir08 - r$red,
+    res = 30 ),
+
+  kNDVI = list(
+    assets = c("nir08", "red"),
+    fun = function(r) tanh( ((r$nir08 - r$red) / (r$nir08 + r$red))^2 ),
+    res = 30 ),
+
+  GNDVI = list(
+    assets = c("nir08", "green"),
+    fun = function(r) (r$nir08 - r$green) / (r$nir08 + r$green),
+    res = 30 ),
+
+  BNDVI = list(
+    assets = c("nir08", "blue"),
+    fun = function(r) (r$nir08 - r$blue) / (r$nir08 + r$blue),
+    res = 30 ),
+
+  GBNDVI = list(
+    assets = c("nir08", "green", "blue"),
+    fun = function(r) (r$nir08 - (r$green + r$blue)) / (r$nir08 + (r$green + r$blue)),
+    res = 30 ),
+
+  GRNDVI = list(
+    assets = c("nir08", "green", "red"),
+    fun = function(r) (r$nir08 - (r$green + r$red)) / (r$nir08 + (r$green + r$red)),
+    res = 30 ),
+
+  NIRv = list(
+    assets = c("nir08", "red"),
+    fun = function(r) ((r$nir08 - r$red) / (r$nir08 + r$red)) * r$nir08,
+    res = 30 ),
+
+  NDWI = list(
+    assets = c("green", "nir08"),
+    fun = function(r) (r$green - r$nir08) / (r$green + r$nir08),
+    res = 30 ),
+
+  NDMI = list(
+    assets = c("nir08", "swir16"),
+    fun = function(r) (r$nir08 - r$swir16) / (r$nir08 + r$swir16),
+    res = 30 ),
+
+  EVI = list(
+    assets = c("nir08", "red", "blue"),
+    fun = function(r) 2.5 * (r$nir08 - r$red) / (r$nir08 + 6 * r$red - 7.5 * r$blue + 1),
+    res = 30 ),
+
+  SAVI = list(
+    assets = c("nir08", "red"),
+    fun = function(r) (r$nir08 - r$red) / (r$nir08 + r$red + 0.5) * 1.5,
+    res = 30 ),
+
+  MSAVI = list(
+    assets = c("nir08", "red"),
+    fun = function(r) (2 * r$nir08 + 1 - sqrt((2 * r$nir08 + 1)^2 - 8 * (r$nir08 - r$red))) / 2,
+    res = 30 ),
+
+  BSI = list(
+    assets = c("swir16", "nir08", "red", "blue"),
+    fun = function(r) ((r$swir16 + r$red) - (r$nir08 + r$blue)) / ((r$swir16 + r$red) + (r$nir08 + r$blue)),
+    res = 30 ),
+
+  SR = list(
+    assets = c("nir08", "red"),
+    fun = function(r) r$nir08 / r$red,
+    res = 30 ),
+
+  EVI2 = list(
+    assets = c("nir08", "red"),
+    fun = function(r) 2.5 * (r$nir08 - r$red) / (r$nir08 + 2.4 * r$red + 1),
+    res = 30 ),
+
+  OSAVI = list(
+    assets = c("nir08", "red"),
+    fun = function(r) (r$nir08 - r$red) / (r$nir08 + r$red + 0.16),
+    res = 30 ),
+
+  ARVI = list(
+    assets = c("nir08", "red", "blue"),
+    fun = function(r) (r$nir08 - (2 * r$red - r$blue)) / (r$nir08 + (2 * r$red - r$blue)),
+    res = 30 ),
+
+  GARI = list(
+    assets = c("nir08", "green", "blue", "red"),
+    fun = function(r) (r$nir08 - (r$green - (r$blue - r$red))) / (r$nir08 + (r$green - (r$blue - r$red))),
+    res = 30 ),
+
+  CIG = list(
+    assets = c("nir08", "green"),
+    fun = function(r) (r$nir08 / r$green) - 1,
+    res = 30 ),
+
+  MNDWI = list(
+    assets = c("green", "swir16"),
+    fun = function(r) (r$green - r$swir16) / (r$green + r$swir16),
+    res = 30 ),
+
+  NBR = list(
+    assets = c("nir08", "swir22"),
+    fun = function(r) (r$nir08 - r$swir22) / (r$nir08 + r$swir22),
+    res = 30 ),
+
+  NBR2 = list(
+    assets = c("swir16", "swir22"),
+    fun = function(r) (r$swir16 - r$swir22) / (r$swir16 + r$swir22),
+    res = 30 ),
+
+  BAI = list(
+    assets = c("red", "nir08"),
+    fun = function(r) 1 / ((0.1 - r$red)^2 + (0.06 - r$nir08)^2),
+    res = 30 )
+
+)
+
+################################################################################
+# Constants
+################################################################################
+# Landsat native pixel resolution.
+.PIXEL_SIZE_LANDSAT <- 30
+
+# Default plot half-widths (metres) when user doesn't supply x_metres/y_metres or auto-detection is disabled/fails
+.DEFAULT_HALF_S2      <- 10  # = 20 m × 20 m bbox
+.DEFAULT_HALF_LANDSAT <- 15  # = 30 m × 30 m bbox
+
+# Minimum bbox (half) width used for STAC downloads. Smaller = inefficient: GDAL fetches entire COG tile blocks.
+.FETCH_HALF_WIDTH_MIN <- 150  # = 300 m × 300 m download window
+
+# Operational start dates for source routing.
+.S2_START <- as.Date("2015-07-01")
+.L8_START <- as.Date("2013-04-01")
+
+# Sentinel-2 -> Landsat (planetary_computer_v1) asset name map.
+# Red-edge bands (B05/B06/B07) have no Landsat equivalent.
+# B08 and B8A both map to nir08; see .translateToLandsat for collision handling.
+.S2_TO_LANDSAT <- c(
+  B02 = "blue",
+  B03 = "green",
+  B04 = "red",
+  B08 = "nir08",
+  B8A = "nir08",
+  B11 = "swir16",
+  B12 = "swir22"
+)
+
+.S2_PROVIDER <- "planetary_computer_v1"
+
+################################################################################
+# Helpers
+################################################################################
+
+#' Convert metres to decimal degrees
+#'
+#' @param latitude Latitude of centre point where the distance is being measured (WGS84).
+#' @param distance Distance in metres. Default 1.
+#' @param pixel_size Pixel resolution in metres. Default 1.
+#' @return A vector containing x & y pixel sizes.
+#' @export
+metres_to_degrees <- function(latitude, distance = 1, pixel_size = 1){
+  a <- 6378137.0
+  e2 <- 0.00669437999014
+  lat_c_rad <- latitude * pi / 180
+  m_c <- a * (1 - e2) / (1 - e2 * sin(lat_c_rad)^2)^1.5
+  half_lat <- (metres / 2) * 180 / (pi * m_c)
+  lat_rad <- (latitude + c(-half_lat, 0, half_lat)) * pi / 180
+  denom <- 1 - e2 * sin(lat_rad)^2
+  n <- a / sqrt(denom)
+  m <- a * (1 - e2) / denom^1.5
+  w <- c(1, 4, 1)
+  x_y_decimal_degrees <- c(x_degrees = pixel_size * 180 / (pi * sum(n * cos(lat_rad) * w) / 6),
+                             y_degrees = pixel_size * 180 / (pi * sum(m * w) / 6))
+  return(x_y_decimal_degrees)
+}
+
+
+#' Bounding box around a central point
+#'
+#' @param longitude Longitude in decimal degrees (WGS84).
+#' @param latitude Latitude in decimal degrees (WGS84).
+#' @param x_metres Bbox x width in metres.
+#' @param y_metres Bbox y length in metres.
+#' @return An sf bbox object.
+#' @export
+point_to_bbox <- function(longitude,
+                          latitude,
+                          x_metres,
+                          y_metres
+                          ){
+  x_half_width <- (x_metres / 2)
+  y_half_width <- (y_metres / 2)
+
+  point <- sf::st_sfc( sf::st_point(c(longitude, latitude)), crs = sf::st_crs(4326) )
+  bbox_x <- point |> sf::st_buffer(dist = x_half_width) |> sf::st_bbox()
+  bbox_y <- point |> sf::st_buffer(dist = y_half_width) |> sf::st_bbox()
+  bbox <- c(bbox_x[1], bbox_y[2], bbox_x[3], bbox_y[4])
+  bbox <- sf::st_bbox(bbox, crs = sf::st_crs(4326))
+
+  return(bbox)
+}
+
+
+#' Check source and index name before running a query
+#'
+#' Selects the STAC source based on start_date and resolves index name matches available indices.
+#' @noRd
+.checkConfigs <- function(start_date, index_name){
+  d <- as.Date(start_date)
+  if (is.na(d)) {
+    stop("start_date could not be parsed as a date: '", start_date, "'", call. = FALSE)
+  }
+  if (d >= .S2_START){
+    index_list <- .resolve_s2_index(index_name)
+    return( list("sentinel-2", index_list) )
+  }
+  if (d >= .L8_START) {
+    message("Sentinel-2 not available (start_date before ",
+            format(.S2_START, "%Y-%m-%d"), "). Landsat 8 data obtained instead.")
+    index_list <- .resolve_landsat_index(index_name)
+    return( list("landsat-8", index_list) )
+  }
+  message("Sentinel-2 and Landsat 8 operations unavailable for start_date (prior to ",
+          format(.L8_START, "%Y-%m-%d"), "); Landsat 5 data obtained instead.")
+  index_list <- .resolve_landsat_index(index_name)
+  return( list("landsat-5", index_list) )
+}
+
+
+#' Resolve an index_name to its s2_index_list entry
+#' @noRd
+.resolve_s2_index <- function(index_name){
+  index_list <- s2_index_list[[index_name]]
+  if (is.null(index_list)) {
+    stop("Unknown index_name '", index_name, "'. Available indices: ",
+         paste(names(s2_index_list), collapse = ", "), call. = FALSE)
+  }
+  return(index_list)
+}
+
+
+#' Resolve an index_name to its landsat_index_list entry
+#' @noRd
+.resolve_landsat_index <- function(index_name){
+  index_list <- landsat_index_list[[index_name]]
+  if (is.null(index_list)) {
+    stop("Unknown index_name '", index_name, "'. Available indices: ",
+         paste(names(landsat_index_list), collapse = ", "), call. = FALSE)
+  }
+  return(index_list)
+}
+
+
+#' Scene-level cloud cover filter (Sentinel-2)
+#' @noRd
+.cloudFilter <- function(max_cloud_cover){
   function(items, bbox, ...) {
     keep <- vapply(items[["features"]], function(item) {
       cc <- item[["properties"]][["eo:cloud_cover"]]
@@ -96,12 +475,25 @@ s2_index <- list(
 }
 
 
-#' SCL pixel-level cloud/shadow mask
-#'
-#' @param scl_classes Integer vector of SCL values to mask
-#' @return A function suitable for mask_function in rsi::get_stac_data
+#' Combined cloud + platform filter (Landsat)
 #' @noRd
-.scl_mask <- function(scl_classes){
+.landsatFilter <- function(max_cloud_cover, platforms){
+  function(items, bbox, ...) {
+    keep <- vapply(items[["features"]], function(item) {
+      cc <- item[["properties"]][["eo:cloud_cover"]]
+      pf <- item[["properties"]][["platform"]]
+      (!is.null(cc) && cc <= max_cloud_cover) &&
+        (!is.null(pf) && pf %in% platforms)
+    }, logical(1))
+    items[["features"]] <- items[["features"]][keep]
+    items
+  }
+}
+
+
+#' Sentinel-2 SCL pixel-level cloud/shadow mask
+#' @noRd
+.sclMask <- function(scl_classes){
   function(mask_rast) {
     result <- mask_rast == scl_classes[1]
     for (cls in scl_classes[-1]) {
@@ -112,99 +504,129 @@ s2_index <- list(
 }
 
 
-#' Fetch Sentinel-2 STAC data with cloud filtering
+#' Fetch STAC data from Sentinel-2, Landsat 8, or Landsat 5
 #'
+#' @importFrom callr r
 #' @importFrom sf st_as_sfc
-#' @importFrom rsi get_stac_data
-#' @param bbox bbox object
-#' @param start_date,end_date Date strings
-#' @param pixel_x_size,pixel_y_size Resolution in decimal degrees
-#' @param asset_names Character vector of band names
-#' @param max_cloud_cover Scene-level threshold (0–100)
-#' @param composite_function NULL for per-scene, or "median" for composites
-#' @param provider Name of the STAC provider in rsi::sentinel2_band_mapping
-#' @param scl_classes Integer vector of SCL classes to mask, or NULL for no masking
+#' @importFrom rsi get_stac_data landsat_mask_function
 #' @noRd
-.fetch_s2 <- function(bbox,
+.fetchStac <- function(bbox,
+                       start_date,
+                       end_date,
+                       pixel_x_size,
+                       pixel_y_size,
+                       asset_names,
+                       max_cloud_cover,
+                       scl_classes = NULL,
+                       composite_function = NULL,
+                       source = "sentinel-2"
+                       ){
+  aoi <- sf::st_as_sfc(bbox)
+  band_mapping <- rsi::landsat_band_mapping$planetary_computer_v1
+  item_filter  <- .landsatFilter(max_cloud_cover, source)
+  mask_band    <- NULL
+  mask_fun     <- NULL
+  scl_temp     <- scl_classes
+  scl_classes  <- NULL
+  if (source == "sentinel-2") {
+    band_mapping <- rsi::sentinel2_band_mapping[[.S2_PROVIDER]]
+    item_filter  <- .cloudFilter(max_cloud_cover)
+    if (is.numeric(scl_temp)){
+      scl_classes <- scl_temp
+      mask_band <- "SCL"
+      mask_fun  <- .sclMask(scl_classes)
+    }
+  }
+  stac <- callr::r(
+    function( aoi, start_date, end_date, pixel_x_size, pixel_y_size, stac_source, asset_names, collection, query_function,
+              sign_function, item_filter, mask_band, mask_function, composite_function, output_filename, limit
+      ){
+      rsi::get_stac_data( aoi                  = aoi,
+                          start_date           = start_date,
+                          end_date             = end_date,
+                          pixel_x_size         = pixel_x_size,
+                          pixel_y_size         = pixel_y_size,
+                          stac_source          = stac_source,
+                          asset_names          = asset_names,
+                          collection           = collection,
+                          query_function       = query_function,
+                          sign_function        = sign_function,
+                          item_filter_function = item_filter,
+                          mask_band            = mask_band,
+                          mask_function        = mask_function,
+                          composite_function   = composite_function,
+                          output_filename      = output_filename,
+                          limit                = limit )
+      },
+    args = list( aoi                = aoi,
+                 start_date         = start_date,
+                 end_date           = end_date,
+                 pixel_x_size       = pixel_x_size,
+                 pixel_y_size       = pixel_y_size,
+                 stac_source        = attr(band_mapping, "stac_source"),
+                 asset_names        = asset_names,
+                 collection         = attr(band_mapping, "collection_name"),
+                 query_function     = attr(band_mapping, "query_function"),
+                 sign_function      = attr(band_mapping, "sign_function"),
+                 item_filter        = item_filter,
+                 mask_band          = mask_band,
+                 mask_function      = mask_fun,
+                 composite_function = composite_function,
+                 output_filename    = tempfile(fileext = ".tif"),
+                 limit              = 999 )
+    )
+  return(stac)
+}
+
+
+#' Extract per-scene mean index values from STAC files
+#'
+#' @importFrom terra rast global
+#' @noRd
+.extractStacMean <- function(stac_data,
+                             index_function
+                             ){
+  bn <- basename(stac_data)
+  dates <- regmatches(bn, regexpr("\\d{4}-\\d{2}-\\d{2}", bn))
+
+  values <- vapply( stac_data, function(f){
+    r <- terra::rast(f)
+    terra::global(index_function(r), "mean", na.rm = TRUE)[[1]]
+  }, numeric(1), USE.NAMES = FALSE )
+
+  df <- data.frame(date = dates, value = values, stringsAsFactors = FALSE)
+  df <- df[!is.nan(df$value), ]
+  result <- aggregate(value ~ date, data = df, FUN = mean)
+  return(result)
+}
+
+
+#' Validation + fetch wrapper
+#' @noRd
+.stacWrap <- function(bbox,
                       start_date,
                       end_date,
                       pixel_x_size,
                       pixel_y_size,
                       asset_names,
                       max_cloud_cover,
-                      composite_function = NULL,
-                      scl_classes = NULL,
-                      provider = "planetary_computer_v1"
-){
+                      scl_classes,
+                      composite_function,
+                      source
+                      ){
+  stopifnot("max_cloud_cover must be between 0 and 100" = max_cloud_cover >= 0 && max_cloud_cover <= 100)
 
-  band_mapping <- rsi::sentinel2_band_mapping[[provider]]
-  if (is.null(band_mapping)) {
-    stop(
-      "Unknown provider '", provider, "'. Available providers: ",
-      paste(names(rsi::sentinel2_band_mapping), collapse = ", "),
-      call. = FALSE
-    )
-  }
-
-  aoi <- sf::st_as_sfc(bbox)
-
-  if (is.null(scl_classes)) {
-    mask_band <- NULL
-    mask_function <- NULL
-  } else {
-    mask_band <- "SCL"
-    mask_function <- .scl_mask(scl_classes)
-  }
-
-  s2_stac <- rsi::get_stac_data(
-    aoi = aoi,
-    start_date = start_date,
-    end_date = end_date,
-    pixel_x_size = pixel_x_size,
-    pixel_y_size = pixel_y_size,
-    stac_source = attr(band_mapping, "stac_source"),
-    asset_names = asset_names,
-    collection = attr(band_mapping, "collection_name"),
-    query_function = attr(band_mapping, "query_function"),
-    sign_function = attr(band_mapping, "sign_function"),
-    item_filter_function = .cloud_filter(max_cloud_cover),
-    mask_band = mask_band,
-    mask_function = mask_function,
-    composite_function = composite_function,
-    output_filename = tempfile(fileext = ".tif"),
-    limit = 999
-  )
-  return(s2_stac)
-}
-
-
-#' Compute a per-scene mean index time series from STAC results
-#'
-#' @importFrom terra rast global
-#' @param stac_data Character vector of file paths from .fetch_s2()
-#' @param index_function A function(rast) -> single-layer SpatRaster of index values
-#' @noRd
-.compute_timeseries <- function(stac_data,
-                                index_function
-){
-
-  num_features <- length(stac_data)
-  df <- data.frame(date = character(num_features),
-                   value = numeric(num_features),
-                   stringsAsFactors = FALSE)
-
-  for (i in seq_len(num_features)) {
-    df[i, "date"] <- regmatches(basename(stac_data[i]),
-                                regexpr("\\d{4}-\\d{2}-\\d{2}", basename(stac_data[i])))
-
-    rast <- terra::rast(stac_data[i])
-    df[i, "value"] <- terra::global(index_function(rast), "mean", na.rm = TRUE)[[1]]
-  }
-
-  df <- df[!is.nan(df$value), ]
-  result <- aggregate(value ~ date, data = df, FUN = mean)
-
-  return(result)
+  stac <- .fetchStac(bbox = bbox,
+                     start_date = start_date,
+                     end_date = end_date,
+                     pixel_x_size = pixel_x_size,
+                     pixel_y_size = pixel_y_size,
+                     asset_names = asset_names,
+                     max_cloud_cover = max_cloud_cover,
+                     scl_classes = scl_classes,
+                     composite_function = composite_function,
+                     source = source)
+  return(stac)
 }
 
 
@@ -212,881 +634,164 @@ s2_index <- list(
 # General functions
 ################################################################################
 
-#' Custom vegetation index time series using Sentinel-2 data
+#' Collect remote sensing data (Sentinel-2, Landsat pre-2015)
 #'
-#' getS2_data() calculates a user-defined vegetation index from Sentinel-2
-#' satellite data, returning a time series of per-scene mean values. This
-#' allows computation of any index expressible as a function of Sentinel-2
-#' band assets.
+#' This is a wrapper for 'rsi' functions used to extract data from Sentinel-2 remote sensing spectral indices for a given location between two dates.
 #'
-#' @param bbox A 'bbox' object (WGS84). Create with sf::st_bbox(..., crs = sf::st_crs(4326)).
-#' @param start_date Start of the date range, "YYYY-MM-DD".
-#' @param end_date Final date to be observed, "YYYY-MM-DD".
-#' @param pixel_x_size Longitude resolution in decimal degrees.
-#' @param pixel_y_size Latitude resolution in decimal degrees.
-#' @param asset_names Character vector of Sentinel-2 band names required by the index (e.g. \code{c("B08", "B04")}).
-#' @param index_function A function that takes a \code{SpatRaster} and returns a single-layer \code{SpatRaster} of index values. Band layers are accessible by name (e.g. \code{r$B08}).
-#' @param max_cloud_cover Maximum scene-level cloud cover percentage (0–100). Default 50.
-#' @param provider Name of the STAC provider to use. Must be a valid entry in
-#'   \code{rsi::sentinel2_band_mapping}. Default \code{"planetary_computer_v1"}.
-#' @param scl_classes Integer vector of SCL (Scene Classification Layer) classes
-#'   to mask. Common classes: 9 = cloud high probability, 8 = cloud medium probability,
-#'   3 = cloud shadow, 10 = thin cirrus, 1 = saturated/defective.
+#' Users simply provide coordinates (longitude & latitude), capture dimensions (x_metres and y_metres), period observed (start and end date), and an index name (must be included in \code{\link{s2_index_list}}).
+#' Optional features include setting maximum cloud cover and cloud masking based on Sentinel-2 SCL classes.
 #'
-#'   Set to \code{NULL} (default) to disable pixel-level masking.
-#' @returns A dataframe with columns for date and value.
+#' Note: Some locations may not return data for desired start and end dates. In addition, if \code{start_date} falls outside the Sentinel-2 operational window (before 2015-07-01), Landsat 8 (after 2013-04-01) or Landsat 5
+#' (before 2013-04-01) STAC data is collected instead. Landsat data not compatible with red-edge bands (B05, B06, B07) will be skipped with a warning.
+#'
+#' @param longitude Longitude in decimal degrees (WGS84) of the centre point.
+#' @param latitude Latitude in decimal degrees (WGS84) of the centre point.
+#' @param x_metres Bounding box x width. Input \code{x_metres} represents the distance (metres) between xmin and xmax in a typical bbox object. It is converted to decimal degrees before it is used to extend the inputted coordinates to a bounding box of the dimensions \code{x_metres} by \code{y_metres}.
+#' @param y_metres Bounding box y length. Input \code{y_metres} represents the distance (metres) between ymin and ymax in a typical bbox object. It is converted to decimal degrees and used to extend the inputted coordinates to create a bounding box of the dimensions \code{x_metres} by \code{y_metres}.
+#' @param start_date First date to be observed, format "YYYY-MM-DD".
+#' @param end_date Last date to be observed, format "YYYY-MM-DD".
+#' @param index_name Name of a spectral index from \code{\link{s2_index_list}} (e.g. \code{"NDVI"}, \code{"EVI2"}, \code{"NBR"}). See \code{names(s2_index_list)}.
+#' @param max_cloud_cover Maximum allowed cloud cover percentage (0–100). Default 50, e.g. scenes are dropped if cloud cover exceeds 50 per cent.
+#' @param scl_classes Vector of integers corresponding to Sentinel-2 SCL classes to be masked (e.g. 9 = cloud high, 8 = cloud medium, 3 = cloud shadow, 10 = thin cirrus). Change from default \code{NULL} to enable. Not available for Landsat observations.
+#' @returns A dataframe with columns \code{date} and \code{value}.
 #' @examples
-#' bbox <- sf::st_bbox(c(xmin = 138.712, xmax = 138.718, ymin = -34.902, ymax = -34.906), crs = sf::st_crs(4326))
+#' ndvi_df <- get_rs_data(longitude = 138.715,
+#'                       latitude = -34.904,
+#'                       x_metres = 30,
+#'                       y_metres = 30,
+#'                       start_date = "2023-01-01",
+#'                       end_date = "2023-01-10",
+#'                       index_name = "NDVI")
 #'
-#' # Using s2_index
-#' ndvi_df <- getS2_data(bbox, "2023-01-01", "2023-01-10", 0.0001, 0.0001,
-#'                       asset_names = s2_index$NDVI$assets,
-#'                       index_function = s2_index$NDVI$fun)
-#'
-#' # Custom index with cloud masking
-#' evi_df <- getS2_data(bbox, "2023-01-01", "2023-01-10", 0.0001, 0.0001,
-#'                      asset_names = c("B08", "B04", "B02"),
-#'                      index_function = function(r) {
-#'                        2.5 * (r$B08 - r$B04) / (r$B08 + 6 * r$B04 - 7.5 * r$B02 + 1)
-#'                      },
-#'                      scl_classes = c(8, 9, 10))
+#' # Pre-Sentinel-2 date: automatically falls back to Landsat
+#' ndvi_df <- get_rs_data(longitude = 138.715,
+#'                       latitude = -34.904,
+#'                       x_metres = 30,
+#'                       y_metres = 30,
+#'                       start_date = "2000-01-01",
+#'                       end_date = "2000-01-31",
+#'                       index_name = "NDVI")
 #'
 #' @export
-getS2_data <- function(bbox,
+get_rs_data <- function(longitude,
+                       latitude,
+                       x_metres,
+                       y_metres,
                        start_date,
                        end_date,
-                       pixel_x_size,
-                       pixel_y_size,
-                       asset_names,
-                       index_function,
+                       index_name,
                        max_cloud_cover = 50,
-                       scl_classes = NULL,
-                       provider = "planetary_computer_v1"
-){
+                       scl_classes = NULL
+                       ){
+  if (xor(is.null(x_metres), is.null(y_metres))) { stop("x_metres and y_metres must both be set, or both left NULL.", call. = FALSE) }
 
-  stopifnot(
-    "asset_names must be a character vector" = is.character(asset_names),
-    "index_function must be a function" = is.function(index_function),
-    "max_cloud_cover must be between 0 and 100" = max_cloud_cover >= 0 && max_cloud_cover <= 100,
-    "scl_classes must be NULL or an integer vector" = is.null(scl_classes) || is.numeric(scl_classes)
-  )
+  index_list <- .checkConfigs(start_date, index_name)
+  source <- index_list[[1]]
+  index_list <- index_list[[2]]
 
-  stac_data <- .fetch_s2(bbox, start_date, end_date, pixel_x_size, pixel_y_size,
+  asset_names <- index_list$assets
+  index_function <- index_list$fun
+  pixel_size_m <- index_list$res
+
+  pixel_size <- metres_to_degrees(latitude = latitude,
+                                   metres = y_metres,
+                                   pixel_size = pixel_size_m)
+
+  bbox <- point_to_bbox(longitude,
+                        latitude,
+                        x_metres,
+                        y_metres)
+
+  stac_data <- .stacWrap(bbox = bbox,
+                         start_date = start_date,
+                         end_date = end_date,
+                         pixel_x_size = pixel_size[1],
+                         pixel_y_size = pixel_size[2],
                          asset_names = asset_names,
                          max_cloud_cover = max_cloud_cover,
-                         provider = provider,
-                         scl_classes = scl_classes)
+                         scl_classes = scl_classes,
+                         composite_function = NULL,
+                         source = source)
 
-  if (length(stac_data) == 0) {
-    warning("No scenes returned. Try increasing max_cloud_cover or widening the date range.",
-            call. = FALSE)
-    return(data.frame(date = character(0), value = numeric(0), stringsAsFactors = FALSE))
-  }
+  if (length(stac_data) == 0) { return(data.frame(date = character(0), value = numeric(0), stringsAsFactors = FALSE)) }
 
-  result <- .compute_timeseries(stac_data, index_function)
+  df <- .extractStacMean(stac_data, index_function)
 
-  return(result)
+  return(df)
 }
 
 
-#' Custom vegetation index raster using Sentinel-2 data
+#' Collect remote sensing data (Sentinel-2, Landsat pre-2015)
 #'
-#' getS2_raster() produces a median composite raster of a user-defined
-#' vegetation index from Sentinel-2 satellite data.
+#' This is a wrapper for 'rsi' functions used to obtain a raster image from Sentinel-2 remote sensing spectral indices for a given location between two dates.
+#'
+#' Users simply provide coordinates (longitude & latitude), capture dimensions (x_metres and y_metres), period observed (start and end date), and an index name (must be included in \code{\link{s2_index_list}}).
+#' Optional features include setting maximum cloud cover and cloud masking based on Sentinel-2 SCL classes.
+#'
+#' Note: Some locations may not return data for desired start and end dates. In addition, if \code{start_date} falls outside the Sentinel-2 operational window (before 2015-07-01), Landsat 8 (after 2013-04-01) or Landsat 5
+#' (before 2013-04-01) STAC data is collected instead. Landsat data not compatible with red-edge bands (B05, B06, B07) will be skipped with a warning.
 #'
 #' @importFrom terra rast
-#' @inheritParams getS2_data
-#' @returns A SpatRaster of median composite index values.
+#' @inheritParams get_rs_data
+#' @param composite_function Passed to \code{rsi::get_stac_data}. Default \code{"median"}.
+#'   Other options include \code{"mean"}, \code{"max"}, \code{"min"}, \code{"sum"}.
+#' @returns A SpatRaster of composite index values, or \code{NULL} if no scenes were returned.
 #' @examples
-#' bbox <- sf::st_bbox(c(xmin = 138.712, xmax = 138.718, ymin = -34.902, ymax = -34.906),
-#'                     crs = sf::st_crs(4326))
-#'
-#' ndvi_rast <- getS2_raster(bbox, "2023-01-01", "2023-01-10", 0.0001, 0.0001,
-#'                           asset_names = s2_index$NDVI$assets,
-#'                           index_function = s2_index$NDVI$fun)
-#' terra::plot(ndvi_rast)
+#' rast <- get_rs_raster(longitude = 138.715,
+#'                      latitude = -34.904,
+#'                      x_metres = 90,
+#'                      y_metres = 90,
+#'                      start_date = "2023-01-01",
+#'                      end_date = "2023-01-10",
+#'                      index_name = "NDVI")
+#' terra::plot(rast)
 #'
 #' @export
-getS2_raster <- function(bbox,
+get_rs_raster <- function(longitude,
+                         latitude,
+                         x_metres,
+                         y_metres,
                          start_date,
                          end_date,
-                         pixel_x_size,
-                         pixel_y_size,
-                         asset_names,
-                         index_function,
+                         index_name,
                          max_cloud_cover = 50,
                          scl_classes = NULL,
-                         provider = "planetary_computer_v1"
-){
+                         composite_function = "median"
+                         ){
+  if (xor(is.null(x_metres), is.null(y_metres))) { stop("x_metres and y_metres must both be set, or both left NULL.", call. = FALSE) }
 
-  stopifnot(
-    "asset_names must be a character vector" = is.character(asset_names),
-    "index_function must be a function" = is.function(index_function),
-    "max_cloud_cover must be between 0 and 100" = max_cloud_cover >= 0 && max_cloud_cover <= 100,
-    "scl_classes must be NULL or an integer vector" = is.null(scl_classes) || is.numeric(scl_classes)
-  )
+  index_list <- .checkConfigs(start_date, index_name)
+  source <- index_list[[1]]
+  index_list <- index_list[[2]]
 
-  comp <- .fetch_s2(bbox, start_date, end_date, pixel_x_size, pixel_y_size,
-                    asset_names = asset_names,
-                    max_cloud_cover = max_cloud_cover,
-                    composite_function = "median",
-                    provider = provider,
-                    scl_classes = scl_classes)
+  asset_names <- index_list$assets
+  index_function <- index_list$fun
+  pixel_size_m <- index_list$res
 
-  r <- terra::rast(comp)
+  pixel_size <- metres_to_degrees(latitude = latitude,
+                                   metres = y_metres,
+                                   pixel_size = pixel_size_m)
+
+  bbox <- point_to_bbox(longitude,
+                        latitude,
+                        x_metres,
+                        y_metres)
+
+  stac_data <- .stacWrap(bbox = bbox,
+                         start_date = start_date,
+                         end_date = end_date,
+                         pixel_x_size = pixel_size[1],
+                         pixel_y_size = pixel_size[2],
+                         asset_names = asset_names,
+                         max_cloud_cover = max_cloud_cover,
+                         scl_classes = scl_classes,
+                         composite_function = composite_function,
+                         source = source)
+
+  if (length(stac_data) == 0) return(NULL)
+
+  r <- terra::rast(stac_data)
   index_raster <- index_function(r)
 
   return(index_raster)
-}
-
-
-################################################################################
-# Convenience functions
-################################################################################
-
-#' @title NDVI using Sentinel-2 data
-#' @description Normalised Difference Vegetation Index (NDVI) time series.
-#' @inheritParams getS2_data
-#' @returns A dataframe of mean NDVI per date.
-#' @examples
-#' bbox <- sf::st_bbox(c(xmin = 138.712, xmax = 138.718, ymin = -34.902, ymax = -34.906),
-#'                     crs = sf::st_crs(4326))
-#' ndvi_df <- getNDVI(bbox, "2023-01-01", "2023-01-10", 0.0001, 0.0001)
-#' @export
-getNDVI <- function(bbox,
-                    start_date,
-                    end_date,
-                    pixel_x_size,
-                    pixel_y_size,
-                    max_cloud_cover = 50,
-                    provider = "planetary_computer_v1"
-){
-
-  df <- getS2_data(bbox, start_date, end_date, pixel_x_size, pixel_y_size,
-                   asset_names = c("B08", "B04"),
-                   index_function = function(r) (r$B08 - r$B04) / (r$B08 + r$B04),
-                   max_cloud_cover = max_cloud_cover,
-                   provider = provider)
-  return(df)
-}
-
-
-#' @title NDVI raster using Sentinel-2 data
-#' @description Normalised Difference Vegetation Index (NDVI) median composite raster.
-#' @inheritParams getS2_data
-#' @returns A SpatRaster of median NDVI.
-#' @examples
-#' bbox <- sf::st_bbox(c(xmin = 138.712, xmax = 138.718, ymin = -34.902, ymax = -34.906),
-#'                     crs = sf::st_crs(4326))
-#' ndvi_rast <- getNDVI_raster(bbox, "2023-01-01", "2023-01-10", 0.0001, 0.0001)
-#' terra::plot(ndvi_rast)
-#' @export
-getNDVI_raster <- function(bbox,
-                           start_date,
-                           end_date,
-                           pixel_x_size,
-                           pixel_y_size,
-                           max_cloud_cover = 50,
-                           provider = "planetary_computer_v1"
-){
-
-  NDVI_raster <- getS2_raster(bbox, start_date, end_date, pixel_x_size, pixel_y_size,
-                              asset_names = c("B08", "B04"),
-                              index_function = function(r) (r$B08 - r$B04) / (r$B08 + r$B04),
-                              max_cloud_cover = max_cloud_cover,
-                              provider = provider)
-  return(NDVI_raster)
-}
-
-
-#' @title NIRv using Sentinel-2 data
-#' @description Near-Infrared Reflectance of Vegetation (NIRv) time series.
-#' @inheritParams getS2_data
-#' @returns A dataframe of mean NIRv per date.
-#' @examples
-#' bbox <- sf::st_bbox(c(xmin = 138.712, xmax = 138.718, ymin = -34.902, ymax = -34.906),
-#'                     crs = sf::st_crs(4326))
-#' nirv_df <- getNIRv(bbox, "2023-01-01", "2023-01-10", 0.0001, 0.0001)
-#' @export
-getNIRv <- function(bbox,
-                    start_date,
-                    end_date,
-                    pixel_x_size,
-                    pixel_y_size,
-                    max_cloud_cover = 50,
-                    provider = "planetary_computer_v1"
-){
-
-  df <- getS2_data(bbox, start_date, end_date, pixel_x_size, pixel_y_size,
-                   asset_names = c("B08", "B04"),
-                   index_function = function(r) ((r$B08 - r$B04) / (r$B08 + r$B04)) * r$B08,
-                   max_cloud_cover = max_cloud_cover,
-                   provider = provider)
-  return(df)
-}
-
-
-#' @title NIRv raster using Sentinel-2 data
-#' @description Near-Infrared Reflectance of Vegetation (NIRv) median composite raster.
-#' @inheritParams getS2_data
-#' @returns A SpatRaster of median NIRv.
-#' @examples
-#' bbox <- sf::st_bbox(c(xmin = 138.712, xmax = 138.718, ymin = -34.902, ymax = -34.906),
-#'                     crs = sf::st_crs(4326))
-#' nirv_rast <- getNIRv_raster(bbox, "2023-01-01", "2023-01-10", 0.0001, 0.0001)
-#' terra::plot(nirv_rast)
-#' @export
-getNIRv_raster <- function(bbox,
-                           start_date,
-                           end_date,
-                           pixel_x_size,
-                           pixel_y_size,
-                           max_cloud_cover = 50,
-                           provider = "planetary_computer_v1"
-){
-
-  NIRv_raster <- getS2_raster(bbox, start_date, end_date, pixel_x_size, pixel_y_size,
-                              asset_names = c("B08", "B04"),
-                              index_function = function(r) ((r$B08 - r$B04) / (r$B08 + r$B04)) * r$B08,
-                              max_cloud_cover = max_cloud_cover,
-                              provider = provider)
-  return(NIRv_raster)
-}
-
-
-#' @title NDWI using Sentinel-2 data
-#' @description Normalised Difference Water Index (NDWI) time series. Detects and monitors water bodies using green and near-infrared reflectance.
-#' @inheritParams getS2_data
-#' @returns A dataframe of mean NDWI per date.
-#' @references McFeeters, S. K. (1996). The use of the Normalized Difference Water
-#'   Index (NDWI) in the delineation of open water features. International Journal
-#'   of Remote Sensing, 17(7), 1425-1432.
-#' @examples
-#' bbox <- sf::st_bbox(c(xmin = 138.712, xmax = 138.718, ymin = -34.902, ymax = -34.906),
-#'                     crs = sf::st_crs(4326))
-#' ndwi_df <- getNDWI(bbox, "2023-01-01", "2023-01-10", 0.0001, 0.0001)
-#' @export
-getNDWI <- function(bbox,
-                    start_date,
-                    end_date,
-                    pixel_x_size,
-                    pixel_y_size,
-                    max_cloud_cover = 50,
-                    provider = "planetary_computer_v1"
-){
-
-  df <- getS2_data(bbox, start_date, end_date, pixel_x_size, pixel_y_size,
-                   asset_names = c("B03", "B08"),
-                   index_function = function(r) (r$B03 - r$B08) / (r$B03 + r$B08),
-                   max_cloud_cover = max_cloud_cover,
-                   provider = provider)
-  return(df)
-}
-
-
-#' @title NDWI raster using Sentinel-2 data
-#' @description Normalised Difference Water Index (NDWI) median composite raster. Detects and monitors water bodies using green and near-infrared reflectance.
-#' @inheritParams getS2_data
-#' @returns A SpatRaster of median NDWI.
-#' @references McFeeters, S. K. (1996). The use of the Normalized Difference Water
-#'   Index (NDWI) in the delineation of open water features. International Journal
-#'   of Remote Sensing, 17(7), 1425-1432.
-#' @examples
-#' bbox <- sf::st_bbox(c(xmin = 138.712, xmax = 138.718, ymin = -34.902, ymax = -34.906),
-#'                     crs = sf::st_crs(4326))
-#' ndwi_rast <- getNDWI_raster(bbox, "2023-01-01", "2023-01-10", 0.0001, 0.0001)
-#' terra::plot(ndwi_rast)
-#' @export
-getNDWI_raster <- function(bbox,
-                           start_date,
-                           end_date,
-                           pixel_x_size,
-                           pixel_y_size,
-                           max_cloud_cover = 50,
-                           provider = "planetary_computer_v1"
-){
-
-  NDWI_raster <- getS2_raster(bbox, start_date, end_date, pixel_x_size, pixel_y_size,
-                              asset_names = c("B03", "B08"),
-                              index_function = function(r) (r$B03 - r$B08) / (r$B03 + r$B08),
-                              max_cloud_cover = max_cloud_cover,
-                              provider = provider)
-  return(NDWI_raster)
-}
-
-
-#' @title NDMI using Sentinel-2 data
-#' @description Normalised Difference Moisture Index (NDMI) time series. Monitors vegetation water content using near-infrared and shortwave infrared reflectance.
-#' @inheritParams getS2_data
-#' @returns A dataframe of mean NDMI per date.
-#' @references Gao, B.-C. (1996). NDWI - A normalized difference water index for
-#'   remote sensing of vegetation liquid water from space. Remote Sensing of
-#'   Environment, 58(3), 257-266.
-#' @examples
-#' bbox <- sf::st_bbox(c(xmin = 138.712, xmax = 138.718, ymin = -34.902, ymax = -34.906),
-#'                     crs = sf::st_crs(4326))
-#' ndmi_df <- getNDMI(bbox, "2023-01-01", "2023-01-10", 0.0001, 0.0001)
-#' @export
-getNDMI <- function(bbox,
-                    start_date,
-                    end_date,
-                    pixel_x_size,
-                    pixel_y_size,
-                    max_cloud_cover = 50,
-                    provider = "planetary_computer_v1"
-){
-
-  df <- getS2_data(bbox, start_date, end_date, pixel_x_size, pixel_y_size,
-                   asset_names = c("B8A", "B11"),
-                   index_function = function(r) (r$B8A - r$B11) / (r$B8A + r$B11),
-                   max_cloud_cover = max_cloud_cover,
-                   provider = provider)
-  return(df)
-}
-
-
-#' @title NDMI raster using Sentinel-2 data
-#' @description Normalised Difference Moisture Index (NDMI) median composite raster. Monitors vegetation water content using near-infrared and shortwave infrared reflectance.
-#' @inheritParams getS2_data
-#' @returns A SpatRaster of median NDMI.
-#' @references Gao, B.-C. (1996). NDWI - A normalized difference water index for
-#'   remote sensing of vegetation liquid water from space. Remote Sensing of
-#'   Environment, 58(3), 257-266.
-#' @examples
-#' bbox <- sf::st_bbox(c(xmin = 138.712, xmax = 138.718, ymin = -34.902, ymax = -34.906),
-#'                     crs = sf::st_crs(4326))
-#' ndmi_rast <- getNDMI_raster(bbox, "2023-01-01", "2023-01-10", 0.0001, 0.0001)
-#' terra::plot(ndmi_rast)
-#' @export
-getNDMI_raster <- function(bbox,
-                           start_date,
-                           end_date,
-                           pixel_x_size,
-                           pixel_y_size,
-                           max_cloud_cover = 50,
-                           provider = "planetary_computer_v1"
-){
-
-  NDMI_raster <- getS2_raster(bbox, start_date, end_date, pixel_x_size, pixel_y_size,
-                              asset_names = c("B8A", "B11"),
-                              index_function = function(r) (r$B8A - r$B11) / (r$B8A + r$B11),
-                              max_cloud_cover = max_cloud_cover,
-                              provider = provider)
-  return(NDMI_raster)
-}
-
-
-#' @title PSRI using Sentinel-2 data
-#' @description Plant Senescence Reflectance Index (PSRI) time series.
-#' @inheritParams getS2_data
-#' @returns A dataframe of mean PSRI per date.
-#' @examples
-#' bbox <- sf::st_bbox(c(xmin = 138.712, xmax = 138.718, ymin = -34.902, ymax = -34.906),
-#'                     crs = sf::st_crs(4326))
-#' psri_df <- getPSRI(bbox, "2023-01-01", "2023-01-10", 0.0001, 0.0001)
-#' @export
-getPSRI <- function(bbox,
-                    start_date,
-                    end_date,
-                    pixel_x_size,
-                    pixel_y_size,
-                    max_cloud_cover = 50,
-                    provider = "planetary_computer_v1"
-){
-
-  df <- getS2_data(bbox, start_date, end_date, pixel_x_size, pixel_y_size,
-                   asset_names = c("B06", "B04", "B02"),
-                   index_function = function(r) (r$B04 - r$B02) / r$B06,
-                   max_cloud_cover = max_cloud_cover,
-                   provider = provider)
-  return(df)
-}
-
-
-#' @title PSRI raster using Sentinel-2 data
-#' @description Plant Senescence Reflectance Index (PSRI) median composite raster.
-#' @inheritParams getS2_data
-#' @returns A SpatRaster of median PSRI.
-#' @examples
-#' bbox <- sf::st_bbox(c(xmin = 138.712, xmax = 138.718, ymin = -34.902, ymax = -34.906),
-#'                     crs = sf::st_crs(4326))
-#' psri_rast <- getPSRI_raster(bbox, "2023-01-01", "2023-01-10", 0.0001, 0.0001)
-#' terra::plot(psri_rast)
-#' @export
-getPSRI_raster <- function(bbox,
-                           start_date,
-                           end_date,
-                           pixel_x_size,
-                           pixel_y_size,
-                           max_cloud_cover = 50,
-                           provider = "planetary_computer_v1"
-){
-
-  PSRI_raster <- getS2_raster(bbox, start_date, end_date, pixel_x_size, pixel_y_size,
-                              asset_names = c("B06", "B04", "B02"),
-                              index_function = function(r) (r$B04 - r$B02) / r$B06,
-                              max_cloud_cover = max_cloud_cover,
-                              provider = provider)
-  return(PSRI_raster)
-}
-
-
-#' @title CIre using Sentinel-2 data
-#' @description Chlorophyll Index Red-Edge (CIre) time series.
-#' @inheritParams getS2_data
-#' @returns A dataframe of mean CIre per date.
-#' @examples
-#' bbox <- sf::st_bbox(c(xmin = 138.712, xmax = 138.718, ymin = -34.902, ymax = -34.906),
-#'                     crs = sf::st_crs(4326))
-#' cire_df <- getCIre(bbox, "2023-01-01", "2023-01-10", 0.0001, 0.0001)
-#' @export
-getCIre <- function(bbox,
-                    start_date,
-                    end_date,
-                    pixel_x_size,
-                    pixel_y_size,
-                    max_cloud_cover = 50,
-                    provider = "planetary_computer_v1"
-){
-
-  df <- getS2_data(bbox, start_date, end_date, pixel_x_size, pixel_y_size,
-                   asset_names = c("B07", "B05"),
-                   index_function = function(r) (r$B07 / r$B05) - 1,
-                   max_cloud_cover = max_cloud_cover,
-                   provider = provider)
-  return(df)
-}
-
-
-#' @title CIre raster using Sentinel-2 data
-#' @description Chlorophyll Index Red-Edge (CIre) median composite raster.
-#' @inheritParams getS2_data
-#' @returns A SpatRaster of median CIre.
-#' @examples
-#' bbox <- sf::st_bbox(c(xmin = 138.712, xmax = 138.718, ymin = -34.902, ymax = -34.906),
-#'                     crs = sf::st_crs(4326))
-#' cire_rast <- getCIre_raster(bbox, "2023-01-01", "2023-01-10", 0.0001, 0.0001)
-#' terra::plot(cire_rast)
-#' @export
-getCIre_raster <- function(bbox,
-                           start_date,
-                           end_date,
-                           pixel_x_size,
-                           pixel_y_size,
-                           max_cloud_cover = 50,
-                           provider = "planetary_computer_v1"
-){
-
-  CIre_raster <- getS2_raster(bbox, start_date, end_date, pixel_x_size, pixel_y_size,
-                              asset_names = c("B07", "B05"),
-                              index_function = function(r) (r$B07 / r$B05) - 1,
-                              max_cloud_cover = max_cloud_cover,
-                              provider = provider)
-  return(CIre_raster)
-}
-
-
-#' @title MTCI using Sentinel-2 data
-#' @description MERIS Terrestrial Chlorophyll Index (MTCI) time series.
-#' @inheritParams getS2_data
-#' @returns A dataframe of mean MTCI per date.
-#' @examples
-#' bbox <- sf::st_bbox(c(xmin = 138.712, xmax = 138.718, ymin = -34.902, ymax = -34.906),
-#'                     crs = sf::st_crs(4326))
-#' mtci_df <- getMTCI(bbox, "2023-01-01", "2023-01-10", 0.0001, 0.0001)
-#' @export
-getMTCI <- function(bbox,
-                    start_date,
-                    end_date,
-                    pixel_x_size,
-                    pixel_y_size,
-                    max_cloud_cover = 50,
-                    provider = "planetary_computer_v1"
-){
-
-  df <- getS2_data(bbox, start_date, end_date, pixel_x_size, pixel_y_size,
-                   asset_names = c("B06", "B05", "B04"),
-                   index_function = function(r) (r$B06 - r$B05) / (r$B05 - r$B04),
-                   max_cloud_cover = max_cloud_cover,
-                   provider = provider)
-  return(df)
-}
-
-
-#' @title MTCI raster using Sentinel-2 data
-#' @description MERIS Terrestrial Chlorophyll Index (MTCI) median composite raster.
-#' @inheritParams getS2_data
-#' @returns A SpatRaster of median MTCI.
-#' @examples
-#' bbox <- sf::st_bbox(c(xmin = 138.712, xmax = 138.718, ymin = -34.902, ymax = -34.906),
-#'                     crs = sf::st_crs(4326))
-#' mtci_rast <- getMTCI_raster(bbox, "2023-01-01", "2023-01-10", 0.0001, 0.0001)
-#' terra::plot(mtci_rast)
-#' @export
-getMTCI_raster <- function(bbox,
-                           start_date,
-                           end_date,
-                           pixel_x_size,
-                           pixel_y_size,
-                           max_cloud_cover = 50,
-                           provider = "planetary_computer_v1"
-){
-
-  MTCI_raster <- getS2_raster(bbox, start_date, end_date, pixel_x_size, pixel_y_size,
-                              asset_names = c("B06", "B05", "B04"),
-                              index_function = function(r) (r$B06 - r$B05) / (r$B05 - r$B04),
-                              max_cloud_cover = max_cloud_cover,
-                              provider = provider)
-  return(MTCI_raster)
-}
-
-
-#' @title NDRE using Sentinel-2 data
-#' @description Normalised Difference Red-Edge Index (NDRE) time series.
-#' @inheritParams getS2_data
-#' @returns A dataframe of mean NDRE per date.
-#' @examples
-#' bbox <- sf::st_bbox(c(xmin = 138.712, xmax = 138.718, ymin = -34.902, ymax = -34.906),
-#'                     crs = sf::st_crs(4326))
-#' ndre_df <- getNDRE(bbox, "2023-01-01", "2023-01-10", 0.0001, 0.0001)
-#' @export
-getNDRE <- function(bbox,
-                    start_date,
-                    end_date,
-                    pixel_x_size,
-                    pixel_y_size,
-                    max_cloud_cover = 50,
-                    provider = "planetary_computer_v1"
-){
-
-  df <- getS2_data(bbox, start_date, end_date, pixel_x_size, pixel_y_size,
-                   asset_names = c("B08", "B05"),
-                   index_function = function(r) (r$B08 - r$B05) / (r$B08 + r$B05),
-                   max_cloud_cover = max_cloud_cover,
-                   provider = provider)
-  return(df)
-}
-
-
-#' @title NDRE raster using Sentinel-2 data
-#' @description Normalised Difference Red-Edge Index (NDRE) median composite raster.
-#' @inheritParams getS2_data
-#' @returns A SpatRaster of median NDRE.
-#' @examples
-#' bbox <- sf::st_bbox(c(xmin = 138.712, xmax = 138.718, ymin = -34.902, ymax = -34.906),
-#'                     crs = sf::st_crs(4326))
-#' ndre_rast <- getNDRE_raster(bbox, "2023-01-01", "2023-01-10", 0.0001, 0.0001)
-#' terra::plot(ndre_rast)
-#' @export
-getNDRE_raster <- function(bbox,
-                           start_date,
-                           end_date,
-                           pixel_x_size,
-                           pixel_y_size,
-                           max_cloud_cover = 50,
-                           provider = "planetary_computer_v1"
-){
-
-  NDRE_raster <- getS2_raster(bbox, start_date, end_date, pixel_x_size, pixel_y_size,
-                              asset_names = c("B08", "B05"),
-                              index_function = function(r) (r$B08 - r$B05) / (r$B08 + r$B05),
-                              max_cloud_cover = max_cloud_cover,
-                              provider = provider)
-  return(NDRE_raster)
-}
-
-
-#' @title EVI using Sentinel-2 data
-#' @description Enhanced Vegetation Index (EVI) time series. Corrects for atmospheric and canopy background effects, and is more sensitive than NDVI in dense vegetation.
-#' @inheritParams getS2_data
-#' @returns A dataframe of mean EVI per date.
-#' @references Huete, A. et al. (2002). Overview of the radiometric and biophysical
-#'   performance of the MODIS vegetation indices. Remote Sensing of Environment, 83(1-2), 195-213.
-#' @examples
-#' bbox <- sf::st_bbox(c(xmin = 138.712, xmax = 138.718, ymin = -34.902, ymax = -34.906),
-#'                     crs = sf::st_crs(4326))
-#' evi_df <- getEVI(bbox, "2023-01-01", "2023-01-10", 0.0001, 0.0001)
-#' @export
-getEVI <- function(bbox,
-                   start_date,
-                   end_date,
-                   pixel_x_size,
-                   pixel_y_size,
-                   max_cloud_cover = 50,
-                   provider = "planetary_computer_v1"
-){
-
-  df <- getS2_data(bbox, start_date, end_date, pixel_x_size, pixel_y_size,
-                   asset_names = c("B08", "B04", "B02"),
-                   index_function = function(r) {2.5 * (r$B08 - r$B04) / (r$B08 + 6 * r$B04 - 7.5 * r$B02 + 1)},
-                   max_cloud_cover = max_cloud_cover,
-                   provider = provider)
-  return(df)
-}
-
-
-#' @title EVI raster using Sentinel-2 data
-#' @description Enhanced Vegetation Index (EVI) median composite raster. Corrects for atmospheric and canopy background effects, and is more sensitive than NDVI in dense vegetation.
-#' @inheritParams getS2_data
-#' @returns A SpatRaster of median EVI.
-#' @references Huete, A. et al. (2002). Overview of the radiometric and biophysical
-#'   performance of the MODIS vegetation indices. Remote Sensing of Environment, 83(1-2), 195-213.
-#' @examples
-#' bbox <- sf::st_bbox(c(xmin = 138.712, xmax = 138.718, ymin = -34.902, ymax = -34.906),
-#'                     crs = sf::st_crs(4326))
-#' evi_rast <- getEVI_raster(bbox, "2023-01-01", "2023-01-10", 0.0001, 0.0001)
-#' terra::plot(evi_rast)
-#' @export
-getEVI_raster <- function(bbox,
-                          start_date,
-                          end_date,
-                          pixel_x_size,
-                          pixel_y_size,
-                          max_cloud_cover = 50,
-                          provider = "planetary_computer_v1"
-){
-
-  EVI_raster <- getS2_raster(bbox, start_date, end_date, pixel_x_size, pixel_y_size,
-                             asset_names = c("B08", "B04", "B02"),
-                             index_function = function(r) {2.5 * (r$B08 - r$B04) / (r$B08 + 6 * r$B04 - 7.5 * r$B02 + 1)},
-                             max_cloud_cover = max_cloud_cover,
-                             provider = provider)
-  return(EVI_raster)
-}
-
-
-#' @title SAVI using Sentinel-2 data
-#' @description Soil Adjusted Vegetation Index (SAVI) time series. Minimises soil brightness effects in areas with sparse vegetation cover.
-#' @inheritParams getS2_data
-#' @param L Soil brightness correction factor (0–1). Default 0.5. Use lower values for high vegetation cover, higher values for low vegetation cover.
-#' @returns A dataframe of mean SAVI per date.
-#' @references Huete, A. R. (1988). A soil-adjusted vegetation index (SAVI).
-#'   Remote Sensing of Environment, 25(3), 295-309.
-#' @examples
-#' bbox <- sf::st_bbox(c(xmin = 138.712, xmax = 138.718, ymin = -34.902, ymax = -34.906),
-#'                     crs = sf::st_crs(4326))
-#' savi_df <- getSAVI(bbox, "2023-01-01", "2023-01-10", 0.0001, 0.0001)
-#' @export
-getSAVI <- function(bbox,
-                    start_date,
-                    end_date,
-                    pixel_x_size,
-                    pixel_y_size,
-                    max_cloud_cover = 50,
-                    provider = "planetary_computer_v1",
-                    L = 0.5
-){
-
-  stopifnot("L must be between 0 and 1" = L >= 0 && L <= 1)
-  df <- getS2_data(bbox, start_date, end_date, pixel_x_size, pixel_y_size,
-                   asset_names = c("B08", "B04"),
-                   index_function = function(r) (r$B08 - r$B04) / (r$B08 + r$B04 + L) * (1 + L),
-                   max_cloud_cover = max_cloud_cover,
-                   provider = provider)
-  return(df)
-}
-
-
-#' @title SAVI raster using Sentinel-2 data
-#' @description Soil Adjusted Vegetation Index (SAVI) median composite raster. Minimises soil brightness effects in areas with sparse vegetation cover.
-#' @inheritParams getSAVI
-#' @returns A SpatRaster of median SAVI.
-#' @references Huete, A. R. (1988). A soil-adjusted vegetation index (SAVI).
-#'   Remote Sensing of Environment, 25(3), 295-309.
-#' @examples
-#' bbox <- sf::st_bbox(c(xmin = 138.712, xmax = 138.718, ymin = -34.902, ymax = -34.906),
-#'                     crs = sf::st_crs(4326))
-#' savi_rast <- getSAVI_raster(bbox, "2023-01-01", "2023-01-10", 0.0001, 0.0001)
-#' terra::plot(savi_rast)
-#' @export
-getSAVI_raster <- function(bbox,
-                           start_date,
-                           end_date,
-                           pixel_x_size,
-                           pixel_y_size,
-                           max_cloud_cover = 50,
-                           provider = "planetary_computer_v1",
-                           L = 0.5
-){
-
-  stopifnot("L must be between 0 and 1" = L >= 0 && L <= 1)
-  SAVI_raster <- getS2_raster(bbox, start_date, end_date, pixel_x_size, pixel_y_size,
-                              asset_names = c("B08", "B04"),
-                              index_function = function(r) (r$B08 - r$B04) / (r$B08 + r$B04 + L) * (1 + L),
-                              max_cloud_cover = max_cloud_cover,
-                              provider = provider)
-  return(SAVI_raster)
-}
-
-
-#' @title MSAVI using Sentinel-2 data
-#' @description Modified Soil Adjusted Vegetation Index (MSAVI) time series. Self-adjusting improvement over SAVI that does not require a user-defined soil brightness parameter.
-#' @inheritParams getS2_data
-#' @returns A dataframe of mean MSAVI per date.
-#' @references Qi, J. et al. (1994). A modified soil adjusted vegetation index.
-#'   Remote Sensing of Environment, 48(2), 119-126.
-#' @examples
-#' bbox <- sf::st_bbox(c(xmin = 138.712, xmax = 138.718, ymin = -34.902, ymax = -34.906),
-#'                     crs = sf::st_crs(4326))
-#' msavi_df <- getMSAVI(bbox, "2023-01-01", "2023-01-10", 0.0001, 0.0001)
-#' @export
-getMSAVI <- function(bbox,
-                     start_date,
-                     end_date,
-                     pixel_x_size,
-                     pixel_y_size,
-                     max_cloud_cover = 50,
-                     provider = "planetary_computer_v1"
-){
-
-  df <- getS2_data(bbox, start_date, end_date, pixel_x_size, pixel_y_size,
-                   asset_names = c("B08", "B04"),
-                   index_function = function(r) {(2 * r$B08 + 1 - sqrt((2 * r$B08 + 1)^2 - 8 * (r$B08 - r$B04))) / 2},
-                   max_cloud_cover = max_cloud_cover,
-                   provider = provider)
-  return(df)
-}
-
-
-#' @title MSAVI raster using Sentinel-2 data
-#' @description Modified Soil Adjusted Vegetation Index (MSAVI) median composite raster. Self-adjusting improvement over SAVI that does not require a user-defined soil brightness parameter.
-#' @inheritParams getS2_data
-#' @returns A SpatRaster of median MSAVI.
-#' @references Qi, J. et al. (1994). A modified soil adjusted vegetation index.
-#'   Remote Sensing of Environment, 48(2), 119-126.
-#' @examples
-#' bbox <- sf::st_bbox(c(xmin = 138.712, xmax = 138.718, ymin = -34.902, ymax = -34.906),
-#'                     crs = sf::st_crs(4326))
-#' msavi_rast <- getMSAVI_raster(bbox, "2023-01-01", "2023-01-10", 0.0001, 0.0001)
-#' terra::plot(msavi_rast)
-#' @export
-getMSAVI_raster <- function(bbox,
-                            start_date,
-                            end_date,
-                            pixel_x_size,
-                            pixel_y_size,
-                            max_cloud_cover = 50,
-                            provider = "planetary_computer_v1"
-){
-
-  MSAVI_raster <- getS2_raster(bbox, start_date, end_date, pixel_x_size, pixel_y_size,
-                               asset_names = c("B08", "B04"),
-                               index_function = function(r) {(2 * r$B08 + 1 - sqrt((2 * r$B08 + 1)^2 - 8 * (r$B08 - r$B04))) / 2},
-                               max_cloud_cover = max_cloud_cover,
-                               provider = provider)
-  return(MSAVI_raster)
-}
-
-
-#' @title GNDVI using Sentinel-2 data
-#' @description Green Normalised Difference Vegetation Index (GNDVI) time series. More sensitive than NDVI to variation in chlorophyll and nitrogen content.
-#' @inheritParams getS2_data
-#' @returns A dataframe of mean GNDVI per date.
-#' @references Gitelson, A. A. et al. (1996). Use of a green channel in remote sensing
-#'   of global vegetation from EOS-MODIS. Remote Sensing of Environment, 58(3), 289-298.
-#' @examples
-#' bbox <- sf::st_bbox(c(xmin = 138.712, xmax = 138.718, ymin = -34.902, ymax = -34.906),
-#'                     crs = sf::st_crs(4326))
-#' gndvi_df <- getGNDVI(bbox, "2023-01-01", "2023-01-10", 0.0001, 0.0001)
-#' @export
-getGNDVI <- function(bbox,
-                     start_date,
-                     end_date,
-                     pixel_x_size,
-                     pixel_y_size,
-                     max_cloud_cover = 50,
-                     provider = "planetary_computer_v1"
-){
-
-  df <- getS2_data(bbox, start_date, end_date, pixel_x_size, pixel_y_size,
-                   asset_names = c("B08", "B03"),
-                   index_function = function(r) (r$B08 - r$B03) / (r$B08 + r$B03),
-                   max_cloud_cover = max_cloud_cover,
-                   provider = provider)
-  return(df)
-}
-
-
-#' @title GNDVI raster using Sentinel-2 data
-#' @description Green Normalised Difference Vegetation Index (GNDVI) median composite raster. More sensitive than NDVI to variation in chlorophyll and nitrogen content.
-#' @inheritParams getS2_data
-#' @returns A SpatRaster of median GNDVI.
-#' @references Gitelson, A. A. et al. (1996). Use of a green channel in remote sensing
-#'   of global vegetation from EOS-MODIS. Remote Sensing of Environment, 58(3), 289-298.
-#' @examples
-#' bbox <- sf::st_bbox(c(xmin = 138.712, xmax = 138.718, ymin = -34.902, ymax = -34.906),
-#'                     crs = sf::st_crs(4326))
-#' gndvi_rast <- getGNDVI_raster(bbox, "2023-01-01", "2023-01-10", 0.0001, 0.0001)
-#' terra::plot(gndvi_rast)
-#' @export
-getGNDVI_raster <- function(bbox,
-                            start_date,
-                            end_date,
-                            pixel_x_size,
-                            pixel_y_size,
-                            max_cloud_cover = 50,
-                            provider = "planetary_computer_v1"
-){
-
-  GNDVI_raster <- getS2_raster(bbox, start_date, end_date, pixel_x_size, pixel_y_size,
-                               asset_names = c("B08", "B03"),
-                               index_function = function(r) (r$B08 - r$B03) / (r$B08 + r$B03),
-                               max_cloud_cover = max_cloud_cover,
-                               provider = provider)
-  return(GNDVI_raster)
-}
-
-
-#' @title BSI using Sentinel-2 data
-#' @description Bare Soil Index (BSI) time series. Highlights exposed soil, useful for monitoring crop emergence, tillage, and erosion.
-#' @inheritParams getS2_data
-#' @returns A dataframe of mean BSI per date.
-#' @examples
-#' bbox <- sf::st_bbox(c(xmin = 138.712, xmax = 138.718, ymin = -34.902, ymax = -34.906),
-#'                     crs = sf::st_crs(4326))
-#' bsi_df <- getBSI(bbox, "2023-01-01", "2023-01-10", 0.0001, 0.0001)
-#' @export
-getBSI <- function(bbox,
-                   start_date,
-                   end_date,
-                   pixel_x_size,
-                   pixel_y_size,
-                   max_cloud_cover = 50,
-                   provider = "planetary_computer_v1"
-){
-
-  df <- getS2_data(bbox, start_date, end_date, pixel_x_size, pixel_y_size,
-                   asset_names = c("B11", "B08", "B04", "B02"),
-                   index_function = function(r) {((r$B11 + r$B04) - (r$B08 + r$B02)) / ((r$B11 + r$B04) + (r$B08 + r$B02))},
-                   max_cloud_cover = max_cloud_cover,
-                   provider = provider)
-  return(df)
-}
-
-
-#' @title BSI raster using Sentinel-2 data
-#' @description Bare Soil Index (BSI) median composite raster. Highlights exposed soil, useful for monitoring crop emergence, tillage, and erosion.
-#' @inheritParams getS2_data
-#' @returns A SpatRaster of median BSI.
-#' @examples
-#' bbox <- sf::st_bbox(c(xmin = 138.712, xmax = 138.718, ymin = -34.902, ymax = -34.906),
-#'                     crs = sf::st_crs(4326))
-#' bsi_rast <- getBSI_raster(bbox, "2023-01-01", "2023-01-10", 0.0001, 0.0001)
-#' terra::plot(bsi_rast)
-#' @export
-getBSI_raster <- function(bbox,
-                          start_date,
-                          end_date,
-                          pixel_x_size,
-                          pixel_y_size,
-                          max_cloud_cover = 50,
-                          provider = "planetary_computer_v1"
-){
-
-  BSI_raster <- getS2_raster(bbox, start_date, end_date, pixel_x_size, pixel_y_size,
-                             asset_names = c("B11", "B08", "B04", "B02"),
-                             index_function = function(r) {((r$B11 + r$B04) - (r$B08 + r$B02)) / ((r$B11 + r$B04) + (r$B08 + r$B02))},
-                             max_cloud_cover = max_cloud_cover,
-                             provider = provider)
-  return(BSI_raster)
 }
