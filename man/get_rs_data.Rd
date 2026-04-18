@@ -2,68 +2,105 @@
 % Please edit documentation in R/remote_sensing_funcs.R
 \name{get_rs_data}
 \alias{get_rs_data}
-\title{Collect remote sensing data (Sentinel-2, Landsat pre-2015)}
+\title{Collect remote sensing data}
 \usage{
 get_rs_data(
   longitude,
   latitude,
-  x_metres,
-  y_metres,
+  x_metres = NULL,
+  y_metres = NULL,
   start_date,
   end_date,
   index_name,
+  field_mask = FALSE,
+  crop_search_params = list(),
+  modis_interpolation = "off",
   max_cloud_cover = 50,
-  scl_classes = NULL
+  scl_classes = NULL,
+  time_aggregate = "daily",
+  aggregate_function = "mean"
 )
 }
 \arguments{
-\item{longitude}{Longitude in decimal degrees (WGS84) of the centre point.}
+\item{longitude, latitude}{Coordinate in WGS84.}
 
-\item{latitude}{Latitude in decimal degrees (WGS84) of the centre point.}
+\item{x_metres, y_metres}{Bounding box dimensions in metres. If both
+\code{NULL}, field dimensions are auto-detected.}
 
-\item{x_metres}{Bounding box x width. Input \code{x_metres} represents the distance (metres) between xmin and xmax in a typical bbox object. It is converted to decimal degrees before it is used to extend the inputted coordinates to a bounding box of the dimensions \code{x_metres} by \code{y_metres}.}
+\item{start_date, end_date}{Date range, "YYYY-MM-DD".}
 
-\item{y_metres}{Bounding box y length. Input \code{y_metres} represents the distance (metres) between ymin and ymax in a typical bbox object. It is converted to decimal degrees and used to extend the inputted coordinates to create a bounding box of the dimensions \code{x_metres} by \code{y_metres}.}
+\item{index_name}{Spectral index name from \code{\link{s2_index_list}}.}
 
-\item{start_date}{First date to be observed, format "YYYY-MM-DD".}
+\item{field_mask}{\code{FALSE}, \code{TRUE}, or an \code{sf}/\code{sfc} polygon.}
 
-\item{end_date}{Last date to be observed, format "YYYY-MM-DD".}
+\item{crop_search_params}{Named list controlling detection behaviour. See
+\code{\link{crop_search_defaults}} and \code{\link{crop_search}}.}
 
-\item{index_name}{Name of a spectral index from \code{\link{s2_index_list}} (e.g. \code{"NDVI"}, \code{"EVI2"}, \code{"NBR"}). See \code{names(s2_index_list)}.}
+\item{modis_interpolation}{One of \code{"off"} (default), \code{"merge"},
+or \code{"sep"}.}
 
-\item{max_cloud_cover}{Maximum allowed cloud cover percentage (0–100). Default 50, e.g. scenes are dropped if cloud cover exceeds 50 per cent.}
+\item{max_cloud_cover}{Maximum scene cloud cover (0-100). Default 50.}
 
-\item{scl_classes}{Vector of integers corresponding to Sentinel-2 SCL classes to be masked (e.g. 9 = cloud high, 8 = cloud medium, 3 = cloud shadow, 10 = thin cirrus). Change from default \code{NULL} to enable. Not available for Landsat observations.}
+\item{scl_classes}{Integer vector of S2 SCL classes to mask.}
+
+\item{time_aggregate}{\code{"daily"}, \code{"monthly"}, or \code{"yearly"}.}
+
+\item{aggregate_function}{Spatial aggregation function name. Default \code{"mean"}.}
 }
 \value{
-A dataframe with columns \code{date} and \code{value}.
+Data frame with \code{date} and \code{value}, plus fusion columns
+when \code{modis_interpolation} is \code{"merge"} or \code{"sep"}.
 }
 \description{
-This is a wrapper for 'rsi' functions used to extract data from Sentinel-2 remote sensing spectral indices for a given location between two dates.
+Extracts spectral index values from Sentinel-2, Landsat 8, or Landsat 5 over
+a user-specified location and date range. Optionally fills gaps with
+MODIS-fused synthetic scenes, auto-detects field dimensions from imagery,
+and masks pixels outside the detected field polygon.
 }
 \details{
-Users simply provide coordinates (longitude & latitude), capture dimensions (x_metres and y_metres), period observed (start and end date), and an index name (must be included in \code{\link{s2_index_list}}).
-Optional features include setting maximum cloud cover and cloud masking based on Sentinel-2 SCL classes.
+Source is chosen automatically from \code{start_date}: Sentinel-2 from
+2015-07-01, Landsat 8 from 2013-04-01, Landsat 5 before that.
+\subsection{Field dimensions}{
 
-Note: Some locations may not return data for desired start and end dates. In addition, if \code{start_date} falls outside the Sentinel-2 operational window (before 2015-07-01), Landsat 8 (after 2013-04-01) or Landsat 5
-(before 2013-04-01) STAC data is collected instead. Landsat data not compatible with red-edge bands (B05, B06, B07) will be skipped with a warning.
+If both \code{x_metres} and \code{y_metres} are \code{NULL} (default), field
+dimensions are auto-detected via \code{\link{crop_search}}. Detection
+behaviour is controlled through \code{crop_search_params}; see
+\code{\link{crop_search_defaults}} for the full list.
+
+Supplying both \code{x_metres} and \code{y_metres} disables detection.
+}
+
+\subsection{MODIS interpolation}{
+
+\code{modis_interpolation} has three states:
+\describe{
+\item{\code{"off"} (default)}{No MODIS used for output. Detection uses Landsat-only feature stack unless \code{crop_search_params$enhanced_search = TRUE}.}
+\item{\code{"merge"}}{MODIS used for detection (via auto-inherited \code{enhanced_search}) AND output, collapsing shared dates with real scenes taking precedence.}
+\item{\code{"sep"}}{MODIS used for detection AND output, keeping real and fused scenes as separate rows.}
+}
+
+When \code{"merge"} or \code{"sep"}, the output includes \code{MODIS},
+\code{anchor_days}, \code{MAE}, and \code{MAPE} columns. MAE/MAPE are
+computed on the field-masked region when \code{field_mask = TRUE}, else on
+the full fetch bbox.
+}
 }
 \examples{
+## Auto-detected field, standard output
 ndvi_df <- get_rs_data(longitude = 138.715,
-                      latitude = -34.904,
-                      x_metres = 30,
-                      y_metres = 30,
-                      start_date = "2023-01-01",
-                      end_date = "2023-01-10",
-                      index_name = "NDVI")
+                       latitude = -34.904,
+                       start_date = "2023-01-01",
+                       end_date = "2023-01-31",
+                       index_name = "NDVI")
 
-# Pre-Sentinel-2 date: automatically falls back to Landsat
+## Custom detection parameters
+params <- crop_search_defaults()
+params$VI_sensitivity <- 0.15
+params$expand_search_area <- TRUE
 ndvi_df <- get_rs_data(longitude = 138.715,
-                      latitude = -34.904,
-                      x_metres = 30,
-                      y_metres = 30,
-                      start_date = "2000-01-01",
-                      end_date = "2000-01-31",
-                      index_name = "NDVI")
-
+                       latitude = -34.904,
+                       start_date = "2023-01-01",
+                       end_date = "2023-01-31",
+                       index_name = "NDVI",
+                       crop_search_params = params)
 }

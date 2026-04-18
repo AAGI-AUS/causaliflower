@@ -6,18 +6,6 @@
 \usage{
 point_to_bbox(longitude, latitude, x_metres, y_metres)
 }
-\arguments{
-\item{longitude}{Longitude in decimal degrees (WGS84).}
-
-\item{latitude}{Latitude in decimal degrees (WGS84).}
-
-\item{x_metres}{Bbox x width in metres.}
-
-\item{y_metres}{Bbox y length in metres.}
-}
-\value{
-An sf bbox object.
-}
 \description{
 Bounding box around a central point
 }

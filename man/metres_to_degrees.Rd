@@ -6,16 +6,6 @@
 \usage{
 metres_to_degrees(latitude, distance = 1, pixel_size = 1)
 }
-\arguments{
-\item{latitude}{Latitude of centre point where the distance is being measured (WGS84).}
-
-\item{distance}{Distance in metres. Default 1.}
-
-\item{pixel_size}{Pixel resolution in metres. Default 1.}
-}
-\value{
-A vector containing x & y pixel sizes.
-}
 \description{
 Convert metres to decimal degrees
 }
