@@ -11,7 +11,7 @@ get_diff_roles(dag1, dag2, compare_all = TRUE, nodes_in_common = FALSE)
 
 \item{dag2}{A dagitty object.}
 
-\item{compare_all}{Compare and return mutually all exclusive edges  (compare_all = TRUE) e.g. dag1 edges not in dag2 AND dag2 edges not in dag1, or set compare_all = FALSE to return only dag1 mutually exclusive edges, e.g. dag1 edges not in dag2. Defaults to compare_all = TRUE.}
+\item{compare_all}{Compare and return mutually all exclusive roles  (compare_all = TRUE) e.g. dag1 roles not in dag2 AND dag2 roles not in dag1, or set compare_all = FALSE to return only dag1 mutually exclusive roles, e.g. dag1 roles not in dag2. Defaults to compare_all = TRUE.}
 
 \item{nodes_in_common}{Determines whether to include only the nodes found in both DAGs. Defaults to nodes_in_common = FALSE (returns all nodes).}
 }
@@ -22,6 +22,13 @@ A list of nodes.
 Compare dagitty object node roles
 }
 \examples{
-get_diff_roles(dag)
+set.seed(1)
+dag <- build_graph(
+  variables = c("Z1", "Z2"), treatments = "X", outcomes = "Y", type = "saturated"
+)
+dag2 <- build_graph(
+  variables = c("Z1", "Z3"), treatments = "X", outcomes = "Y", type = "saturated"
+)
+get_diff_roles(dag, dag2)
 
 }

@@ -10,12 +10,17 @@ mediator_outcome_confounders(dag)
 \item{dag}{A dagitty object.}
 }
 \value{
-A vector of mediator-outcome confounder names, or edges in a data table.
+Character vector of mediator-outcome confounder names; character(0) if none.
 }
 \description{
-moc() is a dagitty wrapper that identifies nodes along paths between treatment and outcome in a directed acyclic graph.
+mediator_outcome_confounders() identifies nodes that instead of being common causes of treatment and outcome (X <- Z -> Y) are a common cause of mediators and outcome (M <- Z -> Y) in a directed acyclic graph.
 }
 \examples{
+set.seed(1)
+dag <- build_graph(
+  variables = c("Z1", "Z2"), treatments = "X", outcomes = "Y",
+  mediators = "M", instrumental_variables = "IV", type = "saturated"
+)
 mediator_outcome_confounders(dag)
 
 }

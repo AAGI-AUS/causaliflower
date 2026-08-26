@@ -12,12 +12,20 @@ get_roles(dag, multiple_roles = FALSE)
 \item{multiple_roles}{Defaults to FALSE (one role per node). If set to TRUE, multiple roles can be returned for some nodes (e.g. latent mediator variable).}
 }
 \value{
-Nested list of nodes and node relationships
+Nested list of nodes and node relationships. With the default
+\code{multiple_roles = FALSE} each node is reported under its primary role
+only; \code{get_nodes()} reports every role a node holds. \code{undetermined} is
+appended for partially directed graphs.
 }
 \description{
 dagitty nodes grouped by role
 }
 \examples{
+set.seed(1)
+dag <- build_graph(
+  variables = c("Z1", "Z2"), treatments = "X", outcomes = "Y",
+  mediators = "M", instrumental_variables = "IV", type = "saturated"
+)
 get_roles(dag)
 
 }

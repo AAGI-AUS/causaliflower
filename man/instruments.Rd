@@ -4,18 +4,32 @@
 \alias{instruments}
 \title{Get instrumental variable names}
 \usage{
-instruments(dag)
+instruments(dag, usable_instruments = FALSE, details = FALSE)
 }
 \arguments{
 \item{dag}{A dagitty object.}
+
+\item{usable_instruments}{When \code{TRUE}, exclude candidates that are
+descendants of their treatment. Defaults to \code{FALSE}.}
+
+\item{details}{When \code{FALSE} (the default), return the nested-list shape
+used by earlier releases. When \code{TRUE}, return a data table containing
+treatment, outcome, instrument, and conditioning set.}
 }
 \value{
-List of instrumental variable names.
+A nested list, or a data table when \code{details = TRUE}.
 }
 \description{
 instruments() is a dagitty wrapper function capable of identifying  multiple instrumental variables in multi-treatment and multi-outcome settings.
+Instruments are identified for each treatment-outcome pair using \code{dagitty::instrumentalVariables()};
 }
 \examples{
+set.seed(1)
+dag <- build_graph(
+  variables = c("Z1", "Z2"), treatments = "X", outcomes = "Y",
+  mediators = "M", instrumental_variables = "IV", type = "saturated"
+)
 instruments(dag)
+instruments(dag, details = TRUE)
 
 }

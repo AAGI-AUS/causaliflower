@@ -16,15 +16,17 @@ assess_edges(
 \arguments{
 \item{dag}{A dagitty object. Must include exposure and outcome nodes.}
 
-\item{edges_to_assess}{Defaults to "all" edges, "bidirectional" includes only the edges where nodes are connected in both directions.}
+\item{edges_to_assess}{Defaults to "all" edges, "bidirectional" includes only bidirected ("<->") and undirected ("--") edges.}
 
-\item{edges_to_keep}{A vector of directed arrows to be kept between (non-treatment and non-outcome) variables, e.g. c("Z1 -> Z2", "Z2 -> Z3"), c("y", "n", "y"), or c(TRUE, FALSE, TRUE).}
+\item{edges_to_keep}{Edges to be kept, e.g. c("Z1 -> Z2", "Z2 -> Z3"). Accepts a character vector of edge strings, a v/e/w edge table, or a dagitty object. Only listed edges are kept, including any into or out of the treatments and outcomes.}
 
 \item{assess_causal_criteria}{Defaults to FALSE. If TRUE, the user is guided through a sequence that assesses each pair of connected nodes using causal criteria. Based on the Evidence Synthesis for Constructing Directed Acyclic Graphs (ESC-DAGs) from Ferguson et al. (2020).}
 
-\item{save_answers}{= NULL,}
+\item{save_answers}{Set to \code{TRUE} to return the decision log with the
+retained edges, or supply a previous log (v, e, w followed by one column per
+criterion) to replay it without prompting.}
 
-\item{causal_criteria}{= Default "ESCDAGs" (Ferguson et al., 2020) causal criteria considers temporality, face-validity, and recourse to theory. Other causal criteria can be supplied as a data.frame, see summary(ESCDAGs) for column names.}
+\item{causal_criteria}{Defaults to "ESCDAGs" (Ferguson et al., 2020) causal criteria considers temporality, face-validity, and recourse to theory. Other causal criteria can be supplied as a data.frame, see summary(ESCDAGs) for column names.}
 }
 \value{
 A list or vector of edges.
@@ -33,28 +35,21 @@ A list or vector of edges.
 assess_edges() provides ways to assess connected edges based on causal criteria and/or user inputs.
 }
 \examples{
-## initial dag
-{
-  variables <- c("Z1", "Z2", "Z3") # these are treated as confounders
-  treatments <- "X"
-  outcomes <- "Y"
-  type <- "ordered"
+set.seed(1)
+dag <- build_graph(
+  variables = c("Z1", "Z2", "Z3"), treatments = "X", outcomes = "Y", type = "ordered"
+)
 
-  dag <- build_graph(type = type,
-                     variables = variables,
-                     treatments = treatments,
-                     outcomes = outcomes)
-}
+## a saturated graph built from the existing (sparser) dag
+saturated_graph <- build_graph(type = "saturated", variables = dag)
 
-## Using a saturated graph as an example, created from an existing dag
-saturated_graph <- build_graph(type = c('full', 'saturated'), # choose a type
-                               variables = dag) # existing dagitty object inputted
-
-## Option 1: existing dag as edges to keep
+## Option 1: keep the edges already present in the existing dag
 edges <- assess_edges(saturated_graph, edges_to_keep = dag)
 
-## Option 2: guided causal criteria sequence (rule out edges already included in existing dag)
+\dontrun{
+## Option 2: interactively rule edges in/out via the guided causal-criteria sequence
 edges_to_keep <- assess_edges(saturated_graph, edges_to_keep = dag,
                               assess_causal_criteria = TRUE)
+}
 
 }

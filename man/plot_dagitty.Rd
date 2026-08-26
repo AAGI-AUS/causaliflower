@@ -7,12 +7,14 @@
 plot_dagitty(
   dag,
   seed = NULL,
-  coords_spec = 0.1,
+  x_step = 2,
+  y_step = 1,
+  layout_shape = 0.5,
   labels = NULL,
   label_type = "name",
   label_placement = "text_box",
   include_legend = c("outcome", "treatment", "confounder", "mediator", "instrument",
-    "competing_exposure", "collider", "latent")
+    "competing_cause", "collider", "latent", "undetermined")
 )
 }
 \arguments{
@@ -20,26 +22,38 @@ plot_dagitty(
 
 \item{seed}{Numeric input, sets seed for label placement (passed to ggdag::geom_dag_label_repel() seed parameter).}
 
-\item{coords_spec}{Adjusts node placement, a higher value increases volatility and results in more extreme DAG structures.}
+\item{x_step}{Horizontal spacing between consecutive temporal ranks when coordinates are generated. Single positive number.}
+
+\item{y_step}{Minimum vertical gap between nodes within a rank when coordinates are generated. Single positive number.}
+
+\item{layout_shape}{Within-rank placement between 0 and 1: 0 places nodes nearest their parents' pathways, 1 spreads each rank evenly.}
 
 \item{labels}{A vector of labels for nodes in dagitty object}
 
-\item{label_type}{Defaults to using the node names of the inputted dag, or 'initials' if specified. Labels are only assigned by plot_dagitty() if nodes are not already labelled, using a 'ggdag::dag_label()' wrapper..}
+\item{label_type}{Label style passed to \code{get_labels()} when \code{labels}
+is not supplied. Defaults to \code{"name"}; \code{"initials"} and
+\code{"short"} are also available.}
 
-\item{label_placement}{Labels are placed in a text box adjacent each node by default (label_placement = "text_box"), or can be placed inside each node using 'node'. It is recommended to also specify label_type = 'initials' where label_placement = 'label_node' is used.}
+\item{label_placement}{Labels are placed in a text box adjacent each node by default (label_placement = "text_box"), or can be placed inside each node using 'node'. It is recommended to also specify label_type = 'initials' where label_placement = 'node' is used.}
 
-\item{include_legend}{Node roles to include in legend. This parameter controls the DAG node colour scale and can be overridden by setting include_legend = FALSE. To include all possible node roles use include_legend = c("outcome", "treatment", "confounder", "mediator", "mediator_outcome_confounder", "instrument", "competing_exposure", "collider", "latent", "observed")}
+\item{include_legend}{Node roles to include in legend. This parameter controls the DAG node colour scale and can be overridden by setting include_legend = FALSE. To include all possible node roles use include_legend = c("outcome", "treatment", "confounder", "mediator", "mediator_outcome_confounder", "instrument", "competing_cause", "collider", "latent", "observed", "undetermined").}
 }
 \value{
 ggdag plot
 }
 \description{
-Generates a ggdag plot from a dagitty object, adding coordinates and node labels using initials (capital letters).
-Essentially a wrapper for dagitty and ggdag plotting functions with added features.
+Generates a ggdag plot from a dagitty object, adding coordinates and node
+labels when needed. Essentially a wrapper for dagitty and ggdag plotting
+functions with added features.
 }
 \examples{
+set.seed(1)
+dag <- build_graph(
+  variables = c("Z1", "Z2"), treatments = "X", outcomes = "Y",
+  mediators = "M", instrumental_variables = "IV", type = "saturated"
+)
 plot_dagitty(dag)
 
-plot_dagitty(dag, coords_spec = 0.1) # increasing spec for more variation in node placement
+plot_dagitty(dag, y_step = 1.5) # more vertical spacing between nodes
 
 }

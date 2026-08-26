@@ -22,6 +22,13 @@ Data table of edges.
 Compare dagitty object edges
 }
 \examples{
-get_diff_edges(dag)
+set.seed(1)
+dag <- build_graph(
+  variables = c("Z1", "Z2"), treatments = "X", outcomes = "Y", type = "saturated"
+)
+dag2 <- build_graph(
+  variables = c("Z1", "Z3"), treatments = "X", outcomes = "Y", type = "saturated"
+)
+get_diff_edges(dag, dag2)
 
 }

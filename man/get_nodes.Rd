@@ -16,6 +16,11 @@ Nested list of nodes and node relationships
 get_nodes() is a dagitty wrapper that returns a list of node names and their roles.
 }
 \examples{
+set.seed(1)
+dag <- build_graph(
+  variables = c("Z1", "Z2"), treatments = "X", outcomes = "Y",
+  mediators = "M", instrumental_variables = "IV", type = "saturated"
+)
 get_nodes(dag)
 
 }

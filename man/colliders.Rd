@@ -10,12 +10,17 @@ colliders(dag)
 \item{dag}{A dagitty object.}
 }
 \value{
-A vector of competing exposure names, or edges in a data table.
+Character vector of collider names; character(0) if none.
 }
 \description{
-colliders() is a dagitty wrapper that identifies nodes in a directed acyclic graph connected to outcome, other than indicated exposures.
+colliders() identifies collider nodes that are common children of both treatment and outcome (treatment -> C <- outcome) in a directed acyclic graph; it does not return arbitrary two-parent colliders.
 }
 \examples{
+set.seed(1)
+dag <- build_graph(
+  variables = c("Z1", "Z2"), treatments = "X", outcomes = "Y",
+  mediators = "M", instrumental_variables = "IV", type = "saturated"
+)
 colliders(dag)
 
 }

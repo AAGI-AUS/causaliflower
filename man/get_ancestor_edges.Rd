@@ -13,5 +13,5 @@ get_ancestor_edges(dag)
 Named list of edges.
 }
 \description{
-ancestor_edges() returns a list of edges grouped by node names for an inputted dagitty object.
+get_ancestor_edges() returns a list of edges grouped by node names for an input dagitty object. Symmetric edges ("<->", "--") are listed once, under their stored left-hand endpoint.
 }

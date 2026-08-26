@@ -3,19 +3,21 @@
 \name{get_labels}
 \alias{get_labels}
 \title{Label DAG nodes
-Extract node initials to use as labels in plot_dagitty, or dag plots using ggdag and ggplot2. This is essentially a wrapper function for ggdag::dag_label().}
+Extract node names, initials, or shortened labels for plotting.}
 \usage{
-get_labels(dag, label_type)
+get_labels(dag, label_type = "name")
 }
 \arguments{
-\item{dag}{A dagittyy object.}
+\item{dag}{A dagitty object.}
 
-\item{label_type}{Defaults to using the node names of the inputted dag, or 'initials' if specified. Labels are only assigned by plot_dagitty() if nodes are not already labelled, using a 'ggdag::dag_label()' wrapper..}
+\item{label_type}{Defaults to \code{"name"} (the graph's node names);
+alternatively \code{"initials"} uses the first letter of each word and
+\code{"short"} generates shortened unique labels.}
 }
 \value{
 Labelled vector of node names from the dagitty object
 }
 \description{
 Label DAG nodes
-Extract node initials to use as labels in plot_dagitty, or dag plots using ggdag and ggplot2. This is essentially a wrapper function for ggdag::dag_label().
+Extract node names, initials, or shortened labels for plotting.
 }

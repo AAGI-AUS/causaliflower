@@ -4,23 +4,32 @@
 \alias{add_coords}
 \title{Generate new dag coordinates}
 \usage{
-add_coords(dag, coords_spec = 0.1, threshold = 0.8)
+add_coords(dag, x_step = 2, y_step = 1, layout_shape = 0.5)
 }
 \arguments{
-\item{dag}{Dagitty object, with at least a treatment and outcome set. Nodes are automatically placed in the following categories: treatment, outcome, confounder, mediator, latent variable, mediator-outcome-confounder, or instrumental variable.}
+\item{dag}{A dagitty object.}
 
-\item{coords_spec}{Adjusts node placement, a higher value increases volatility and results in more extreme DAG structures.}
+\item{x_step}{Horizontal spacing between consecutive temporal ranks. Single positive number.}
 
-\item{confounders}{Vector of confounders in order of occurrence.}
+\item{y_step}{Minimum vertical gap between nodes within a rank. Single positive number.}
+
+\item{layout_shape}{Within-rank placement between 0 and 1: 0 places nodes nearest their parents' pathways, 1 spreads each rank evenly.}
 }
 \value{
 dagitty object with coordinates.
 }
 \description{
-Generate new dag coordinates
+Generates coordinates deterministically: nodes are ranked left to right by
+longest directed path (temporal order) and spaced vertically within each
+rank. The same graph always receives the same coordinates. A graph containing
+a directed cycle is laid out on an acyclic subset of its edges, with a warning.
 }
 \examples{
-dag <- add_coords(dag, coords_spec = 0.1) # update dagitty object node coordinates
+dag <- build_graph(
+  variables = c("Z1", "Z2"), treatments = "X", outcomes = "Y",
+  mediators = "M", instrumental_variables = "IV", type = "saturated"
+)
+dag <- add_coords(dag) # update dagitty object node coordinates
 
 plot_dagitty(dag) # check coordinates
 

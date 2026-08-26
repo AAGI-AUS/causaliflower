@@ -12,8 +12,7 @@ add_nodes(
   node_role = NULL,
   type = "saturated",
   print_edges = TRUE,
-  coords_spec = 0.1,
-  threshold = 0.5
+  position = NULL
 )
 }
 \arguments{
@@ -21,17 +20,27 @@ add_nodes(
 
 \item{new_nodes}{Inputted vector of node names to be added to the graph.}
 
-\item{node_role}{Determines which nodes will be connected, defaults to "confounder". Options include the following: c("confounder", "treatment", "outcome", "mediator", "mediator_outcome_confounder", "instrument", "competing_exposure", "collider", "latent", "observed").}
+\item{ancestors}{Optional character vector of existing nodes to set as ancestors (parents) of the new nodes. Defaults to NULL.}
 
-\item{type}{Type of graph generated. Defaults to 'full' (fully connected graph) with arrows drawn between confounders (both directions) and from confounders to mediators. If type ='saturated', a similar saturated graph is produced except confounders are not connected to mediators, featuring bi-directional arrows between each of the confounders (follows the ESC-DAGs Mapping Stage in Ferguson et al. (2020)). When type = 'first' or 'last', inputted new_nodes are ordered first or last if a confounder, mediator, or treatment node_role is selected.}
+\item{descendants}{Optional character vector of existing nodes to set as descendants (children) of the new nodes. Defaults to NULL.}
+
+\item{node_role}{Optional role for the new nodes. When \code{NULL}, each new
+node is connected according to \code{ancestors}/\code{descendants}, or to
+every existing node when neither is supplied. A \code{node_role} cannot be
+combined with explicit \code{ancestors}/\code{descendants}.}
+
+\item{type}{Graph structure: \code{"full"}, \code{"saturated"}, or
+\code{"ordered"}. Defaults to \code{"saturated"}. The legacy values
+\code{"first"} and \code{"last"} remain available for compatibility;
+\code{position} provides a separate, newer ordering API.}
 
 \item{print_edges}{Print new edges in console, defaults to TRUE.}
 
-\item{coords_spec}{Adjust node placement when generating coordinates with a numeric value > 0 (recommended < 10).}
-
-\item{threshold}{Set the allowed closeness of new node coordinates. Numeric value between 0 and 1 for the minimum distance allowed when generating coordinates.}
-
-\item{temporal_reference_node}{Supply an alternative reference, or simply leave blank. Default settings uses dagitty::topologicalOrdering() and selects the first of the inputted node_role (e.g., first confounder) as the temporal point of reference. If type = 'last', the last node is used.}
+\item{position}{Optional placement within the relevant temporal order,
+expressed with \code{first()}, \code{last()},
+\code{before()}, and \code{after()} (see
+\code{\link{position_helpers}}). Supported for node_role
+\code{"confounder"}, \code{"treatment"}, and \code{"mediator"}.}
 }
 \value{
 A dagitty object.
@@ -40,6 +49,11 @@ A dagitty object.
 Add nodes to a dagitty object, connecting edges based on the 'type' of graph selected, and generate new node coordinates using existing nodes.
 }
 \examples{
-dag <- add_nodes(dag, new_nodes, node_role)
+set.seed(1)
+dag <- build_graph(
+  variables = c("Z1", "Z2"), treatments = "X", outcomes = "Y",
+  mediators = "M", instrumental_variables = "IV", type = "saturated"
+)
+dag <- add_nodes(dag, new_nodes = "W", node_role = "confounder")
 
 }

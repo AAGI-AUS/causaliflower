@@ -10,12 +10,17 @@ confounders(dag)
 \item{dag}{A dagitty object.}
 }
 \value{
-A vector of confounder names, or edges in a data table.
+Character vector of confounder names; character(0) if none.
 }
 \description{
-confounders() is a dagitty wrapper that identifies common causes of treatment and outcome in a directed acyclic graph.
+confounders() identifies common causes of treatment and outcome in a directed acyclic graph. Ancestral common causes are included, as are proxy variables of indicated unmeasured confounding.
 }
 \examples{
+set.seed(1)
+dag <- build_graph(
+  variables = c("Z1", "Z2"), treatments = "X", outcomes = "Y",
+  mediators = "M", instrumental_variables = "IV", type = "saturated"
+)
 confounders(dag)
 
 }

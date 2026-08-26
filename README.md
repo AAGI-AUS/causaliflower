@@ -1,38 +1,32 @@
 # causaliflower
 
-The causaliflower package aims to support causal analysis in R. It extends 'dagitty' and 'ggdag' functions for analysing and visualising directed acylic graphs (DAGs) to enable building and assessing causal DAGs using expert knowledge.
+>causality + cauliflower = 'causaliflower'!
+
+Graph-based causal analysis in R.
+The `causaliflower` package extends `dagitty` and `ggdag` with functions for building and assessing directed acyclic graphs (DAGs).
+
+The goal of `causaliflower` is to support reproducible causal analytical workflows,
+with a focus on applied causal inference techniques in agriculture.
 
 ### Installation
 
-Causaliflower is currently in development. The most recent version can be installed from [GitHub](https://github.com/AAGI-AUS/causaliflower) with:
+The most recent version can be installed from [GitHub](https://github.com/AAGI-AUS/causaliflower):
 
 ```R
-o <- options() # store original options
-
-options(pkg.build_vignettes = TRUE)
-
 if (!require("pak")) {
   install.packages("pak")
 }
 
 pak::pak("AAGI-AUS/causaliflower")
-options(o) # reset options
 
 ```
 
-###  What is causaliflower?
-
->Causality + cauliflower = 'causaliflower' (working title!)
-
-The goal of this package is to provide functions for reproducible causal analytical workflows in R.
-
-Some examples are included below, however an in-depth tutorial will be provided in an upcoming vignette.
+Some examples are included below, and an introductory vignette will be provided in an upcoming release.
 
 
 ### Example code
 
-
-- Build and a basic graph (dagitty object)
+- Build a basic graph (dagitty object)
 
 ```R
 
@@ -45,7 +39,7 @@ dag <- build_graph(variables = variables,
                    treatments = treatments,
                    outcomes = outcomes,
                    type = "ordered")
-                   
+
 ```
 
 - Plot dagitty objects:
@@ -59,14 +53,14 @@ dag <- add_coords(dag)
 
 ```
 
-- Generate new coordinates
+- Generate new coordinates:
 
 ```R
 
 # Changing the input parameters affects how coordinates are generated
 dag <- add_coords(dag,
-                  coords_spec = 0.2, # >1 increases node placement volatility
-                  threshold = 0.9) # controls the spacing/closeness allowed between nodes
+                  x_step = 2, # default horizontal spacing between temporal ranks
+                  y_step = 1) # default vertical spacing between nodes within a rank
 
 ```
 
@@ -77,7 +71,7 @@ dag <- add_coords(dag,
 fc_graph <- connect_nodes(dag) # default connects all nodes in both directions (type = "full")
 fc_graph |> plot_dagitty()
 
-saturated_graph <- connect_nodes(dag, type = "saturated", print_edges = TRUE) # saturated graph connects earlier nodes to default connects all nodes in both directions
+saturated_graph <- connect_nodes(dag, type = "saturated", print_edges = TRUE) # saturated graph connects earlier nodes to later nodes
 
 ```
 
@@ -86,23 +80,23 @@ saturated_graph <- connect_nodes(dag, type = "saturated", print_edges = TRUE) # 
 
 ```R
 ## Assess edges to keep and build a new graph
-new_graph <- fc_graph |> 
-  assess_edges(edges_to_keep = dag, 
+new_graph <- fc_graph |>
+  assess_edges(edges_to_keep = dag,
                assess_causal_criteria = TRUE) |> # guided causal criteria sequence
   keep_edges(dag = fc_graph)
-  
-  
+
+
 plot_dagitty(new_graph)
 
 ## Or, save answers to causal criteria in a list
-edges_list <- fc_graph |> 
-  assess_edges(edges_to_keep = dag, 
+edges_list <- fc_graph |>
+  assess_edges(edges_to_keep = dag,
                assess_causal_criteria = TRUE,
                save_answers = TRUE) # saves answers to causal criteria, output becomes a list
-               
-edges_list$edges_to_keep
+
+edges_list$edges
 edges_list$answers
-  
+
 ```
 
 
@@ -112,11 +106,11 @@ edges_list$answers
 
 mediators <- "M"
 
-new_dag <- build_graph(treatments = treatments, 
-                       outcomes = outcomes, 
+new_dag <- build_graph(treatments = treatments,
+                       outcomes = outcomes,
                        mediators = mediators)
-                       
-new_dag <- add_coords(new_dag, coords_spec = 0.9)
+
+new_dag <- add_coords(new_dag)
 plot_dagitty(new_dag)
 
 dag <- join_graphs(dag, new_dag)
@@ -146,8 +140,42 @@ plot_dagitty(dag)
 
 ```
 
+- Place new nodes by causal role and temporal position:
 
-- Functions to get edges and node structure information from a dagitty object:
+```R
+
+dag <- add_nodes(
+  dag,
+  new_nodes = "W",
+  node_role = "confounder",
+  type = "saturated",
+  position = first()
+)
+plot_dagitty(dag)
+
+```
+
+`position` takes four placement helpers, used alone or combined with `c()`:
+
+```R
+
+first()       # before every existing node
+last()        # after every existing node
+before("X")   # immediately before an existing anchor node
+after("Z2")   # immediately after an existing anchor node
+
+# Name the new nodes assigned to each position clause.
+dag <- add_nodes(
+  dag,
+  new_nodes = c("W1", "W2", "U"),
+  node_role = "confounder",
+  type = "saturated",
+  position = c(first("W1"), after("Z2", "W2"))
+)
+
+```
+
+- Get edges and node structure information from a dagitty object:
 
 ```R
 get_edges(dag)
@@ -156,7 +184,7 @@ get_ancestor_edges(dag)
 
 get_structure(dag)
 
-get_nodes(dag)  
+get_nodes(dag)
 
 get_roles(dag)
 
@@ -169,74 +197,19 @@ get_diff_edges(dag, new_dag)
 - Other utility functions:
 
 ```R
-confounders(dag)  
+confounders(dag)
 
-mediators(dag)  
+mediators(dag)
 
-instruments(dag) 
+instruments(dag)
 
-colliders(dag)  
+colliders(dag)
 
-competing_exposures(dag) 
+competing_causes(dag)
 
-mediator_outcome_confounders(dag) 
+mediator_outcome_confounders(dag)
 
 proxies(dag)
-
-get_nodes_from_treatment_to_outcome(dag)
-```
-
-
-- Obtain remote sensing data from Sentinel 2:
-
-```R
-bbox <- sf::st_bbox(c(xmin = 138.712, xmax = 138.718, 
-                      ymin = -34.902, ymax = -34.906),
-                    crs = sf::st_crs(4326))
-## General function for obtaining time series data, NDVI example:
-ndvi_df <- getS2_data(bbox, "2023-01-01", "2023-01-10", 0.0001, 0.0001,
-                      asset_names = s2_index$NDVI$assets,
-                      index_function = s2_index$NDVI$fun)
-                      
-## You can also use a convenience function
-ndvi_df <- getNDVI(bbox, "2023-01-01", "2023-01-10", 0.0001, 0.0001)
-
-## Cloud cover can also be specified
-ndvi_df <- getNDVI(bbox, "2023-01-01", "2023-01-10", 0.0001, 0.0001,
-                   max_cloud_cover = 40) # defaults to 50
-                   
-## The general function allows cloud masking
-ndvi_df <- getS2_data(bbox, "2023-01-01", "2023-01-10", 0.0001, 0.0001,
-                      asset_names = s2_index$NDVI$assets,
-                      index_function = s2_index$NDVI$fun,
-                      scl_classes = c(8, 9, 10)) # defaults to NULL
-```
-
-
-- Raster composite of Sentinel 2 data:
-
-```R
-bbox <- sf::st_bbox(c(xmin = 138.712, xmax = 138.718, 
-                      ymin = -34.902, ymax = -34.906),
-                    crs = sf::st_crs(4326))
-                    
-## General function (NDVI)
-ndvi_rast <- getS2_raster(bbox, "2023-01-01", "2023-01-10", 0.0001, 0.0001,
-                          asset_names = s2_index$NDVI$assets,
-                          index_function = s2_index$NDVI$fun)
-## Convenience function (NDVI)
-ndvi_rast <- getNDVI_raster(bbox, "2023-01-01", "2023-01-10", 0.0001, 0.0001)
-
-## Plot with terra
-terra::plot(ndvi_rast)
-
-## Adding cloud masking
-ndvi_rast_m <- getS2_raster(bbox, "2023-01-01", "2023-01-10", 0.0001, 0.0001,
-                      asset_names = s2_index$NDVI$assets,
-                      index_function = s2_index$NDVI$fun,
-                      scl_classes = c(8, 9, 10))
-terra::plot(ndvi_rast_m)
-
 ```
 
 If you have any questions, suggestions, or would like to contribute, please let me know!

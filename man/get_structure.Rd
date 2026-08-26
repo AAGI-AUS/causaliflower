@@ -13,9 +13,14 @@ get_structure(dag)
 Nested list of nodes and node relationships
 }
 \description{
-node_structure() is a dagitty wrapper function that returns a list of node names extrated from a dagitty object, including the name and role of their ancestor and descendant nodes.
+get_structure() is a dagitty wrapper function that returns a list of node names extracted from a dagitty object, including each node's direct edges and its own role. For each node, the ancestor component holds the edges where the node is the source and the descendant component the edges where it is the target; the role column reports the focal node's role, and the edge operator is not reported. Symmetric edges appear once, on their stored orientation. Isolated nodes are included with empty components.
 }
 \examples{
+set.seed(1)
+dag <- build_graph(
+  variables = c("Z1", "Z2"), treatments = "X", outcomes = "Y",
+  mediators = "M", instrumental_variables = "IV", type = "saturated"
+)
 get_structure(dag)
 
 }

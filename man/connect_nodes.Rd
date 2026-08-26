@@ -2,34 +2,52 @@
 % Please edit documentation in R/graph_funcs.R
 \name{connect_nodes}
 \alias{connect_nodes}
-\title{Connect nodes in a dagitty object}
+\title{Connect existing nodes in a dagitty object}
 \usage{
 connect_nodes(
   dag,
   nodes = NULL,
   node_role = NULL,
   type = "full",
-  print_edges = TRUE
+  print_edges = TRUE,
+  position = NULL
 )
 }
 \arguments{
 \item{dag}{A dagitty object. Must include exposure and outcome nodes.}
 
-\item{nodes}{Inputted vector of node names to be added to the graph.}
+\item{nodes}{Existing node names to connect. Defaults to all graph nodes.}
 
-\item{node_role}{Determines which nodes will be connected, default fully connects new node to all existing nodes. Other options include the following: c("confounder", "treatment", "outcome", "mediator", "mediator_outcome_confounder", "instrument", "competing_exposure", "collider", "latent", "observed").}
+\item{node_role}{Optional role controlling how the supplied nodes are
+connected. The default (\code{NULL}) connects them to all existing nodes.}
 
-\item{type}{Type of graph generated. Defaults to 'full' (fully connected graph) with arrows drawn between confounders (both directions) and from confounders to mediators. If type ='saturated', a similar saturated graph is produced except confounders are not connected to mediators, featuring bi-directional arrows between each of the confounders (follows the ESC-DAGs Mapping Stage in Ferguson et al. (2020)). When type = 'first' or 'last', inputted nodes are ordered first or last if a confounder, mediator, or treatment node_role is selected.}
+\item{type}{Graph structure: \code{"full"}, \code{"saturated"}, or
+\code{"ordered"}. Defaults to \code{"full"}. The legacy values
+\code{"first"} and \code{"last"} remain available for compatibility;
+\code{position} provides a separate, newer ordering API.}
 
 \item{print_edges}{Print new edges in console, defaults to TRUE.}
+
+\item{position}{Optional placement of the selected nodes within their
+\code{node_role} temporal order, expressed with \code{first()},
+\code{last()}, \code{before()}, and
+\code{after()} (see \code{\link{position_helpers}}). When
+supplied, new edges follow the resolved order; \code{NULL} retains the
+default behaviour. Requires a \code{node_role}.}
 }
 \value{
 A dagitty object.
 }
 \description{
-Add nodes to a dagitty object, connecting edges based on the 'type' of graph selected, and generate new node coordinates using existing nodes.
+Connects existing nodes according to the selected graph type and optional
+causal role while preserving graph metadata and coordinates.
 }
 \examples{
-dag <- connect_nodes(dag, nodes)
+set.seed(1)
+dag <- build_graph(
+  variables = c("Z1", "Z2"), treatments = "X", outcomes = "Y",
+  mediators = "M", instrumental_variables = "IV", type = "saturated"
+)
+dag <- connect_nodes(dag, nodes = "Z1")
 
 }

@@ -2,7 +2,7 @@
 % Please edit documentation in R/utility_funcs.r
 \name{competing_exposures}
 \alias{competing_exposures}
-\title{Competing exposure node names in a dagitty object}
+\title{Renamed: competing_exposures}
 \usage{
 competing_exposures(dag)
 }
@@ -10,12 +10,9 @@ competing_exposures(dag)
 \item{dag}{A dagitty object.}
 }
 \value{
-A vector of competing exposure names, or edges in a data table.
+No return value; calling this function stops with a renaming message.
 }
 \description{
-competing_exposure() is a dagitty wrapper that identifies nodes in a directed acyclic graph connected to outcome, other than indicated exposures.
-}
-\examples{
-competing_exposures(dag)
-
+competing_exposures() was renamed competing_causes(). Calling this name stops
+with a pointer to the new one; it will be removed in a later release.
 }

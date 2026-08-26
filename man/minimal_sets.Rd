@@ -22,8 +22,6 @@ minimal_sets(
 \item{effect}{Defaults to total effect, options available as per dagitty::adjustmentSets()}
 
 \item{num_sets}{Number of sets to return, defaults to the smallest five minimally sufficient adjustment sets.}
-
-\item{decreasing}{Defaults to FALSE (shows minimally sufficient). Optionally can be set to filter the largest minimally sufficient adjustment sets.}
 }
 \value{
 Named list of minimally sufficient adjustment sets.
@@ -32,6 +30,11 @@ Named list of minimally sufficient adjustment sets.
 minimal_sets() is a dagitty::adjustmentSets() wrapper for obtaining minimal adjustment sets, returning the smallest 5 (if available) by default.
 }
 \examples{
+set.seed(1)
+dag <- build_graph(
+  variables = c("Z1", "Z2"), treatments = "X", outcomes = "Y",
+  mediators = "M", instrumental_variables = "IV", type = "saturated"
+)
 minimal_sets(dag) # defaults to the total effect and 5 smallest sets
 
 minimal_sets(dag, effect = "direct") # direct effect

@@ -12,13 +12,14 @@ build_graph(
   latent_variables = NA,
   instrumental_variables = NA,
   mediator_outcome_confounders = NA,
-  competing_exposures = NA,
+  competing_causes = NA,
   colliders = NA,
-  type = "full"
+  type = "full",
+  confounders = NULL
 )
 }
 \arguments{
-\item{variables}{Dagitty object, or vector of variable names, e.g. "Z" or c("Z1", "Z2", "Z3"). If variable names are inputted the order determines the assigned coordinates. A list can also be supplied. Variables inputted are treated as confounders. If type = "ordered", confounders located in the same list will be assigned similar coordinates.}
+\item{variables}{Dagitty object, or vector of variable names, e.g. "Z" or c("Z1", "Z2", "Z3"). If variable names are inputted the order determines the assigned coordinates. A list can also be supplied. Variables inputted are treated as confounders. If type = "ordered", confounders located in the same list will be assigned similar coordinates. When a dagitty object is supplied, a new DAG is constructed from its inferred node roles; use graph-editing functions when the original graph type and edge semantics must be retained.}
 
 \item{treatments}{Treatment variable name, e.g. "X". Must be specified.}
 
@@ -32,17 +33,19 @@ build_graph(
 
 \item{mediator_outcome_confounders}{Vector of mediator-outcome confounder names, that instead of being common causes of treatment and outcome (X <- Z -> Y) are a common cause of mediators and outcome (M <- Z -> Y). A list can also be supplied.}
 
-\item{competing_exposures}{Vector of competing exposure names. An arrow is drawn connecting competing exposures to the outcome, with other arrows also connected depending on type of graph specified.}
+\item{competing_causes}{Vector of competing cause names. An arrow is drawn from each competing cause to the outcome, with other arrows depending on \code{type}.}
 
 \item{colliders}{Vector of collider variables, with both treatment and outcome parents.}
 
-\item{type}{Type of connected graph (e.g. "full", "saturated", "ordered", "none"). Defaults to 'full' (fully connected graph) with arrows drawn between confounders (both directions) and from confounders to mediators. If type ='saturated', a similar saturated graph is produced except confounders are not connected to mediators, featuring bi-directional arrows between each of the confounders (follows the ESC-DAGs Mapping Stage in Ferguson et al. (2020)). When type = 'ordered', the order of supplied confounders and mediators determines the order that each node occurs, therefore directed arrows are to be connected in one direction from confounders and mediators to other confounders and mediators, respectively. This builds a saturated DAG with temporal, uni-directional arrows, based on Tennnant et al. (2021).}
+\item{type}{Type of connected graph (e.g. "full", "saturated", "ordered"). Defaults to 'full' (fully connected graph) with bi-directional arrows drawn between each of the confounders (follows the ESC-DAGs Mapping Stage in Ferguson et al. (2020)) and arrows from confounders to mediators. If type = 'saturated', a similar saturated graph is produced except confounders are not connected to mediators or each other bidirectionally. When type = 'ordered', the order of supplied confounders and mediators determines the order that each node occurs, therefore directed arrows are to be connected in one direction from confounders and mediators to other confounders and mediators, respectively. This builds a saturated DAG with temporal, uni-directional arrows, based on Tennant et al. (2021).}
+
+\item{confounders}{Optional alias for \code{variables} when supplying confounder names.}
 }
 \value{
 A dagitty object, fully connected (saturated) graph.
 }
 \description{
-build_graph() produces a dagitty graph object from inputted parameters (e.g. treatments, outcome, confounders).
+build_graph() produces a dagitty graph object from inputted parameters (e.g. treatments, outcome, confounders). A node listed in more than one role input receives each listed role's arrows.
 }
 \examples{
 ## initial variables (see above for full list of possible inputs)
@@ -53,22 +56,26 @@ build_graph() produces a dagitty graph object from inputted parameters (e.g. tre
 }
 # Three types of graphs can be generated using build_graph()
 
-## Option 1: 'ordered' graph, where the supplied vector order is used to determine the temporal order of confounder nodes.
+## Option 1: an 'ordered' graph uses the supplied vector order to determine
+## the temporal order of confounder nodes.
 
 type <- "ordered"
 
+set.seed(1)
 dag <- build_graph(variables = variables,
                   treatments = treatments,
                   outcomes = outcomes,
                   type = type)
 
-plot_dagitty(dag) # Plot the graph with plot_dagitty() (assigns coordinates based on the variable roles, e.g., confounders, treatments, outcomes).
+# Plot the graph and assign coordinates based on the variable roles.
+plot_dagitty(dag)
 
 
-## Option 2: 'saturated' graph connecting each of the confounders (inputted as variables)
+## Option 2: a 'saturated' graph connects each supplied confounder.
 
 type <- "saturated"
 
+set.seed(1)
 dag <- build_graph(variables = variables,
                   treatments = treatments,
                   outcomes = outcomes,
@@ -77,10 +84,12 @@ dag <- build_graph(variables = variables,
 plot_dagitty(dag)
 
 
-## Option 3: "full" creates a fully connected graph (bidirectional arrows between confounders, and from confounders to all other nodes except treatment and outcome.)
+## Option 3: 'full' connects confounders bidirectionally and connects them
+## to all other nodes except treatment and outcome.
 
 type <- "full"
 
+set.seed(1)
 dag <- build_graph(variables = variables,
                   treatments = treatments,
                   outcomes = outcomes,

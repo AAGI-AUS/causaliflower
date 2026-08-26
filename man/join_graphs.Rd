@@ -4,16 +4,12 @@
 \alias{join_graphs}
 \title{Merge two dagitty objects}
 \usage{
-join_graphs(dag, new_dag, coords_spec = 0.1, threshold = 0.5)
+join_graphs(dag, new_dag)
 }
 \arguments{
 \item{dag}{First dagitty object.}
 
 \item{new_dag}{Second dagitty object, added to the first.}
-
-\item{coords_spec}{Adjust node placement when generating coordinates with a numeric value > 0 (recommended < 10).}
-
-\item{threshold}{Set the allowed closeness of nodes in newly generated coordinates. Numeric value between 0 and 1 for the minimum distance allowed when generating coordinates.}
 }
 \value{
 A dagitty object
@@ -22,6 +18,13 @@ A dagitty object
 join_graphs() adds new nodes to the first from the second supplied dagitty object, before generating new coordinates for the merged graph.
 }
 \examples{
-new_graph <- join_graphs(dag, new_dag)
+set.seed(1)
+dag <- build_graph(
+  variables = c("Z1", "Z2"), treatments = "X", outcomes = "Y", type = "saturated"
+)
+dag2 <- build_graph(
+  variables = c("Z1", "Z3"), treatments = "X", outcomes = "Y", type = "saturated"
+)
+new_graph <- join_graphs(dag, dag2)
 
 }

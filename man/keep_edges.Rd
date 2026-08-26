@@ -7,7 +7,7 @@
 keep_edges(edges_to_keep, dag)
 }
 \arguments{
-\item{edges_to_keep}{A vector of directed arrows to be kept between (non-treatment and non-outcome) variables, e.g. c("Z1 -> Z2", "Z2 -> Z3"), c("y", "n", "y"), or c(TRUE, FALSE, TRUE).}
+\item{edges_to_keep}{Edges to be kept, e.g. c("Z1 -> Z2", "Z2 -> Z3"). Accepts a character vector of edge strings, a v/e/w edge table, or a dagitty object. Only listed edges are kept, including any into or out of the treatments and outcomes.}
 
 \item{dag}{A saturated graph dagitty object. Exposure and outcome must be indicated, and optionally can include assigned coordinates.}
 }
@@ -18,27 +18,22 @@ A dagitty object, with directed arrows removed based on edges_to_keep.
 keep_edges() removes edges based on user inputs.
 }
 \examples{
-## initial dag
-{
-  variables <- c("Z1", "Z2", "Z3") # these are treated as confounders
-  treatments <- "X"
-  outcomes <- "Y"
-  type <- "ordered"
+set.seed(1)
+dag <- build_graph(
+  variables = c("Z1", "Z2", "Z3"), treatments = "X", outcomes = "Y", type = "ordered"
+)
 
-  dag <- build_graph(type = type,
-                     variables = variables,
-                     treatments = treatments,
-                     outcomes = outcomes)
-}
+## a saturated graph built from the existing (sparser) dag
+saturated_graph <- build_graph(type = "saturated", variables = dag)
 
-## Using a saturated graph as an example, created from an existing dag
-saturated_graph <- build_graph(type = c('full', 'saturated'), # choose a type
-                               variables = dag) # existing dagitty object inputted
+## keep only the edges present in the original dag
+kept <- keep_edges(dag, saturated_graph)
 
-## guided causal criteria sequence (rule out edges already included in existing dag)
+\dontrun{
+## interactive: curate edges via the guided causal-criteria sequence, then keep them
 edges_to_keep <- assess_edges(saturated_graph, edges_to_keep = dag,
                               assess_causal_criteria = TRUE)
-
-dag <- keep_edges(saturated_graph, edges_to_keep)
+kept <- keep_edges(edges_to_keep, saturated_graph)
+}
 
 }
