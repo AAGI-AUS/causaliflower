@@ -10,15 +10,15 @@ mediators(dag)
 \item{dag}{A dagitty object.}
 }
 \value{
-Character vector of mediator names; character(0) if none.
+A character vector of mediator names, or \code{character(0)} if none.
 }
 \description{
-mediators() identifies nodes along directed paths between treatment and outcome in a directed acyclic graph.
+\code{mediators()} identifies nodes along directed paths between treatment and outcome in a directed acyclic graph.
 }
 \examples{
 set.seed(1)
 dag <- build_graph(
-  variables = c("Z1", "Z2"), treatments = "X", outcomes = "Y",
+  variables = c("X1", "X2"), treatments = "T", outcomes = "Y",
   mediators = "M", instrumental_variables = "IV", type = "saturated"
 )
 mediators(dag)

@@ -12,21 +12,21 @@ instruments(dag, usable_instruments = FALSE, details = FALSE)
 \item{usable_instruments}{When \code{TRUE}, exclude candidates that are
 descendants of their treatment. Defaults to \code{FALSE}.}
 
-\item{details}{When \code{FALSE} (the default), return the nested-list shape
-used by earlier releases. When \code{TRUE}, return a data table containing
-treatment, outcome, instrument, and conditioning set.}
+\item{details}{With \code{FALSE} (the default), the function returns a nested
+list grouped by treatment and outcome. With \code{TRUE}, it returns a data
+table containing treatment, outcome, instrument and conditioning set.}
 }
 \value{
 A nested list, or a data table when \code{details = TRUE}.
 }
 \description{
-instruments() is a dagitty wrapper function capable of identifying  multiple instrumental variables in multi-treatment and multi-outcome settings.
-Instruments are identified for each treatment-outcome pair using \code{dagitty::instrumentalVariables()};
+Finds candidate instruments for each treatment and outcome pair using
+\code{dagitty::instrumentalVariables()}.
 }
 \examples{
 set.seed(1)
 dag <- build_graph(
-  variables = c("Z1", "Z2"), treatments = "X", outcomes = "Y",
+  variables = c("X1", "X2"), treatments = "T", outcomes = "Y",
   mediators = "M", instrumental_variables = "IV", type = "saturated"
 )
 instruments(dag)

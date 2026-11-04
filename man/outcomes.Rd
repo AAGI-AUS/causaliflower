@@ -17,17 +17,17 @@ outcomes(x) <- value
 \item{value}{Character vector of outcome names to declare.}
 }
 \value{
-Character vector of outcome names; character(0) if none.
+A character vector of outcome names, or \code{character(0)} if none.
 }
 \description{
-outcomes() returns a vector of node names assigned "\code{[outcome]}" in a dagitty object (similar to dagitty::outcomes()).
-Attaching causaliflower after dagitty masks \code{dagitty::outcomes()}; both read the same declarations, and the
-replacement form \code{outcomes(dag) <- value} continues to work.
+\code{outcomes()} returns node names marked \verb{[outcome]} in a dagitty object,
+as does \code{dagitty::outcomes()}. Attaching causaliflower after dagitty masks
+that function. The replacement form \code{outcomes(dag) <- value} still works.
 }
 \examples{
 set.seed(1)
 dag <- build_graph(
-  variables = c("Z1", "Z2"), treatments = "X", outcomes = "Y",
+  variables = c("X1", "X2"), treatments = "T", outcomes = "Y",
   mediators = "M", instrumental_variables = "IV", type = "saturated"
 )
 outcomes(dag)

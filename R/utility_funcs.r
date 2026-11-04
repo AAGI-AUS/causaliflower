@@ -1,14 +1,22 @@
+# ==============================================================================
+# utility_funcs.r
+
+
+# Node status and role functions with wrappers for dagitty's identification checks
+# ==============================================================================
+
 
 #' Treatment variables in a dagitty object
 #'
-#' treatments() returns a vector of node names assigned "\code{[exposure]}" in a dagitty object (similar to dagitty::exposures())
+#' `treatments()` returns node names marked `[exposure]` in a dagitty object,
+#' as does `dagitty::exposures()`.
 #'
 #' @param dag A dagitty object.
-#' @returns Character vector of treatment names; character(0) if none.
+#' @returns A character vector of treatment names, or `character(0)` if none.
 #' @examples
 #' set.seed(1)
 #' dag <- build_graph(
-#'   variables = c("Z1", "Z2"), treatments = "X", outcomes = "Y",
+#'   variables = c("X1", "X2"), treatments = "T", outcomes = "Y",
 #'   mediators = "M", instrumental_variables = "IV", type = "saturated"
 #' )
 #' treatments(dag)
@@ -16,20 +24,23 @@
 #' @export
 treatments <- function(dag){
 
-  return(.get_dagitty_role(dag, "treatment"))
+  nodes <- get_dagitty_role(dag, "treatment")
+
+  return(nodes)
 }
 
 
 #' Unobserved (latent) variables in a dagitty object
 #'
-#' unobserved() returns a vector of node names assigned "\code{[latent]}" in a dagitty object (similar to dagitty::latents())
+#' `unobserved()` returns node names marked `[latent]` in a dagitty object,
+#' as does `dagitty::latents()`.
 #'
 #' @param dag A dagitty object.
-#' @returns Character vector of unobserved (latent) names; character(0) if none.
+#' @returns A character vector of unobserved (latent) names, or `character(0)` if none.
 #' @examples
 #' set.seed(1)
 #' dag <- build_graph(
-#'   variables = c("Z1", "Z2"), treatments = "X", outcomes = "Y",
+#'   variables = c("X1", "X2"), treatments = "T", outcomes = "Y",
 #'   mediators = "M", instrumental_variables = "IV", type = "saturated"
 #' )
 #' unobserved(dag)
@@ -37,21 +48,24 @@ treatments <- function(dag){
 #' @export
 unobserved <- function(dag){
 
-  return(.get_dagitty_role(dag, "unobserved"))
+  nodes <- get_dagitty_role(dag, "unobserved")
+
+  return(nodes)
 }
 
 
 #' Observed variables in a dagitty object
 #'
-#' observed() returns a vector of variables that are not assigned "\code{[latent]}" in a dagitty object.
-#' This is the measurement status; the \code{observed} element of \code{get_roles()} instead lists nodes without another role.
+#' `observed()` returns node names without a `[latent]` tag in a dagitty
+#' object. This is their measurement status. The `observed` element of
+#' `get_roles()` instead lists nodes without another role.
 #'
 #' @param dag A dagitty object.
-#' @returns Character vector of observed names; character(0) if none.
+#' @returns A character vector of observed names, or `character(0)` if none.
 #' @examples
 #' set.seed(1)
 #' dag <- build_graph(
-#'   variables = c("Z1", "Z2"), treatments = "X", outcomes = "Y",
+#'   variables = c("X1", "X2"), treatments = "T", outcomes = "Y",
 #'   mediators = "M", instrumental_variables = "IV", type = "saturated"
 #' )
 #' observed(dag)
@@ -59,22 +73,24 @@ unobserved <- function(dag){
 #' @export
 observed <- function(dag){
 
-  return(setdiff(.get_node_names(dag), unobserved(dag)))
+  nodes <- setdiff(get_node_names(dag), unobserved(dag))
+
+  return(nodes)
 }
 
 
 #' Outcome variables in a dagitty object
 #'
-#' outcomes() returns a vector of node names assigned "\code{[outcome]}" in a dagitty object (similar to dagitty::outcomes()).
-#' Attaching causaliflower after dagitty masks \code{dagitty::outcomes()}; both read the same declarations, and the
-#' replacement form \code{outcomes(dag) <- value} continues to work.
+#' `outcomes()` returns node names marked `[outcome]` in a dagitty object,
+#' as does `dagitty::outcomes()`. Attaching causaliflower after dagitty masks
+#' that function. The replacement form `outcomes(dag) <- value` still works.
 #'
 #' @param dag A dagitty object.
-#' @returns Character vector of outcome names; character(0) if none.
+#' @returns A character vector of outcome names, or `character(0)` if none.
 #' @examples
 #' set.seed(1)
 #' dag <- build_graph(
-#'   variables = c("Z1", "Z2"), treatments = "X", outcomes = "Y",
+#'   variables = c("X1", "X2"), treatments = "T", outcomes = "Y",
 #'   mediators = "M", instrumental_variables = "IV", type = "saturated"
 #' )
 #' outcomes(dag)
@@ -82,8 +98,11 @@ observed <- function(dag){
 #' @export
 outcomes <- function(dag){
 
-  return(.get_dagitty_role(dag, "outcome"))
+  nodes <- get_dagitty_role(dag, "outcome")
+
+  return(nodes)
 }
+
 
 #' @rdname outcomes
 #' @param x A dagitty object.
@@ -95,151 +114,263 @@ outcomes <- function(dag){
   return(x)
 }
 
-#' Outcome variables in a dagitty object (internal)
+
+#' Declare treatment variables in a dagitty object
 #'
-#' Internal function for outcomes - returns a vector of node names assigned "\code{[outcome]}" in a dagitty object (similar to dagitty::outcomes())
+#' `set_treatment()` adds `[exposure]` to the named nodes and changes
+#' nothing else: no edge, coordinate, curve, label or other node status is
+#' altered.
 #'
 #' @param dag A dagitty object.
-#' @returns Character vector of outcome names; character(0) if none.
-#' @noRd
-.outcomes <- function(dag){
+#' @param nodes Character vector of node names already in the graph.
+#' @returns A dagitty object.
+#' @examples
+#' set_treatment(dagitty::dagitty("dag { T Y Z T -> Y }"), "T")
+#'
+#' @export
+set_treatment <- function(dag, nodes){
 
-  return(.get_dagitty_role(dag, "outcome"))
+  nodes <- check_status_nodes(dag, nodes, "set_treatment()")
+
+  dag_out <- set_node_status(dag, nodes, "exposure", "set_treatment()")
+
+  return(dag_out)
 }
 
 
-#' Node roles in dagitty
+#' Declare outcome variables in a dagitty object
 #'
-#' Returns node names assigned a given dagitty role, read directly from the dagitty model string
-#' (see .dag_to_string() / .lowercase_nodes()) instead of via dagitty functions.
+#' `set_outcome()` adds `[outcome]` to the named nodes and changes
+#' nothing else: no edge, coordinate, curve, label or other node status is
+#' altered.
 #'
 #' @param dag A dagitty object.
-#' @param role One of "treatment", "outcome", "unobserved".
-#' @returns Character vector of node names, or character(0) if none.
+#' @param nodes Character vector of node names already in the graph.
+#' @returns A dagitty object.
+#' @examples
+#' set_outcome(dagitty::dagitty("dag { X Y Z X -> Y }"), "Y")
+#'
+#' @export
+set_outcome <- function(dag, nodes){
+
+  nodes <- check_status_nodes(dag, nodes, "set_outcome()")
+
+  dag_out <- set_node_status(dag, nodes, "outcome", "set_outcome()")
+
+  return(dag_out)
+}
+
+
+#' Declare unobserved (latent) variables in a dagitty object
+#'
+#' `set_latent()` adds `[latent]` to the named nodes and changes nothing
+#' else: no edge, coordinate, curve, label or other node status is altered.
+#'
+#' @param dag A dagitty object.
+#' @param nodes Character vector of node names already in the graph.
+#' @returns A dagitty object.
+#' @examples
+#' set_latent(dagitty::dagitty("dag { X Y Z X -> Y }"), "Z")
+#'
+#' @export
+set_latent <- function(dag, nodes){
+
+  nodes <- check_status_nodes(dag, nodes, "set_latent()")
+
+  dag_out <- set_node_status(dag, nodes, "latent", "set_latent()")
+
+  return(dag_out)
+}
+
+
+#' Check node status setter inputs
+#'
+#' Checks that `dag` is a dagitty object and that `nodes` names existing nodes,
+#' then returns those names.
+#'
+#' @param dag A dagitty object.
+#' @param nodes Character vector of node names already in the graph.
+#' @param caller Name of the calling function, used in the messages.
+#' @returns Character vector of node names.
 #' @noRd
-.get_dagitty_role <- function(dag, role){
+check_status_nodes <- function(dag, nodes, caller){
 
-  tags <- switch(role,
-                 treatment   = c("exposure", "e"),
-                 outcome    = c("outcome", "o"),
-                 unobserved = c("latent", "unobserved", "u"),
-                 stop("Unknown role: ", role, ". Expected treatment, outcome, or unobserved."))
-  lowercase_node_names <- .lowercase_nodes(.dag_to_string(dag))
-  matched_node_names   <- names(lowercase_node_names)[vapply(lowercase_node_names, function(a) any(tags %in% a), logical(1L))]
-
-  if( length(matched_node_names) > 0L ){
-    return(as.character(matched_node_names))
+  if( !inherits(dag, "dagitty") ){
+    stop(caller, ": 'dag' must be a dagitty object.", call. = FALSE)
+  }
+  if( !is.character(nodes) || length(nodes) == 0L ){
+    stop(caller, ": 'nodes' must name nodes in the graph: ",
+         paste(deparse(nodes), collapse = " "), ".", call. = FALSE)
+  }
+  missing_nodes <- unique(nodes[!nodes %in% names(dag)])
+  if( length(missing_nodes) > 0L ){
+    stop(caller, ": 'nodes' must name nodes in the graph: ",
+         paste(missing_nodes, collapse = ", "), ".", call. = FALSE)
   }
 
-  return(character(0L))
+  return(nodes)
 }
 
 
-#' All variable names in a dagitty object (including isolated nodes)
+#' Write a node status into the native graph text
 #'
-#' Returns every node name in a dagitty object, including isolated (edge-less) nodes. Used by observed() and the get_* family.
+#' Inserts the dagitty keyword into each node's declaration, keeping every
+#' other byte of the graph text, then checks that only the requested status
+#' changed.
 #'
 #' @param dag A dagitty object.
-#' @returns Character vector of node names, or character(0).
+#' @param nodes Character vector of node names already in the graph.
+#' @param keyword One of "exposure", "outcome", "latent".
+#' @param caller Name of the calling function, used in the messages.
+#' @returns A dagitty object.
 #' @noRd
-.get_node_names <- function(dag){
+set_node_status <- function(dag, nodes, keyword, caller){
 
-  s  <- .dag_to_string(dag)
-  s  <- gsub("\\[[^][]*\\]", " ", s)                            # drop [attribute] blocks (and pos="x,y")
-  qn <- regmatches(s, gregexpr("\"[^\"]*\"", s, perl = TRUE))[[1]]   # quoted names (now pos-free, may hold spaces)
-  qn <- vapply(qn, .noquote, character(1L))
-  s  <- gsub("\"[^\"]*\"", " ", s)                              # remove quoted names from the string
-  s  <- sub("^\\s*(dag|pdag|mag|pag)\\b", " ", s, perl = TRUE)  # drop the graph-type keyword
-  s  <- gsub("[{}]", " ", s)                                    # drop braces
-  s  <- gsub("<->|<-|->|--", " ", s)                            # drop edge operators -> leave bare endpoints
-  bn <- strsplit(s, "[[:space:];]+", perl = TRUE)[[1]]          # bare node names
-  bn <- bn[nzchar(bn)]
-  vals <- unique(c(as.character(qn), as.character(bn)))
-
-  if( length(vals) > 0L ){
-
-    return(vals)
+  status <- switch(keyword,
+                   exposure = treatments(dag),
+                   outcome  = get_outcome_names(dag),
+                   latent   = unobserved(dag))
+  pending <- setdiff(unique(nodes), status)
+  if( length(pending) == 0L ){
+    return(dag)
   }
 
-  return(character(0L))
-}
+  failure <- function(){
+    stop(caller, ": the graph could not be updated without changing its ",
+         "existing metadata.", call. = FALSE)
+  }
+  text <- as.character(dag)
+  index <- tryCatch(native_layout_index(text, caller),
+                    error = function(error) {
+                      out <- NULL
 
+                      return(out)
+                    })
+  if( is.null(index) ) failure()
 
-#' Obtain the dagitty model string (internal)
-#'
-#' @param dag A dagitty object.
-#' @returns Length-1 character: the dagitty model string.
-#' @noRd
-.dag_to_string <- function(dag){
+  edits <- list()
+  written <- character()
+  for( block in index$blocks ){
+    if( block$kind != "node" || is.null(block$node) ) next
+    if( !block$node %in% pending || block$node %in% written ) next
+    at <- index$tokens$end[block$first] + 1L
+    edits[[length(edits) + 1L]] <- list(
+      start = at, end = at - 1L,
+      text = paste0(keyword, if( length(block$fields) > 0L ) "," else "")
+    )
+    written <- c(written, block$node)
+  }
+  for( declaration in index$declarations ){
+    if( !declaration$node %in% pending || declaration$node %in% written ) next
+    at <- index$tokens$end[declaration$token]
+    edits[[length(edits) + 1L]] <- list(
+      start = at + 1L, end = at, text = paste0(" [", keyword, "]")
+    )
+    written <- c(written, declaration$node)
+  }
+  undeclared <- setdiff(pending, written)
+  if( length(undeclared) > 0L ){
+    lines <- paste0(native_layout_quote(undeclared), " [", keyword, "]")
+    edits[[length(edits) + 1L]] <- list(
+      start = index$closing, end = index$closing - 1L,
+      text = paste0("\n", paste(lines, collapse = "\n"), "\n")
+    )
+  }
+  result <- native_layout_value(dag, native_layout_edits(text, edits))
 
-  cands <- list(tryCatch(as.character(dag), error = function(e) NULL),
-                tryCatch(unclass(dag),      error = function(e) NULL),
-                tryCatch(format(dag),       error = function(e) NULL))
-  for( s in cands ){
-    if( is.null(s) ) next
-    s <- paste(as.character(s), collapse = "\n")
-    if( grepl("\\{|->|--|<->|\\[", s) ){
-      graph_type <- sub("^\\s*([[:alpha:]]+).*", "\\1", s)
-      if( !graph_type %in% c("dag", "pdag", "mag") ){
-        stop("causaliflower does not currently support dagitty graph type '",
-             graph_type, "'.", call. = FALSE)
-      }
-      return(s)
+  restored <- as.character(result)
+  for( i in order(vapply(edits, `[[`, numeric(1L), "start")) ){
+    inserted <- edits[[i]]$text
+    at <- edits[[i]]$start
+    if( !identical(substr(restored, at, at + nchar(inserted) - 1L), inserted) ){
+      failure()
     }
+    restored <- paste0(substr(restored, 1L, at - 1L),
+                       substring(restored, at + nchar(inserted)))
   }
+  if( !identical(restored, text) ) failure()
+  if( !status_write_intact(dag, result, pending, keyword, caller) ) failure()
 
-  stop("Could not read a dagitty model string from the supplied object. ",
-       "Please check that a dagitty object is supplied and try again.", call. = FALSE)
+  return(result)
 }
 
-#' Strip one layer of surrounding double quotes (internal)
+
+#' Check that a node status write changed nothing else
 #'
-#' @param x Character vector.
-#' @returns x with a single pair of wrapping double quotes removed where present.
+#' Compares the node set, statuses, edges, coordinates and stored curve control
+#' points of the rewritten graph with the supplied one.
+#'
+#' @param dag The supplied dagitty object.
+#' @param result The rewritten dagitty object.
+#' @param nodes Character vector of node names given the status.
+#' @param keyword One of "exposure", "outcome", "latent".
+#' @param caller Name of the calling function, used in the messages.
+#' @returns TRUE if only the requested status changed, otherwise FALSE.
 #' @noRd
-.noquote <- function(x){
+status_write_intact <- function(dag, result, nodes, keyword, caller){
 
-  return(sub('^"(.*)"$', "\\1", x))
-}
+  same <- function(x, y){
+    matches <- identical(sort(unique(as.character(x))), sort(unique(as.character(y))))
 
-#' Parse node-attribute declarations from a dagitty model string (internal)
-#'
-#' Returns a named list of lowercase node names. Helper to .get_dagitty_role().
-#'
-#' @param s character dagitty model string (length of 1)
-#' @returns Named list
-#' @noRd
-.lowercase_nodes <- function(s){
+    return(matches)
+  }
+  keys <- function(x) {
+    keys <- edge_control_keys(x$v, x$e, x$w)
 
-  pat <- '("[^"]*"|[A-Za-z0-9_.]+)\\s*\\[([^][]*)\\]'
-  m   <- gregexpr(pat, s, perl = TRUE)[[1]]
-  if( m[1] == -1L ) return(list())
-  starts <- m; lens <- attr(m, "match.length")
-  out <- list()
-  for( i in seq_along(starts) ){
-    chunk <- substr(s, starts[i], starts[i] + lens[i] - 1L)
-    nm   <- .noquote(sub(pat, "\\1", chunk, perl = TRUE))
-    att  <- sub(pat, "\\2", chunk, perl = TRUE)
-    att  <- gsub('[A-Za-z0-9_.]+\\s*=\\s*"[^"]*"', "", att)     # drop key="value" pairs, e.g. pos="x,y"
-    toks <- trimws(strsplit(att, "[,[:space:]]+", perl = TRUE)[[1]]) # tags are case-sensitive, matching dagitty's grammar
-    out[[nm]] <- unique( c( out[[nm]], toks[nzchar(toks)] ) ) # merge tokens across repeated declarations of one node
+    return(keys)
   }
 
-  return(out)
+  intact <- tryCatch({
+    expected <- list(exposure = as.character(dagitty::exposures(dag)),
+                     outcome  = as.character(dagitty::outcomes(dag)),
+                     latent   = as.character(dagitty::latents(dag)))
+    expected[[keyword]] <- union(expected[[keyword]], nodes)
+    graph_nodes <- names(dag)
+    before <- dagitty::coordinates(dag)
+    after <- dagitty::coordinates(result)
+    controls <- edge_controls(dag, caller)
+    actual <- edge_controls(result, caller)
+    found <- match(keys(controls), keys(actual))
+    edges <- dag_edges(dag, caller)
+    rewritten <- dag_edges(result, caller)
+
+    same(dagitty::exposures(result), expected$exposure) &&
+      same(dagitty::outcomes(result), expected$outcome) &&
+      same(dagitty::latents(result), expected$latent) &&
+      setequal(names(result), graph_nodes) &&
+      length(names(result)) == length(graph_nodes) &&
+      setequal(keys(rewritten), keys(edges)) &&
+      length(keys(rewritten)) == length(keys(edges)) &&
+      identical(after$x[graph_nodes], before$x[graph_nodes]) &&
+      identical(after$y[graph_nodes], before$y[graph_nodes]) &&
+      nrow(actual) == nrow(controls) && !anyNA(found) &&
+      identical(as.numeric(actual$x[found]), as.numeric(controls$x)) &&
+      identical(as.numeric(actual$y[found]), as.numeric(controls$y)) &&
+      identical(dagitty::adjustedNodes(result), dagitty::adjustedNodes(dag)) &&
+      identical(selected_nodes(result), selected_nodes(dag))
+  }, error = function(error) {
+    matches <- FALSE
+
+    return(matches)
+  })
+
+  matches <- isTRUE(intact)
+
+  return(matches)
 }
 
 
 #' Mediator names in a dagitty object
 #'
-#' mediators() identifies nodes along directed paths between treatment and outcome in a directed acyclic graph.
+#' `mediators()` identifies nodes along directed paths between treatment and outcome in a directed acyclic graph.
 #'
 #' @importFrom dagitty parents
 #' @param dag A dagitty object.
-#' @returns Character vector of mediator names; character(0) if none.
+#' @returns A character vector of mediator names, or `character(0)` if none.
 #' @examples
 #' set.seed(1)
 #' dag <- build_graph(
-#'   variables = c("Z1", "Z2"), treatments = "X", outcomes = "Y",
+#'   variables = c("X1", "X2"), treatments = "T", outcomes = "Y",
 #'   mediators = "M", instrumental_variables = "IV", type = "saturated"
 #' )
 #' mediators(dag)
@@ -247,23 +378,25 @@ outcomes <- function(dag){
 #' @export
 mediators <- function(dag){
 
-  mediators <- .get_roles(dag)$mediator
+  mediators <- classify_node_roles(dag)$mediator
 
-  return(as.character(mediators[ complete.cases(mediators) ]))
+  nodes <- as.character(mediators[ complete.cases(mediators) ])
+
+  return(nodes)
 }
 
 
 #' Confounder names in a dagitty object
 #'
-#' confounders() identifies common causes of treatment and outcome in a directed acyclic graph. Ancestral common causes are included, as are proxy variables of indicated unmeasured confounding.
+#' `confounders()` identifies common causes of treatment and outcome in a directed acyclic graph. Ancestral common causes are included, as are proxy variables of indicated unmeasured confounding.
 #'
 #' @importFrom dagitty parents
 #' @param dag A dagitty object.
-#' @returns Character vector of confounder names; character(0) if none.
+#' @returns A character vector of confounder names, or `character(0)` if none.
 #' @examples
 #' set.seed(1)
 #' dag <- build_graph(
-#'   variables = c("Z1", "Z2"), treatments = "X", outcomes = "Y",
+#'   variables = c("X1", "X2"), treatments = "T", outcomes = "Y",
 #'   mediators = "M", instrumental_variables = "IV", type = "saturated"
 #' )
 #' confounders(dag)
@@ -271,22 +404,25 @@ mediators <- function(dag){
 #' @export
 confounders <- function(dag){
 
-  confounders <- .get_roles(dag)$confounder
+  confounders <- classify_node_roles(dag)$confounder
 
-  return(as.character(confounders[ complete.cases(confounders) ]))
+  nodes <- as.character(confounders[ complete.cases(confounders) ])
+
+  return(nodes)
 }
 
-#' Mediator-outcome confounder names in a dagitty object
+
+#' Mediator and outcome confounder names in a dagitty object
 #'
-#' mediator_outcome_confounders() identifies nodes that instead of being common causes of treatment and outcome (X <- Z -> Y) are a common cause of mediators and outcome (M <- Z -> Y) in a directed acyclic graph.
+#' `mediator_outcome_confounders()` identifies nodes that instead of being common causes of treatment and outcome (T <- X -> Y) are a common cause of mediators and outcome (M <- X -> Y) in a directed acyclic graph.
 #'
 #' @importFrom dagitty parents
 #' @param dag A dagitty object.
-#' @returns Character vector of mediator-outcome confounder names; character(0) if none.
+#' @returns A character vector of mediator and outcome confounder names, or `character(0)` if none.
 #' @examples
 #' set.seed(1)
 #' dag <- build_graph(
-#'   variables = c("Z1", "Z2"), treatments = "X", outcomes = "Y",
+#'   variables = c("X1", "X2"), treatments = "T", outcomes = "Y",
 #'   mediators = "M", instrumental_variables = "IV", type = "saturated"
 #' )
 #' mediator_outcome_confounders(dag)
@@ -294,23 +430,25 @@ confounders <- function(dag){
 #' @export
 mediator_outcome_confounders <- function(dag){
 
-  mediator_outcome_confounders <- .get_roles(dag)$mediator_outcome_confounder
+  mediator_outcome_confounders <- classify_node_roles(dag)$mediator_outcome_confounder
 
-  return(as.character(mediator_outcome_confounders[ complete.cases(mediator_outcome_confounders) ]))
+  nodes <- as.character(mediator_outcome_confounders[ complete.cases(mediator_outcome_confounders) ])
+
+  return(nodes)
 }
 
 
 #' Competing cause node names in a dagitty object
 #'
-#' competing_causes() returns direct causes of the outcome that are not otherwise classified -- i.e. causes of the outcome lying off the treatment->outcome path and unconnected to the treatment. Sometimes called a competing exposure (Tennant et al., 2021).
+#' `competing_causes()` returns direct causes of the outcome that are not otherwise classified -- i.e. causes of the outcome lying off the treatment->outcome path and unconnected to the treatment. Sometimes called a competing exposure (Tennant et al., 2021).
 #'
 #' @importFrom dagitty edges coordinates dagitty
 #' @param dag A dagitty object.
-#' @returns Character vector of competing cause names; character(0) if none.
+#' @returns A character vector of competing cause names, or `character(0)` if none.
 #' @examples
 #' set.seed(1)
 #' dag <- build_graph(
-#'   variables = c("Z1", "Z2"), treatments = "X", outcomes = "Y",
+#'   variables = c("X1", "X2"), treatments = "T", outcomes = "Y",
 #'   mediators = "M", instrumental_variables = "IV", type = "saturated"
 #' )
 #' competing_causes(dag)
@@ -318,37 +456,54 @@ mediator_outcome_confounders <- function(dag){
 #' @export
 competing_causes <- function(dag){
 
-  competing_causes <- .get_roles(dag)$competing_cause
+  competing_causes <- classify_node_roles(dag)$competing_cause
 
-  return(as.character(competing_causes[ complete.cases(competing_causes) ]))
+  nodes <- as.character(competing_causes[ complete.cases(competing_causes) ])
+
+  return(nodes)
 }
 
-#' Renamed: competing_exposures
+
+#' Deprecated: competing_exposures
 #'
-#' competing_exposures() was renamed competing_causes(). Calling this name stops
-#' with a pointer to the new one; it will be removed in a later release.
+#' `competing_exposures()` is deprecated as of 0.0.1. Use
+#' `competing_causes()` instead. Calling `competing_exposures()` warns and
+#' returns the result of `competing_causes()`. The deprecated name will be
+#' removed in a later release.
 #'
 #' @param dag A dagitty object.
-#' @returns No return value; calling this function stops with a renaming message.
+#' @returns Character vector of competing cause names, as `competing_causes()`.
+#' @examples
+#' dag <- build_graph(
+#'   treatments = "T", outcomes = "Y", competing_causes = "C",
+#'   type = "saturated"
+#' )
+#' competing_exposures(dag)
 #' @export
 competing_exposures <- function(dag){
+  warning(warningCondition(
+    paste0("competing_exposures(): 'competing_exposures()' is deprecated as of ",
+           "0.0.1. Use 'competing_causes()' instead."),
+    class = "deprecatedWarning"
+  ))
 
-  stop("competing_exposures() was renamed competing_causes(); call competing_causes() instead.",
-       call. = FALSE)
+  nodes <- competing_causes(dag)
+
+  return(nodes)
 }
 
 
 #' Proxy node names in a dagitty object
 #'
-#' proxies() is a dagitty wrapper that identifies nodes that are proxy variables for indicated unmeasured confounding (direct children of a latent variable that are direct parents of treatment or outcome) in a directed acyclic graph.
+#' `proxies()` is a dagitty wrapper that identifies nodes that are proxy variables for indicated unmeasured confounding (direct children of a latent variable that are direct parents of treatment or outcome) in a directed acyclic graph.
 #'
 #' @importFrom data.table as.data.table
 #' @param dag A dagitty object.
-#' @returns Character vector of proxy variable names; character(0) if none.
+#' @returns A character vector of proxy variable names, or `character(0)` if none.
 #' @examples
 #' set.seed(1)
 #' dag <- build_graph(
-#'   variables = c("Z1", "Z2"), treatments = "X", outcomes = "Y",
+#'   variables = c("X1", "X2"), treatments = "T", outcomes = "Y",
 #'   mediators = "M", instrumental_variables = "IV", type = "saturated"
 #' )
 #' proxies(dag)
@@ -360,18 +515,18 @@ proxies <- function(dag){
   treatments <- treatments(dag)
 
   # outcome
-  outcomes <- .outcomes(dag)
+  outcomes <- get_outcome_names(dag)
 
   # latent variables
   latent_vars <- unobserved(dag)
 
   edges <- dagitty::edges(dag)
 
-  treatment_parents <- .parents_edge_order(edges, treatments)
+  treatment_parents <- parents_edge_order(edges, treatments)
 
   # mediators - first parse (includes mediator-outcome confounders)
-  outcome_parents <- .parents_edge_order(edges, outcomes)
-  treatment_children <- .children_edge_order(edges, treatments)
+  outcome_parents <- parents_edge_order(edges, outcomes)
+  treatment_children <- children_edge_order(edges, treatments)
 
   nodes_trt_to_y <- nodes_between_treatment_and_outcome(dag = dag,
                                                             treatments = treatments,
@@ -380,7 +535,7 @@ proxies <- function(dag){
   mediators <- outcome_parents[ ( outcome_parents %in% treatment_children | outcome_parents %in% nodes_trt_to_y ) ]
 
   # proxy
-  latent_children <- .children_edge_order(edges, latent_vars)
+  latent_children <- children_edge_order(edges, latent_vars)
 
   proxy_b <- suppressWarnings( treatment_parents[ treatment_parents %in% latent_children &
                                                     !treatment_parents %in% latent_vars &
@@ -399,15 +554,17 @@ proxies <- function(dag){
 
 #' Collider names in a dagitty object
 #'
-#' colliders() identifies collider nodes that are common children of both treatment and outcome (treatment -> C <- outcome) in a directed acyclic graph; it does not return arbitrary two-parent colliders.
+#' `colliders()` identifies nodes that are common children of both treatment
+#' and outcome (`treatment -> C <- outcome`) in a directed acyclic graph. It
+#' does not return arbitrary colliders with two parents.
 #'
 #' @importFrom dagitty children
 #' @param dag A dagitty object.
-#' @returns Character vector of collider names; character(0) if none.
+#' @returns A character vector of collider names, or `character(0)` if none.
 #' @examples
 #' set.seed(1)
 #' dag <- build_graph(
-#'   variables = c("Z1", "Z2"), treatments = "X", outcomes = "Y",
+#'   variables = c("X1", "X2"), treatments = "T", outcomes = "Y",
 #'   mediators = "M", instrumental_variables = "IV", type = "saturated"
 #' )
 #' colliders(dag)
@@ -415,29 +572,31 @@ proxies <- function(dag){
 #' @export
 colliders <- function(dag){
 
-  colliders <- .get_roles(dag)$collider
+  colliders <- classify_node_roles(dag)$collider
 
-  return(as.character(colliders[ complete.cases(colliders) ]))
+  nodes <- as.character(colliders[ complete.cases(colliders) ])
+
+  return(nodes)
 }
 
 
 #' Get instrumental variable names
 #'
-#' instruments() is a dagitty wrapper function capable of identifying  multiple instrumental variables in multi-treatment and multi-outcome settings.
-#' Instruments are identified for each treatment-outcome pair using `dagitty::instrumentalVariables()`;
+#' Finds candidate instruments for each treatment and outcome pair using
+#' `dagitty::instrumentalVariables()`.
 #'
 #' @importFrom dagitty parents children descendants
 #' @param dag A dagitty object.
 #' @param usable_instruments When \code{TRUE}, exclude candidates that are
 #'   descendants of their treatment. Defaults to \code{FALSE}.
-#' @param details When \code{FALSE} (the default), return the nested-list shape
-#'   used by earlier releases. When \code{TRUE}, return a data table containing
-#'   treatment, outcome, instrument, and conditioning set.
+#' @param details With `FALSE` (the default), the function returns a nested
+#'   list grouped by treatment and outcome. With `TRUE`, it returns a data
+#'   table containing treatment, outcome, instrument and conditioning set.
 #' @returns A nested list, or a data table when \code{details = TRUE}.
 #' @examples
 #' set.seed(1)
 #' dag <- build_graph(
-#'   variables = c("Z1", "Z2"), treatments = "X", outcomes = "Y",
+#'   variables = c("X1", "X2"), treatments = "T", outcomes = "Y",
 #'   mediators = "M", instrumental_variables = "IV", type = "saturated"
 #' )
 #' instruments(dag)
@@ -450,7 +609,7 @@ instruments <- function(dag,
                         ){
 
   treatments <- treatments(dag)
-  outcomes <- .outcomes(dag)
+  outcomes <- get_outcome_names(dag)
   instrumental_vars <- instrumental_variables_helper(dag = dag,
                                                      treatments = treatments,
                                                      outcomes = outcomes,
@@ -465,39 +624,59 @@ instruments <- function(dag,
         instrumental_vars$treatment == treatment &
           instrumental_vars$outcome == outcome
       ]
-      if( length(values) == 0L ) NULL else unique(as.character(values))
+      if( length(values) == 0L ) {
+        out <- NULL
+
+        return(out)
+      } else {
+        value <- unique(as.character(values))
+
+        return(value)
+      }
     })
     names(per_outcome) <- outcomes
-    per_outcome
+
+    return(per_outcome)
   })
   names(result) <- treatments
-  result
+  return(result)
 }
 
 
-#' Minimal sufficient adjustment sets
+#' Minimal adjustment and single door sets
 #'
-#' minimal_sets() is a dagitty::adjustmentSets() wrapper for obtaining minimal adjustment sets, returning the smallest 5 (if available) by default.
+#' `minimal_sets()` returns sets from `dagitty::adjustmentSets()`, ordered by
+#' size. At most `num_sets` are returned.
+#'
+#' With `effect = "total"`, these are minimal sufficient adjustment sets.
+#' With `effect = "direct"`, dagitty's single door criterion is used. These
+#' sets identify a direct path coefficient in a linear structural equation
+#' model when the corresponding arrow from treatment to outcome exists. The wrapper
+#' does not check for that arrow. This differs from the nonparametric response
+#' distribution checked by `get_identification(effect = "direct")`.
 #'
 #' @importFrom data.table as.data.table is.data.table
 #' @importFrom dagitty adjustmentSets
 #' @param dag A dagitty object.
-#' @param treatment Vector of treatment(s).
-#' @param outcome Vector of outcome(s).
-#' @param effect Defaults to total effect, options available as per dagitty::adjustmentSets()
-#' @param num_sets Number of sets to return, defaults to the smallest five minimally sufficient adjustment sets.
-#' @returns Named list of minimally sufficient adjustment sets.
+#' @param treatment Vector of treatment node names.
+#' @param outcome Vector of outcome node names.
+#' @param effect Either `"total"` (the default) for adjustment sets for the
+#'   total effect, or `"direct"` for single door sets.
+#' @param num_sets Maximum number of sets to return, ordered by size.
+#'   Defaults to five.
+#' @returns A list of sets, with set sizes as names, or invisible `NULL` with a
+#'   message when no set is available.
 #' @examples
 #' set.seed(1)
 #' dag <- build_graph(
-#'   variables = c("Z1", "Z2"), treatments = "X", outcomes = "Y",
+#'   variables = c("X1", "X2"), treatments = "T", outcomes = "Y",
 #'   mediators = "M", instrumental_variables = "IV", type = "saturated"
 #' )
 #' minimal_sets(dag) # defaults to the total effect and 5 smallest sets
 #'
-#' minimal_sets(dag, effect = "direct") # direct effect
+#' minimal_sets(dag, effect = "direct") # single door sets
 #'
-#' minimal_sets(dag, effect = "direct", num_sets = 1) # return only the smallest set (direct effect)
+#' minimal_sets(dag, effect = "direct", num_sets = 1) # one single door set
 #'
 #' @export
 minimal_sets <- function(dag,
@@ -521,7 +700,6 @@ minimal_sets <- function(dag,
                             type = "minimal",
                             effect = effect),
     error = function(e){
-      # An error here means the dag argument could not be processed
       stop("Failed to compute adjustment sets: ", conditionMessage(e),
            "\n Please check that a valid dagitty object is supplied and try again.",
            call. = FALSE)
@@ -530,11 +708,16 @@ minimal_sets <- function(dag,
   if( length(adjustment_sets) == 0){
 
     # Indicates why no set is available (e.g., cycles, latent variables)
-    has_latents <- tryCatch(length(unobserved(dag)) > 0, error = function(e) FALSE)
-    is_cyclic   <- FALSE
-    if( "isAcyclic" %in% getNamespaceExports("dagitty") ){
-      is_cyclic <- isFALSE(tryCatch(dagitty::isAcyclic(dag), error = function(e) NA))
-    }
+    has_latents <- tryCatch(length(unobserved(dag)) > 0, error = function(e) {
+      matches <- FALSE
+
+      return(matches)
+    })
+    is_cyclic <- isFALSE(tryCatch(dag_is_acyclic(dag), error = function(e) {
+      value <- NA
+
+      return(value)
+    }))
     why <- character(0)
     if( isTRUE(is_cyclic) ){ why <- c(why, "the graph is not acyclic (contains a cycle)") }
     if( isTRUE(has_latents) ){ why <- c(why, "latent variables are present") }
@@ -542,10 +725,13 @@ minimal_sets <- function(dag,
     message("No available adjustment sets for the ", effect, " effect.", reason,
             "\n Try adjusting parameters, or assess edges using assess_edges(dag, assess_causal_criteria = TRUE).")
 
-    return(invisible())
+    value <- NULL
+    return(invisible(value))
   }
   adjustment_sets_list <- lapply(seq_along(adjustment_sets), function(x){
     adjustment_sets <- adjustment_sets[[x]]
+
+    return(invisible(adjustment_sets))
   })
 
   set_length <- sapply(adjustment_sets_list, length)
@@ -553,7 +739,6 @@ minimal_sets <- function(dag,
   adjustment_sets_list <- adjustment_sets_list[order(set_length)]
   num_available <- length(adjustment_sets_list)
 
-  # Warning produced when a set is excluded due to a same-length tie
   if( num_available > num_sets &&
       length( adjustment_sets_list[[num_sets]] ) == length( adjustment_sets_list[[num_sets + 1]] ) ){
     warning("A same length adjustment set has been excluded. If this is unintentional, please adjust the num_sets parameter input and run again.")
@@ -561,4 +746,78 @@ minimal_sets <- function(dag,
   adjustment_sets <- adjustment_sets_list[ 1:min(num_sets, num_available) ]
 
   return(adjustment_sets)
+}
+
+
+#' node names in path from treatment to outcome
+#'
+#' nodes_between_treatment_and_outcome() is a ggdag::dag_paths() wrapper intended for use with multiple treatments and outcomes.
+#'
+#' @importFrom ggdag dag_paths
+#' @importFrom data.table as.data.table data.table
+#' @param dag A dagitty object
+#' @param treatments A vector of treatment node names.
+#' @param outcomes A vector of outcome node names.
+#' @param output_list Whether to keep results grouped by treatment and outcome.
+#'   Defaults to FALSE.
+#' @param directed When TRUE (default), restricts to directed paths from treatment to outcome; when FALSE, considers all paths.
+#' @returns Unique node names, or a nested list when output_list is TRUE.
+#'   Returns an empty list if treatments or outcomes is empty.
+#' @noRd
+nodes_between_treatment_and_outcome <- function(dag,
+                                                treatments,
+                                                outcomes,
+                                                output_list = FALSE,
+                                                directed = TRUE
+                                                ){
+  nodes <- c()
+  treatments <- unlist(treatments)
+  outcomes <- unlist(outcomes)
+
+  paths_trt_to_y <- list()
+
+  if( length(treatments) > 0 & length(outcomes) > 0 ){
+
+    paths_trt_to_y <- lapply(1:length(treatments), function(x){
+
+      paths_trt_to_y[[x]] <- lapply(1:length(outcomes), function(y){
+
+        value <- tryCatch({
+          paths_trt_y <- NA
+          paths_trt_y <- ggdag::dag_paths(dag,
+                                          from = treatments[x],
+                                          to = outcomes[y],
+                                          directed = directed,
+                                          paths_only = TRUE)[["data"]]
+          if(length(paths_trt_y) > 0 ){
+            paths_trt_y <- as.vector(unlist(unique( paths_trt_y[ complete.cases(paths_trt_y["direction"]), "name" ])))
+            paths_trt_y <- paths_trt_y[ !paths_trt_y %in% treatments]
+          }
+        }, error = function(e){
+          paths_trt_y <- NA
+
+          return(invisible(paths_trt_y))
+        })
+
+        return(value)
+      })
+      names(paths_trt_to_y[[x]]) <- outcomes
+      value <- paths_trt_to_y[[x]]
+
+      return(value)
+    })
+
+    names(paths_trt_to_y) <- treatments
+
+    if(output_list == TRUE){
+
+      return(paths_trt_to_y)
+    }
+
+    paths_trt_to_y <- as.vector(unique(unlist(paths_trt_to_y)))
+
+    paths_trt_to_y <- paths_trt_to_y[ complete.cases(paths_trt_to_y) ]
+  }
+
+  return(paths_trt_to_y)
 }

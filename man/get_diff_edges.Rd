@@ -11,23 +11,28 @@ get_diff_edges(dag1, dag2, compare_all = TRUE, include_roles = FALSE)
 
 \item{dag2}{A dagitty object.}
 
-\item{compare_all}{Return mutually exclusive edges in both dag1 and dag2 (compare_all = TRUE) e.g. dag1 edges not in dag2 AND dag2 edges not in dag1, or only dag1 mutually exclusive edges (compare_all = FALSE), e.g. dag1 edges not in dag2. Defaults to compare_all = TRUE.}
+\item{compare_all}{With \code{TRUE} (the default), the function returns edges
+from either graph that have no match in the other. With \code{FALSE}, it
+returns only edges from \code{dag1} that have no match in \code{dag2}.}
 
-\item{include_roles}{Determines whether to include node roles in addition to node names and edge direction. Defaults to include_roles = FALSE, e.g. only considers edges where descendant/ancestor node names and edge direction are different.}
+\item{include_roles}{With \code{FALSE} (the default), edges are compared by
+node names and edge types. With \code{TRUE}, the roles of the two nodes are
+also compared.}
 }
 \value{
 Data table of edges.
 }
 \description{
-Compare dagitty object edges
+\code{get_diff_edges()} returns differences between the supplied graphs' edges,
+optionally including endpoint roles in the comparison.
 }
 \examples{
 set.seed(1)
 dag <- build_graph(
-  variables = c("Z1", "Z2"), treatments = "X", outcomes = "Y", type = "saturated"
+  variables = c("X1", "X2"), treatments = "T", outcomes = "Y", type = "saturated"
 )
 dag2 <- build_graph(
-  variables = c("Z1", "Z3"), treatments = "X", outcomes = "Y", type = "saturated"
+  variables = c("X1", "X3"), treatments = "T", outcomes = "Y", type = "saturated"
 )
 get_diff_edges(dag, dag2)
 

@@ -2,7 +2,7 @@
 % Please edit documentation in R/utility_funcs.r
 \name{mediator_outcome_confounders}
 \alias{mediator_outcome_confounders}
-\title{Mediator-outcome confounder names in a dagitty object}
+\title{Mediator and outcome confounder names in a dagitty object}
 \usage{
 mediator_outcome_confounders(dag)
 }
@@ -10,15 +10,15 @@ mediator_outcome_confounders(dag)
 \item{dag}{A dagitty object.}
 }
 \value{
-Character vector of mediator-outcome confounder names; character(0) if none.
+A character vector of mediator and outcome confounder names, or \code{character(0)} if none.
 }
 \description{
-mediator_outcome_confounders() identifies nodes that instead of being common causes of treatment and outcome (X <- Z -> Y) are a common cause of mediators and outcome (M <- Z -> Y) in a directed acyclic graph.
+\code{mediator_outcome_confounders()} identifies nodes that instead of being common causes of treatment and outcome (T <- X -> Y) are a common cause of mediators and outcome (M <- X -> Y) in a directed acyclic graph.
 }
 \examples{
 set.seed(1)
 dag <- build_graph(
-  variables = c("Z1", "Z2"), treatments = "X", outcomes = "Y",
+  variables = c("X1", "X2"), treatments = "T", outcomes = "Y",
   mediators = "M", instrumental_variables = "IV", type = "saturated"
 )
 mediator_outcome_confounders(dag)

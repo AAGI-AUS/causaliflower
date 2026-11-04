@@ -2,23 +2,38 @@
 % Please edit documentation in R/get_funcs.r
 \name{get_structure}
 \alias{get_structure}
-\title{dagitty node names, ancestor/descendant roles}
+\title{Graph structure by focal node}
 \usage{
-get_structure(dag)
+get_structure(dag, max_paths = 100L, max_length = Inf)
 }
 \arguments{
 \item{dag}{A dagitty object.}
+
+\item{max_paths}{Maximum paths retained separately for each focal node's
+incoming and outgoing collections. A positive whole number or \code{Inf}.}
+
+\item{max_length}{Maximum number of directed edges in a retained path. A
+positive whole number or \code{Inf}.}
 }
 \value{
-Nested list of nodes and node relationships
+A nested list indexed by focal node. Each entry contains \code{role},
+\code{parents}, \code{children}, \code{undirected}, \code{bidirected}, \code{ancestors},
+\code{descendants}, and \code{paths}. The \code{truncated} attribute on each \code{paths}
+component records whether \code{max_paths} or \code{max_length} limited its incoming
+or outgoing paths.
 }
 \description{
-get_structure() is a dagitty wrapper function that returns a list of node names extracted from a dagitty object, including each node's direct edges and its own role. For each node, the ancestor component holds the edges where the node is the source and the descendant component the edges where it is the target; the role column reports the focal node's role, and the edge operator is not reported. Symmetric edges appear once, on their stored orientation. Isolated nodes are included with empty components.
+\code{get_structure()} reports each node's role, direct parents and children,
+nodes joined by undirected or bidirected edges, proper ancestors and
+descendants, and maximal directed paths. Ancestors are grouped by the number
+of edges in their shortest directed path to the focal node, and descendants
+by their shortest directed path from it. Letters
+beside each ancestor or descendant identify the paths listed under \code{paths}.
 }
 \examples{
 set.seed(1)
 dag <- build_graph(
-  variables = c("Z1", "Z2"), treatments = "X", outcomes = "Y",
+  variables = c("X1", "X2"), treatments = "T", outcomes = "Y",
   mediators = "M", instrumental_variables = "IV", type = "saturated"
 )
 get_structure(dag)

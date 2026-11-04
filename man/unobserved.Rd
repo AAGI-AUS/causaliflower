@@ -10,15 +10,16 @@ unobserved(dag)
 \item{dag}{A dagitty object.}
 }
 \value{
-Character vector of unobserved (latent) names; character(0) if none.
+A character vector of unobserved (latent) names, or \code{character(0)} if none.
 }
 \description{
-unobserved() returns a vector of node names assigned "\code{[latent]}" in a dagitty object (similar to dagitty::latents())
+\code{unobserved()} returns node names marked \verb{[latent]} in a dagitty object,
+as does \code{dagitty::latents()}.
 }
 \examples{
 set.seed(1)
 dag <- build_graph(
-  variables = c("Z1", "Z2"), treatments = "X", outcomes = "Y",
+  variables = c("X1", "X2"), treatments = "T", outcomes = "Y",
   mediators = "M", instrumental_variables = "IV", type = "saturated"
 )
 unobserved(dag)

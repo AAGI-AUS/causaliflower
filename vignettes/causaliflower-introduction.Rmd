@@ -1,0 +1,266 @@
+---
+title: "Getting started with causaliflower"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Getting started with causaliflower}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 5
+)
+```
+
+```{r setup, message = FALSE}
+library(causaliflower)
+```
+
+This introductory vignette covers building and analysing causal graphs in the
+`causaliflower` package. Fitting a model is not covered, and although data can
+help to establish what the observed variables are, it is not a requirement to
+use `causaliflower`.
+
+## Answering causal questions
+
+We can use prior knowledge to build a causal graph depicting the assumed relationships between variables. This is a useful way to represent a research problem, for example, when studying a treatment's effect on an outcome under confounding. The causal relationships in a directed acyclic graph (DAG) can tell us if an effect of interest is identifiable.
+
+## Identification
+
+For treatment `T` and outcome `Y`, the path `T -> Y` is a **causal path**.
+This represents the **direct effect** of `T` on `Y`, which to estimate requires
+accounting for any **noncausal paths** between them.
+
+The **total effect** includes all **indirect effects**, in addition to the **direct effect**,
+such as where the effect of `T` on `Y` is mediated by another variable, `M` (`T -> M -> Y`).
+In some cases the direct and total effects are the same, for example, where there
+are no mediated causal paths from `T` to `Y`. If a valid adjustment set is available,
+we can identify this effect through adjustment and estimate it using **outcome regression**.
+
+Assume we somehow know that `X` is the only confounder (common cause) of `T`
+and `Y`, and there are no other variables.
+
+This is represented by:
+
+```{r dag-confounder-1}
+dag <- build_graph(
+  variables = "X", # names supplied to `variables` are treated the same as `confounders`
+  # confounders = "X", # using this instead of `variables` gives the same result
+  treatments = "T",
+  outcomes = "Y",
+  type = "ordered"
+)
+
+plot_dagitty(dag)
+```
+
+We can check for a valid adjustment set:
+
+```{r minimal-sets-total-1}
+minimal_sets(dag)
+```
+
+
+The adjustment set is `X`, which blocks the noncausal path `T <- X -> Y`.
+In this graph, the direct and total effects are the same.
+
+We can also ask for an adjustment set for the direct effect:
+
+```{r minimal-sets-direct-1}
+minimal_sets(dag, effect = "direct")
+```
+
+This also returns `X`. With `effect = "direct"`, `minimal_sets()` uses
+dagitty's single door criterion to identify a direct path coefficient in a
+linear model.
+
+Now suppose there is also a mediated path from `T` to `Y` (`T -> M -> Y`):
+
+```{r dag-mediator-1}
+dag <- build_graph(
+  confounders = "X",
+  treatments = "T",
+  outcomes = "Y",
+  mediators = "M",
+  type = "ordered"
+)
+
+plot_dagitty(dag)
+```
+
+`get_identification()` can check identification without data, such as for the direct effect:
+
+```{r identification-mediator-1}
+get_identification(dag, effect = "direct")
+```
+
+The **controlled direct effect** is identifiable in this graph without
+assuming that the relationships between the variables are linear. Here, the
+function checks the effect of changing `T` while holding `M` and `X` fixed
+by intervention. Holding `M` fixed prevents changes in `T` from reaching
+`Y` through the mediated path `T -> M -> Y`.
+
+The result also includes a **mediation** check for `M`, with adjustment for `X`.
+The **natural direct effect** asks what would happen if `T` changed while `M`
+took the value it would have had under a reference treatment. Together with the
+corresponding **natural indirect effect**, it gives a decomposition of the
+total effect. This check requires additional structural causal assumptions
+(including *cross world assumptions*), consistency and positivity.
+See `?get_identification`.
+
+Use `mediator = "M"` to select a mediator explicitly. If several mediators are
+supplied, they are assessed jointly.
+
+Estimating the **total effect** is still possible using the adjustment set `X` and a suitable estimator.
+
+```{r minimal-sets-total-mediator}
+minimal_sets(dag)
+```
+
+
+Now suppose that there is no direct arrow `T -> Y`, and an unobserved variable
+`U` is a common cause of `T` and `Y` (`T <- U -> Y`):
+
+
+```{r dag-mediator-2, warning = FALSE}
+dag_frontdoor <- remove_edges(dag, edges = "T -> Y")
+dag_frontdoor <- add_nodes(
+  dag_frontdoor,
+  "U",
+  children = c("T", "Y"),
+  role = "latent"
+)
+
+plot_dagitty(dag_frontdoor)
+```
+
+```{r identification-mediator-2}
+minimal_sets(dag_frontdoor)
+get_identification(dag_frontdoor)
+```
+
+There is no valid adjustment set for the total effect, because the path
+`T <- U -> Y` cannot be blocked by an observed variable. However,
+`get_identification()` finds that the **front door criterion** holds for `M`.
+Every causal path from `T` to `Y` passes through `M`, there is no unblocked
+noncausal path between `T` and `M`, and adjusting for `T` blocks the noncausal
+paths from `M` to `Y`. These conditions allow the total effect to be identified.
+
+## Building a DAG from prior knowledge
+
+There are different approaches to building a DAG from prior knowledge, but often
+the initial steps are the same:
+
+1. Assign nodes to **treatment** and **outcome**.
+
+2. Connect **treatment** to **outcome** (e.g., `T -> Y`) if a direct path is assumed.
+
+3. Add **confounders** (common causes of treatment and outcome).
+
+4. Draw an arrow from each **confounder** to **treatment** (`X -> T`) and **outcome**
+(`X -> Y`).
+
+5. Add any other nodes, such as mediators found in the path from **treatment**
+   to **outcome** (e.g., `T -> M -> Y`).
+
+The resulting DAG is the same one from earlier with the mediated causal path:
+
+```{r dag-mediator}
+dag <- build_graph(
+  confounders = "X",
+  treatments = "T",
+  outcomes = "Y",
+  mediators = "M",
+  type = "ordered"
+)
+
+plot_dagitty(dag)
+```
+
+But what if we added a latent node?
+
+```{r dag-latent, warning = FALSE}
+dag_u <- add_nodes(
+  dag,
+  "U",
+  children = c("X", "T"),
+  role = "latent"
+)
+
+plot_dagitty(dag_u)
+```
+
+Here, `U` is an unobserved common cause of `X` and `T`.
+
+`X -> T` represents a direct causal effect of `X` on `T`.
+A bidirected arrow, `X <-> T`, represents an unobserved common cause,
+such as `X <- U -> T`. Both arrows can occur between the same two nodes.
+
+We can replace the paths through `U` with a bidirected arrow using
+`collapse_nodes()`:
+
+```{r dag-projected}
+dag_projected <- collapse_nodes(dag_u, nodes = "U")
+
+plot_dagitty(dag_projected)
+```
+
+The graph now contains both `X -> T` and `X <-> T`. `U` is no longer drawn,
+but its role as a common cause is represented by the bidirected arrow.
+
+## Refining a causal graph
+
+The earlier examples assumed we knew which arrows to draw. When building a
+graph from prior knowledge, we need to assess the evidence for each proposed
+relationship. Returning to our original `dag`, we can list its arrows with
+`assess_edges()`:
+
+```{r assess-graph-edges}
+assess_edges(dag)
+```
+
+For a guided assessment, `assess_edges()` asks questions about each arrow,
+drawing on the ESC-DAGs approach of Ferguson et al. (2020):
+
+1. **Temporality:** does the proposed cause precede its effect?
+2. **Face validity:** is the relationship plausible given what we know?
+3. **Recourse to theory:** is the relationship supported by theory?
+
+With the default criteria, answering `n` to temporality or face validity
+excludes the arrow from the retained edges and skips its remaining questions.
+An `n` for theory is recorded but does not exclude the arrow.
+
+Run the following in an interactive R session, such as the RStudio console.
+Answer `y` to begin, then `y` or `n` when prompted. Enter `?info` for an
+explanation. Setting `eval = FALSE` excludes this interactive assessment
+from the vignette build.
+
+```{r guided-assessment, eval = FALSE}
+dag <- assess_edges(dag, assess_causal_criteria = TRUE) |>
+  keep_edges(dag)
+```
+
+Removing arrows can change which effects are identifiable, so we check
+identification again:
+
+```{r apply-assessment, eval = FALSE}
+get_identification(dag)
+```
+
+The assessment considers each arrow in its supplied direction.
+
+## References
+
+Ferguson KD et al. (2020). Evidence synthesis for constructing directed acyclic
+graphs (ESC-DAGs): a novel and systematic method for building directed acyclic
+graphs. *International Journal of Epidemiology*, 49(1), 322–329.
+doi:10.1093/ije/dyz150.
+
+Textor J, van der Zander B, Gilthorpe MS, Liśkiewicz M, Ellison GTH (2016).
+Robust causal inference using directed acyclic graphs: the R package ‘dagitty’.
+*International Journal of Epidemiology*, 45(6), 1887–1894.
+doi:10.1093/ije/dyw341.

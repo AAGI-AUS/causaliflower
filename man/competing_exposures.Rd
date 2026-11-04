@@ -2,7 +2,7 @@
 % Please edit documentation in R/utility_funcs.r
 \name{competing_exposures}
 \alias{competing_exposures}
-\title{Renamed: competing_exposures}
+\title{Deprecated: competing_exposures}
 \usage{
 competing_exposures(dag)
 }
@@ -10,9 +10,18 @@ competing_exposures(dag)
 \item{dag}{A dagitty object.}
 }
 \value{
-No return value; calling this function stops with a renaming message.
+Character vector of competing cause names, as \code{competing_causes()}.
 }
 \description{
-competing_exposures() was renamed competing_causes(). Calling this name stops
-with a pointer to the new one; it will be removed in a later release.
+\code{competing_exposures()} is deprecated as of 0.0.1. Use
+\code{competing_causes()} instead. Calling \code{competing_exposures()} warns and
+returns the result of \code{competing_causes()}. The deprecated name will be
+removed in a later release.
+}
+\examples{
+dag <- build_graph(
+  treatments = "T", outcomes = "Y", competing_causes = "C",
+  type = "saturated"
+)
+competing_exposures(dag)
 }

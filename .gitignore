@@ -5,6 +5,9 @@
 # User-specific files
 .Ruserdata
 
+# Local development files
+/dev/
+
 # Output files from R CMD build
 /*.tar.gz
 

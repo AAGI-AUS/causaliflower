@@ -2,7 +2,7 @@
 % Please edit documentation in R/helper_funcs.r
 \name{string_to_dag}
 \alias{string_to_dag}
-\title{string to dag}
+\title{Build a dagitty object from edge text}
 \usage{
 string_to_dag(edges_string)
 }
@@ -13,10 +13,18 @@ string_to_dag(edges_string)
 A dagitty object.
 }
 \description{
-string_to_dag() converts edge text to a dagitty object.
+\code{string_to_dag()} converts edge text to a dagitty object.
 }
 \details{
-Input may contain newline- or semicolon-separated edges, edge chains, and
-isolated node declarations. Supported operators are \code{->},
+Input may contain edges separated by newlines or semicolons, edge chains, and isolated node declarations. Supported operators are \code{->},
 \code{<-}, \code{<->}, and \code{--}.
+}
+\examples{
+dag <- string_to_dag(c(
+  "rainfall -> irrigation",
+  "rainfall -> yield",
+  "irrigation -> yield"
+))
+get_edges(dag)
+
 }

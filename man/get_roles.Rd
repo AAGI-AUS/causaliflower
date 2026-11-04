@@ -9,21 +9,23 @@ get_roles(dag, multiple_roles = FALSE)
 \arguments{
 \item{dag}{A dagitty object.}
 
-\item{multiple_roles}{Defaults to FALSE (one role per node). If set to TRUE, multiple roles can be returned for some nodes (e.g. latent mediator variable).}
+\item{multiple_roles}{Defaults to \code{FALSE} (one role per node). With \code{TRUE}, a node can be
+returned under more than one role, for example as both a latent variable
+and a mediator.}
 }
 \value{
-Nested list of nodes and node relationships. With the default
+A named list of node names grouped by role. With the default
 \code{multiple_roles = FALSE} each node is reported under its primary role
-only; \code{get_nodes()} reports every role a node holds. \code{undetermined} is
+only. \code{get_nodes()} reports every role a node holds. \code{undetermined} is
 appended for partially directed graphs.
 }
 \description{
-dagitty nodes grouped by role
+\code{get_roles()} groups node names by their causal roles in the supplied graph.
 }
 \examples{
 set.seed(1)
 dag <- build_graph(
-  variables = c("Z1", "Z2"), treatments = "X", outcomes = "Y",
+  variables = c("X1", "X2"), treatments = "T", outcomes = "Y",
   mediators = "M", instrumental_variables = "IV", type = "saturated"
 )
 get_roles(dag)

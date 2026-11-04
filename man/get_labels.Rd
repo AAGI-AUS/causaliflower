@@ -2,22 +2,27 @@
 % Please edit documentation in R/get_funcs.r
 \name{get_labels}
 \alias{get_labels}
-\title{Label DAG nodes
-Extract node names, initials, or shortened labels for plotting.}
+\title{Label DAG nodes}
 \usage{
 get_labels(dag, label_type = "name")
 }
 \arguments{
 \item{dag}{A dagitty object.}
 
-\item{label_type}{Defaults to \code{"name"} (the graph's node names);
-alternatively \code{"initials"} uses the first letter of each word and
+\item{label_type}{Defaults to \code{"name"} (the graph's node names). Alternatively \code{"initials"} uses the first letter of each word and
 \code{"short"} generates shortened unique labels.}
 }
 \value{
-Labelled vector of node names from the dagitty object
+A named character vector of labels, with the original node names as names.
 }
 \description{
-Label DAG nodes
 Extract node names, initials, or shortened labels for plotting.
+}
+\examples{
+dag <- string_to_dag(c(
+  '"soil moisture" -> "crop growth"',
+  '"crop growth" -> "grain yield"'
+))
+get_labels(dag, label_type = "initials")
+
 }
