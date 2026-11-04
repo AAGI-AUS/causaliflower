@@ -7,18 +7,18 @@
 get_nodes(dag)
 }
 \arguments{
-\item{dag}{dagitty object}
+\item{dag}{A dagitty object.}
 }
 \value{
-Nested list of nodes and node relationships
+A named list giving the roles of each node.
 }
 \description{
-get_nodes() is a dagitty wrapper that returns a list of node names and their roles.
+\code{get_nodes()} returns a list of node names and their roles.
 }
 \examples{
 set.seed(1)
 dag <- build_graph(
-  variables = c("Z1", "Z2"), treatments = "X", outcomes = "Y",
+  variables = c("X1", "X2"), treatments = "T", outcomes = "Y",
   mediators = "M", instrumental_variables = "IV", type = "saturated"
 )
 get_nodes(dag)

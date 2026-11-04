@@ -13,5 +13,18 @@ get_ancestor_edges(dag)
 Named list of edges.
 }
 \description{
-get_ancestor_edges() returns a list of edges grouped by node names for an input dagitty object. Symmetric edges ("<->", "--") are listed once, under their stored left-hand endpoint.
+\code{get_ancestor_edges()} is deprecated as of 0.0.2. Use
+\code{get_node_edges(direction = "any")} to include directed and symmetric
+edges. The deprecated function keeps its original grouping: each edge is
+listed once under the first endpoint in the stored edge. \code{get_node_edges()} instead
+lists each edge under both endpoints when \code{direction = "any"}.
+}
+\examples{
+dag <- string_to_dag(c(
+  "rainfall -> irrigation",
+  "rainfall -> yield",
+  "irrigation -> yield"
+))
+get_ancestor_edges(dag)
+
 }

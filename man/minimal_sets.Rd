@@ -2,7 +2,7 @@
 % Please edit documentation in R/utility_funcs.r
 \name{minimal_sets}
 \alias{minimal_sets}
-\title{Minimal sufficient adjustment sets}
+\title{Minimal adjustment and single door sets}
 \usage{
 minimal_sets(
   dag,
@@ -15,30 +15,42 @@ minimal_sets(
 \arguments{
 \item{dag}{A dagitty object.}
 
-\item{treatment}{Vector of treatment(s).}
+\item{treatment}{Vector of treatment node names.}
 
-\item{outcome}{Vector of outcome(s).}
+\item{outcome}{Vector of outcome node names.}
 
-\item{effect}{Defaults to total effect, options available as per dagitty::adjustmentSets()}
+\item{effect}{Either \code{"total"} (the default) for adjustment sets for the
+total effect, or \code{"direct"} for single door sets.}
 
-\item{num_sets}{Number of sets to return, defaults to the smallest five minimally sufficient adjustment sets.}
+\item{num_sets}{Maximum number of sets to return, ordered by size.
+Defaults to five.}
 }
 \value{
-Named list of minimally sufficient adjustment sets.
+A list of sets, with set sizes as names, or invisible \code{NULL} with a
+message when no set is available.
 }
 \description{
-minimal_sets() is a dagitty::adjustmentSets() wrapper for obtaining minimal adjustment sets, returning the smallest 5 (if available) by default.
+\code{minimal_sets()} returns sets from \code{dagitty::adjustmentSets()}, ordered by
+size. At most \code{num_sets} are returned.
+}
+\details{
+With \code{effect = "total"}, these are minimal sufficient adjustment sets.
+With \code{effect = "direct"}, dagitty's single door criterion is used. These
+sets identify a direct path coefficient in a linear structural equation
+model when the corresponding arrow from treatment to outcome exists. The wrapper
+does not check for that arrow. This differs from the nonparametric response
+distribution checked by \code{get_identification(effect = "direct")}.
 }
 \examples{
 set.seed(1)
 dag <- build_graph(
-  variables = c("Z1", "Z2"), treatments = "X", outcomes = "Y",
+  variables = c("X1", "X2"), treatments = "T", outcomes = "Y",
   mediators = "M", instrumental_variables = "IV", type = "saturated"
 )
 minimal_sets(dag) # defaults to the total effect and 5 smallest sets
 
-minimal_sets(dag, effect = "direct") # direct effect
+minimal_sets(dag, effect = "direct") # single door sets
 
-minimal_sets(dag, effect = "direct", num_sets = 1) # return only the smallest set (direct effect)
+minimal_sets(dag, effect = "direct", num_sets = 1) # one single door set
 
 }

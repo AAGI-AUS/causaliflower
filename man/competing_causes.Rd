@@ -10,15 +10,15 @@ competing_causes(dag)
 \item{dag}{A dagitty object.}
 }
 \value{
-Character vector of competing cause names; character(0) if none.
+A character vector of competing cause names, or \code{character(0)} if none.
 }
 \description{
-competing_causes() returns direct causes of the outcome that are not otherwise classified -- i.e. causes of the outcome lying off the treatment->outcome path and unconnected to the treatment. Sometimes called a competing exposure (Tennant et al., 2021).
+\code{competing_causes()} returns direct causes of the outcome that are not otherwise classified -- i.e. causes of the outcome lying off the treatment->outcome path and unconnected to the treatment. Sometimes called a competing exposure (Tennant et al., 2021).
 }
 \examples{
 set.seed(1)
 dag <- build_graph(
-  variables = c("Z1", "Z2"), treatments = "X", outcomes = "Y",
+  variables = c("X1", "X2"), treatments = "T", outcomes = "Y",
   mediators = "M", instrumental_variables = "IV", type = "saturated"
 )
 competing_causes(dag)

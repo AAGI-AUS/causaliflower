@@ -1,13 +1,20 @@
+# ==============================================================================
+# data.R
+
+
+# Roxygen documentation for the ESCDAGs lookup data
+# ==============================================================================
+
 
 #' Lookup table for ESCDAGs
 #'
 #' Causal criteria for assessing graph edges as presented in Ferguson et al., 2020, 'Evidence Synthesis for Constructing Directed Acyclic Graphs (ESC-DAGs): a novel and systematic method for building directed acyclic graphs'.
 #'
 #' About ESC-DAGs causal criteria ('Evidence synthesis for constructing directed acyclic graphs')
-#' Each directed edge is assessed for three causal criteria: temporality; face-validity; and recourse to theory.
+#' Each directed edge is assessed for three causal criteria: temporality, face validity and recourse to theory.
 #' These are informed by the classic Bradford Hill viewpoints, compatible with the 'inference to the best explanation' approach advocated by Krieger and Davey Smith.
 #' If a posited causal relationship satisfies all causal criteria, a counterfactual thought experiment derived from the potential outcomes framework can be used to further explicate and assess assumptions.
-#' For more details, see Ferguson et al. (2020), DOI: https://doi.org/10.1093/ije/dyz150).
+#' For more details, see Ferguson et al. (2020), DOI: https://doi.org/10.1093/ije/dyz150.
 #' @format A data frame with 3 rows and five columns:
 #' \describe{
 #'   \item{name}{Causal criterion name or title.}

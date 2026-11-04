@@ -10,15 +10,15 @@ proxies(dag)
 \item{dag}{A dagitty object.}
 }
 \value{
-Character vector of proxy variable names; character(0) if none.
+A character vector of proxy variable names, or \code{character(0)} if none.
 }
 \description{
-proxies() is a dagitty wrapper that identifies nodes that are proxy variables for indicated unmeasured confounding (direct children of a latent variable that are direct parents of treatment or outcome) in a directed acyclic graph.
+\code{proxies()} is a dagitty wrapper that identifies nodes that are proxy variables for indicated unmeasured confounding (direct children of a latent variable that are direct parents of treatment or outcome) in a directed acyclic graph.
 }
 \examples{
 set.seed(1)
 dag <- build_graph(
-  variables = c("Z1", "Z2"), treatments = "X", outcomes = "Y",
+  variables = c("X1", "X2"), treatments = "T", outcomes = "Y",
   mediators = "M", instrumental_variables = "IV", type = "saturated"
 )
 proxies(dag)

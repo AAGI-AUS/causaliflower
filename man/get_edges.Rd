@@ -14,19 +14,21 @@ get_edges(
 \arguments{
 \item{dag}{A dagitty object.}
 
-\item{selected_nodes}{Nodes to return edges. Defaults to all roles, or can be a character or vector combination of any of the following: c("outcome", "treatment", "confounder", "mediator", "mediator_outcome_confounder", "instrument", "competing_cause", "collider", "latent", "observed", "undetermined"). Prefix a role with "!" to exclude edges touching that role instead.}
+\item{selected_nodes}{Node roles whose edges should be returned. Defaults to all roles. Supply
+one or more of the following: c("outcome", "treatment", "confounder", "mediator", "mediator_outcome_confounder", "instrument", "competing_cause", "collider", "latent", "observed", "undetermined"). Prefix a role with "!" to exclude edges touching that role instead.}
 }
 \value{
 A data frame of edges for the roles specified in
 \code{selected_nodes}.
 }
 \description{
-get_edges() filters a dagitty object and returns a data frame with edges for specified node roles.
+\code{get_edges()} filters a dagitty object and returns a data frame with edges
+for specified node roles.
 }
 \examples{
 set.seed(1)
 dag <- build_graph(
-  variables = c("Z1", "Z2"), treatments = "X", outcomes = "Y",
+  variables = c("X1", "X2"), treatments = "T", outcomes = "Y",
   mediators = "M", instrumental_variables = "IV", type = "saturated"
 )
 edges <- get_edges(dag)

@@ -1,22 +1,25 @@
 test_that("connect_nodes() restricts new edges to the selected nodes", {
   set.seed(1)
-  dag <- suppressMessages(build_graph(c("Z1", "Z2", "Z3"), "X", "Y", type = "ordered"))
+  dag <- suppressMessages(build_graph(
+    c("X1", "X2", "X3"), "T", "Y", mediators = "M",
+    type = "ordered"
+  ))
 
   base_keys <- edge_keys(dag)
 
   connected <- suppressWarnings(suppressMessages(
-    connect_nodes(dag, nodes = "Z1", type = "saturated", print_edges = FALSE)
+    connect_nodes(dag, nodes = "X1", type = "saturated", print_edges = FALSE)
   ))
 
   added <- setdiff(edge_keys(connected), base_keys)
   expect_true(length(added) > 0L)
   added_ends <- strsplit(added, " ")
-  expect_true(all(vapply(added_ends, function(x) "Z1" %in% x[c(1, 3)], logical(1))))
+  expect_true(all(vapply(added_ends, function(x) "X1" %in% x[c(1, 3)], logical(1))))
 })
 
 test_that("connect_nodes() selection default is the whole graph", {
   set.seed(1)
-  dag <- suppressMessages(build_graph(c("Z1", "Z2"), "X", "Y", type = "ordered"))
+  dag <- suppressMessages(build_graph(c("X1", "X2"), "T", "Y", type = "ordered"))
 
   all_default <- suppressWarnings(suppressMessages(
     connect_nodes(dag, type = "full", print_edges = FALSE)
@@ -28,28 +31,258 @@ test_that("connect_nodes() selection default is the whole graph", {
   expect_identical(edge_keys(all_default), edge_keys(all_explicit))
 })
 
-test_that("add_nodes() rejects a node_role combined with explicit targets", {
-  set.seed(1)
-  dag <- suppressMessages(build_graph(c("Z1", "Z2"), "X", "Y", type = "ordered"))
+test_that("add_nodes() explicit targets override role-based edges", {
+  dag <- dagitty::dagitty(paste(
+    "dag { T [exposure] Y [outcome] U0 [latent]",
+    "T -> M1 M1 -> M2 M2 -> Y U0 -> M1 }"
+  ))
+  original <- as.character(dag)
 
-  expect_error(
-    add_nodes(dag, "W", node_role = "confounder", ancestors = "X", print_edges = FALSE),
-    "not both"
+  expect_warning(
+    latent <- add_nodes(dag, "U", role = "latent", children = c("M1", "M2"),
+                        print_edges = FALSE),
+    "add_nodes(): parents/children input overrides role-based edges.",
+    fixed = TRUE
   )
-  expect_error(
-    add_nodes(dag, "W", node_role = "confounder", descendants = "Y", print_edges = FALSE),
-    "not both"
+  expect_setequal(edge_keys(latent), c(edge_keys(dag), "U -> M1", "U -> M2"))
+  expect_setequal(unobserved(latent), c("U", "U0"))
+  expect_identical(treatments(latent), "T")
+  expect_identical(outcomes(latent), "Y")
+
+  expect_warning(
+    parent <- add_nodes(dag, "T2", role = "treatment", parents = "T",
+                        print_edges = FALSE),
+    "add_nodes(): parents/children input overrides role-based edges.",
+    fixed = TRUE
+  )
+  expect_setequal(edge_keys(parent), c(edge_keys(dag), "T -> T2"))
+  expect_setequal(treatments(parent), c("T", "T2"))
+  expect_identical(as.character(dag), original)
+})
+
+test_that("add_nodes() explicit targets determine edges for every graph type", {
+  dag <- dagitty::dagitty("dag { T [exposure] Y [outcome] T -> M M -> Y }")
+
+  for( type in c("full", "chain", "ordered", "saturated") ){
+    expect_warning(
+      added <- add_nodes(dag, c("U1", "U2"), role = "latent", parents = "T",
+                         children = "M", type = type, print_edges = FALSE),
+      "parents/children input overrides role-based edges", info = type
+    )
+    if( type == "full" ){
+      expected <- c("T <-> U1", "T <-> U2", "U1 <-> M", "U2 <-> M")
+    }else{
+      expected <- c("T -> U1", "T -> U2", "U1 -> M", "U2 -> M")
+    }
+    expect_setequal(edge_keys(added), c(edge_keys(dag), expected))
+    expect_setequal(unobserved(added), c("U1", "U2"))
+  }
+})
+
+test_that("add_nodes() explicit targets support each native status role", {
+  dag <- dagitty::dagitty(paste(
+    "dag { T [exposure] Y [outcome] U [latent]",
+    "T -> M M -> Y U -> M }"
+  ))
+
+  for( role in c("treatment", "outcome", "latent") ){
+    for( targets in list(list(parents = "T"), list(children = "M"),
+                         list(parents = "T", children = "M")) ){
+      expect_warning(
+        added <- do.call(add_nodes, c(list(dag = dag, nodes = "N", role = role,
+                                           position = before("absent"),
+                                           print_edges = FALSE), targets)),
+        "parents/children input overrides role-based edges", info = role
+      )
+      expected <- c(if( !is.null(targets$parents) ) "T -> N",
+                    if( !is.null(targets$children) ) "N -> M")
+      expect_setequal(edge_keys(added), c(edge_keys(dag), expected))
+      expect_setequal(treatments(added), c("T", if( role == "treatment" ) "N"))
+      expect_setequal(outcomes(added), c("Y", if( role == "outcome" ) "N"))
+      expect_setequal(unobserved(added), c("U", if( role == "latent" ) "N"))
+    }
+  }
+})
+
+test_that("add_nodes() rejects explicit targets with other roles", {
+  dag <- dagitty::dagitty("dag { T [exposure] Y [outcome] T -> M M -> Y }")
+  original <- as.character(dag)
+  error <- paste0("add_nodes(): explicit parents/children can only be combined ",
+                   "with role = \"treatment\", \"outcome\", or \"latent\".")
+
+  for( role in c("confounder", "mediator", "mediator_outcome_confounder",
+                 "instrument", "competing_cause", "collider", "observed") ){
+    for( targets in list(list(parents = "T"), list(children = "M"),
+                         list(parents = "T", children = "M")) ){
+      expect_warning(
+        expect_error(do.call(add_nodes, c(list(dag = dag, nodes = "N", role = role,
+                                               print_edges = FALSE), targets)),
+                     error, fixed = TRUE),
+        NA
+      )
+    }
+    expect_warning(added <- add_nodes(dag, "N", role = role,
+                                      print_edges = FALSE), NA)
+    expect_true("N" %in% names(added))
+    expect_true(all(edge_keys(dag) %in% edge_keys(added)))
+  }
+  expect_warning(
+    expect_error(add_nodes(dag, "N", role = "confounder", parents = character(),
+                           print_edges = FALSE), error, fixed = TRUE),
+    NA
+  )
+  expect_identical(as.character(dag), original)
+})
+
+test_that("add_nodes() accepts explicit targets without a role", {
+  dag <- dagitty::dagitty("dag { T [exposure] Y [outcome] T -> M M -> Y }")
+
+  for( targets in list(list(parents = "T"), list(children = "M"),
+                       list(parents = "T", children = "M")) ){
+    expect_warning(
+      added <- do.call(add_nodes, c(list(dag = dag, nodes = "N",
+                                         print_edges = FALSE), targets)),
+      NA
+    )
+    expected <- c(if( !is.null(targets$parents) ) "T -> N",
+                  if( !is.null(targets$children) ) "N -> M")
+    expect_setequal(edge_keys(added), c(edge_keys(dag), expected))
+    expect_identical(treatments(added), "T")
+    expect_identical(outcomes(added), "Y")
+    expect_identical(unobserved(added), character())
+  }
+})
+
+test_that("add_nodes() explicit targets ignore temporal and routing inputs", {
+  dag <- dagitty::dagitty("dag { T [exposure] Y [outcome] T -> M M -> Y }")
+
+  expect_warning(
+    added <- add_nodes(dag, list(incoming("U1"), outgoing(c("U2", "U3"))),
+                       role = "latent", children = "M",
+                       position = before("absent"), print_edges = FALSE),
+    "parents/children input overrides role-based edges"
+  )
+  expect_setequal(edge_keys(added),
+                  c(edge_keys(dag), "U1 -> M", "U2 -> M", "U3 -> M"))
+})
+
+test_that("add_nodes() explicit targets replace latent mapping targets", {
+  dag <- dagitty::dagitty("dag { T [exposure] Y [outcome] T -> M M -> Y }")
+
+  expect_warning(
+    added <- add_nodes(dag, list(list("U1", "absent"), list("U2", c("T", "Y"))),
+                       role = "latent", children = "M", print_edges = FALSE),
+    "parents/children input overrides role-based edges"
+  )
+  expect_setequal(names(added), c(names(dag), "U1", "U2"))
+  expect_setequal(edge_keys(added), c(edge_keys(dag), "U1 -> M", "U2 -> M"))
+  expect_setequal(unobserved(added), c("U1", "U2"))
+
+  expect_warning(
+    expect_error(add_nodes(dag, list(list("U", NA_character_)), role = "latent",
+                           children = "M", print_edges = FALSE),
+                 "latent mapping targets must be non-missing node names"),
+    "parents/children input overrides role-based edges"
   )
 })
 
-test_that("add_nodes() rejects position for unsupported node roles", {
-  set.seed(1)
-  dag <- suppressMessages(build_graph(c("Z1", "Z2"), "X", "Y", type = "ordered"))
+test_that("add_nodes() distinguishes NULL targets from empty targets", {
+  dag <- dagitty::dagitty("dag { T [exposure] Y [outcome] T -> M M -> Y }")
 
-  expect_error(
-    add_nodes(dag, "K", node_role = "collider", position = first(), print_edges = FALSE),
-    "supported for node_role"
+  expect_warning(default <- add_nodes(dag, "X", role = "confounder",
+                                      print_edges = FALSE), NA)
+  expect_warning(null <- add_nodes(dag, "X", role = "confounder",
+                                   parents = NULL, children = NULL,
+                                   print_edges = FALSE), NA)
+  expect_identical(edge_keys(null), edge_keys(default))
+
+  for( targets in list(list(parents = character()),
+                       list(children = character()),
+                       list(parents = character(), children = character())) ){
+    expect_warning(
+      expect_error(do.call(add_nodes, c(list(dag = dag, nodes = "U",
+                                             role = "latent",
+                                             print_edges = FALSE), targets)),
+                   "'parents' and 'children' are both empty", fixed = TRUE),
+      "parents/children input overrides role-based edges"
+    )
+  }
+  expect_warning(
+    added <- add_nodes(dag, "U", role = "latent", parents = character(),
+                       children = "M", print_edges = FALSE),
+    "parents/children input overrides role-based edges"
   )
+  expect_setequal(edge_keys(added), c(edge_keys(dag), "U -> M"))
+})
+
+test_that("add_nodes() validates explicit targets without changing the input", {
+  dag <- dagitty::dagitty("dag { T [exposure] Y [outcome] T -> M M -> Y }")
+  original <- as.character(dag)
+  original_attributes <- attributes(dag)
+
+  for( targets in list(list(parents = "absent"), list(children = "absent")) ){
+    expect_warning(
+      expect_error(do.call(add_nodes, c(list(dag = dag, nodes = "U",
+                                             role = "latent",
+                                             print_edges = FALSE), targets)),
+                   "Parent or child nodes not present in the dag: absent"),
+      "parents/children input overrides role-based edges"
+    )
+  }
+  expect_identical(as.character(dag), original)
+  expect_identical(attributes(dag), original_attributes)
+})
+
+test_that("add_nodes() deprecated aliases use the explicit target override", {
+  dag <- dagitty::dagitty("dag { T [exposure] Y [outcome] T -> M M -> Y }")
+
+  expect_warning(
+    expect_warning(
+      expect_warning(
+        parent <- add_nodes(dag, "U", node_role = "latent", ancestors = "T",
+                            print_edges = FALSE),
+        "parents/children input overrides role-based edges"
+      ),
+      "'node_role' is deprecated as of 0.0.2"
+    ),
+    "'ancestors' is deprecated as of 0.0.2"
+  )
+  expect_setequal(edge_keys(parent), c(edge_keys(dag), "T -> U"))
+  expect_identical(unobserved(parent), "U")
+
+  expect_warning(
+    expect_warning(
+      child <- add_nodes(dag, "U", role = "latent", descendants = "M",
+                         print_edges = FALSE),
+      "parents/children input overrides role-based edges"
+    ),
+    "'descendants' is deprecated as of 0.0.2"
+  )
+  expect_setequal(edge_keys(child), c(edge_keys(dag), "U -> M"))
+  expect_identical(unobserved(child), "U")
+
+  expect_warning(
+    expect_warning(
+      expect_error(add_nodes(dag, "X", node_role = "confounder", descendants = "M",
+                             print_edges = FALSE),
+                   "explicit parents/children can only be combined with role"),
+      "'node_role' is deprecated as of 0.0.2"
+    ),
+    "'descendants' is deprecated as of 0.0.2"
+  )
+})
+
+test_that("add_nodes() supports temporal position for collider roles", {
+  set.seed(1)
+  dag <- suppressMessages(build_graph(
+    c("X1", "X2"), "T", "Y", colliders = "C1", type = "last"
+  ))
+
+  positioned <- add_nodes(
+    dag, "C0", role = "collider", type = "chain", position = first(),
+    print_edges = FALSE
+  )
+  expect_true("C0 -> C1" %in% edge_keys(positioned))
 })
 
 test_that("assess_edges() honours edges_to_assess = 'bidirectional' without the causal sequence", {
@@ -63,6 +296,15 @@ test_that("assess_edges() honours edges_to_assess = 'bidirectional' without the 
   expect_identical(nrow(res$edges_to_assess), 1L)
   expect_identical(unlist(res$edges_to_assess[, "e"]), c(e = "<->"))
   expect_setequal(unname(res$edges_to_keep), c("A -> B", "X -> Y"))
+
+  capture.output(
+    removed <- suppressMessages(assess_edges(
+      dag,
+      edges_to_assess = "bidirectional",
+      remove_edges = "A -> B"
+    ))
+  )
+  expect_identical(unname(removed$edges_to_keep), "X -> Y")
 })
 
 test_that("assess_edges() bidirectional mode assesses only symmetric edges in the sequence", {
@@ -73,8 +315,8 @@ test_that("assess_edges() bidirectional mode assesses only symmetric edges in th
   )
 
   testthat::with_mocked_bindings(
-    .assessment_is_interactive = function() TRUE,
-    .assessment_readline = function(prompt) "y",
+    assessment_is_interactive = function() TRUE,
+    assessment_readline = function(prompt) "y",
     {
       capture.output(
         res <- suppressMessages(assess_edges(
@@ -93,15 +335,15 @@ test_that("assess_edges() bidirectional mode assesses only symmetric edges in th
 })
 
 test_that("minimal_sets() separates the empty set, no valid set, and invalid calls", {
-  clean <- string_to_dag("X -> Y")
-  dagitty::exposures(clean) <- "X"
+  clean <- string_to_dag("T -> Y")
+  dagitty::exposures(clean) <- "T"
   dagitty::outcomes(clean) <- "Y"
   expect_warning(res <- minimal_sets(clean), NA)
   expect_identical(length(res), 1L)
   expect_identical(names(res), "0")
   expect_identical(length(res[[1]]), 0L)
 
-  latent <- dagitty::dagitty("dag { X [exposure] Y [outcome] U [latent] U -> X U -> Y X -> Y }")
+  latent <- dagitty::dagitty("dag { T [exposure] Y [outcome] U [latent] U -> T U -> Y T -> Y }")
   expect_message(none <- minimal_sets(latent), "assess edges using")
   expect_null(none)
 
@@ -109,7 +351,7 @@ test_that("minimal_sets() separates the empty set, no valid set, and invalid cal
 })
 
 test_that("minimal_sets() validates num_sets as a positive whole number", {
-  dag <- dagitty::dagitty("dag { X [exposure] Y [outcome] Z Z -> X Z -> Y X -> Y }")
+  dag <- dagitty::dagitty("dag { T [exposure] Y [outcome] X X -> T X -> Y T -> Y }")
 
   for( bad in list(0, -1, NA, c(2, 3), 2.5, "3", Inf) ){
     expect_error(minimal_sets(dag, num_sets = bad), "positive integer")
@@ -117,7 +359,7 @@ test_that("minimal_sets() validates num_sets as a positive whole number", {
 })
 
 test_that("minimal_sets() warns once when a same-length set is excluded", {
-  dag <- dagitty::dagitty("dag { X [exposure] Y [outcome] Z W Z -> X Z -> W W -> Y X -> Y }")
+  dag <- dagitty::dagitty("dag { T [exposure] Y [outcome] X W X -> T X -> W W -> Y T -> Y }")
 
   expect_warning(res <- minimal_sets(dag, num_sets = 1),
                  "A same length adjustment set has been excluded")
@@ -127,28 +369,28 @@ test_that("minimal_sets() warns once when a same-length set is excluded", {
 test_that("ordered graphs connect every role to every outcome", {
   set.seed(1)
   dag <- suppressMessages(build_graph(
-    variables = c("Z1", "Z2"), treatments = "X", outcomes = c("Y1", "Y2"),
-    mediators = "M", latent_variables = "U", type = "ordered"
+    variables = c("X1", "X2"), treatments = "T", outcomes = c("Y1", "Y2"),
+    mediators = "M", latents = "U", type = "ordered"
   ))
 
   keys <- edge_keys(dag)
-  expect_true("X -> Y2" %in% keys)
+  expect_true("T -> Y2" %in% keys)
   expect_true("M -> Y2" %in% keys)
   expect_true("U -> Y2" %in% keys)
-  expect_true("Z1 -> Y2" %in% keys)
+  expect_true("X1 -> Y2" %in% keys)
   expect_true("Y1 -> Y2" %in% keys)
 })
 
 test_that("join_graphs() warns on conflicting shared declarations and cyclic output", {
-  dag1 <- dagitty::dagitty("dag { X [exposure] Y [outcome] X -> Y }")
-  dag2 <- dagitty::dagitty("dag { X [outcome] Y [exposure] Y -> X }")
+  dag1 <- dagitty::dagitty("dag { T [exposure] Y [outcome] T -> Y }")
+  dag2 <- dagitty::dagitty("dag { T [outcome] Y [exposure] Y -> T }")
 
   expect_warning(
     expect_warning(joined <- join_graphs(dag1, dag2), "disagree on the exposure/outcome/latent status"),
     "contains cycles"
   )
-  expect_identical(treatments(joined), "X")
-  expect_identical(causaliflower:::.outcomes(joined), "Y")
+  expect_identical(treatments(joined), "T")
+  expect_identical(causaliflower:::get_outcome_names(joined), "Y")
   expect_false(dagitty::isAcyclic(joined))
 })
 
@@ -161,22 +403,22 @@ test_that("join_graphs() warns when direction disagreement creates a cycle", {
 })
 
 test_that("status accessors match dagitty's own readers", {
-  dag <- dagitty::dagitty("dag { X [exposure] Y [outcome] U [latent] Z X -> Y U -> Y }")
+  dag <- dagitty::dagitty("dag { T [exposure] Y [outcome] U [latent] Z T -> Y U -> Y }")
   expect_setequal(treatments(dag), dagitty::exposures(dag))
-  expect_setequal(causaliflower:::.outcomes(dag), dagitty::outcomes(dag))
+  expect_setequal(causaliflower:::get_outcome_names(dag), dagitty::outcomes(dag))
   expect_setequal(unobserved(dag), dagitty::latents(dag))
   expect_setequal(observed(dag), setdiff(names(dag), dagitty::latents(dag)))
 
-  short <- dagitty::dagitty("dag { X [e] Y [o] U [u] X -> Y }")
+  short <- dagitty::dagitty("dag { T [e] Y [o] U [u] T -> Y }")
   expect_setequal(treatments(short), dagitty::exposures(short))
-  expect_setequal(causaliflower:::.outcomes(short), dagitty::outcomes(short))
+  expect_setequal(causaliflower:::get_outcome_names(short), dagitty::outcomes(short))
   expect_setequal(unobserved(short), dagitty::latents(short))
 
-  dup <- dagitty::dagitty("dag { X [exposure] Y [outcome] X [pos=\"1,1\"] X -> Y }")
-  expect_identical(treatments(dup), "X")
+  dup <- dagitty::dagitty("dag { T [exposure] Y [outcome] T [pos=\"1,1\"] T -> Y }")
+  expect_identical(treatments(dup), "T")
   expect_setequal(treatments(dup), dagitty::exposures(dup))
 
-  upper <- dagitty::dagitty("dag { X [Exposure] Y [outcome] X -> Y }")
+  upper <- dagitty::dagitty("dag { T [Exposure] Y [outcome] T -> Y }")
   expect_setequal(treatments(upper), dagitty::exposures(upper))
 
   empty <- string_to_dag("")
@@ -185,7 +427,7 @@ test_that("status accessors match dagitty's own readers", {
 })
 
 test_that("outcomes() pairs with treatments() and keeps the dagitty replacement form", {
-  dag <- dagitty::dagitty("dag { X [exposure] Y [outcome] X -> Y }")
+  dag <- dagitty::dagitty("dag { T [exposure] Y [outcome] T -> Y }")
   expect_identical(outcomes(dag), "Y")
   expect_setequal(outcomes(dag), dagitty::outcomes(dag))
 
@@ -203,8 +445,8 @@ test_that("status accessors reject unsupported graph types", {
   expect_error(unobserved(pag), "does not currently support")
 })
 
-test_that("add_coords() is deterministic and temporally ordered", {
-  dag <- suppressMessages(build_graph(c("Z1", "Z2"), "X", "Y",
+test_that("add_coords() is deterministic and places parents to the left of children", {
+  dag <- suppressMessages(build_graph(c("X1", "X2"), "T", "Y",
                                       mediators = "M", instrumental_variables = "IV",
                                       type = "saturated"))
   a <- add_coords(dag)
@@ -225,10 +467,17 @@ test_that("add_coords() is deterministic and temporally ordered", {
       expect_true(all(diff(ys) >= 1 - 1e-9))
     }
   }
+
+  fixture <- string_to_dag(c("A -> B -> C", "A -> C", "D -> C"))
+  fixture_coordinates <- dagitty::coordinates(add_coords(fixture, x_step = 2))
+  expect_identical(
+    fixture_coordinates$x[c("A", "D", "B", "C")],
+    c(A = 0L, D = 0L, B = 2L, C = 4L)
+  )
 })
 
 test_that("join_graphs() keeps the first graph's coordinates and places only new nodes", {
-  dag <- add_coords(suppressMessages(build_graph(c("Z1", "Z2"), "X", "Y", type = "ordered")))
+  dag <- add_coords(suppressMessages(build_graph(c("X1", "X2"), "T", "Y", type = "ordered")))
   before <- dagitty::coordinates(dag)
 
   joined <- suppressWarnings(join_graphs(dag, string_to_dag("Y -> K")))
@@ -262,14 +511,4 @@ test_that("symmetric edges across ranks share a height after layout", {
   laid <- add_coords(g)
   co <- dagitty::coordinates(laid)
   expect_identical(co$y[["A"]], co$y[["C"]])
-})
-
-test_that("connect_nodes() position requires a node_role", {
-  set.seed(1)
-  dag <- suppressMessages(build_graph(c("Z1", "Z2"), "X", "Y", type = "ordered"))
-
-  expect_error(
-    connect_nodes(dag, nodes = "Z1", position = first(), print_edges = FALSE),
-    "requires a 'node_role'"
-  )
 })

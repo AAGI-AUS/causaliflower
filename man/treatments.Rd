@@ -10,15 +10,16 @@ treatments(dag)
 \item{dag}{A dagitty object.}
 }
 \value{
-Character vector of treatment names; character(0) if none.
+A character vector of treatment names, or \code{character(0)} if none.
 }
 \description{
-treatments() returns a vector of node names assigned "\code{[exposure]}" in a dagitty object (similar to dagitty::exposures())
+\code{treatments()} returns node names marked \verb{[exposure]} in a dagitty object,
+as does \code{dagitty::exposures()}.
 }
 \examples{
 set.seed(1)
 dag <- build_graph(
-  variables = c("Z1", "Z2"), treatments = "X", outcomes = "Y",
+  variables = c("X1", "X2"), treatments = "T", outcomes = "Y",
   mediators = "M", instrumental_variables = "IV", type = "saturated"
 )
 treatments(dag)

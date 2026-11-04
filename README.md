@@ -1,12 +1,10 @@
 # causaliflower
 
->causality + cauliflower = 'causaliflower'!
+> causality + cauliflower = 'causaliflower'!
 
-Graph-based causal analysis in R.
-The `causaliflower` package extends `dagitty` and `ggdag` with functions for building and assessing directed acyclic graphs (DAGs).
+This package extends `dagitty` and `ggdag` with functions for causal analysis using graphs in R.
 
-The goal of `causaliflower` is to support reproducible causal analytical workflows,
-with a focus on applied causal inference techniques in agriculture.
+It aims to support causal inference in agriculture through reproducible workflows for building and assessing directed acyclic graphs (DAGs) using domain knowledge.
 
 ### Installation
 
@@ -21,7 +19,8 @@ pak::pak("AAGI-AUS/causaliflower")
 
 ```
 
-Some examples are included below, and an introductory vignette will be provided in an upcoming release.
+Examples are included below. If the introductory vignette is installed,
+open it with `vignette("causaliflower-introduction")`.
 
 
 ### Example code
@@ -30,8 +29,8 @@ Some examples are included below, and an introductory vignette will be provided 
 
 ```R
 
-variables <- c("Z3", "Z2", "Z1")
-treatments <- "X"
+variables <- c("X3", "X2", "X1")
+treatments <- "T"
 outcomes <- "Y"
 
 
@@ -39,6 +38,32 @@ dag <- build_graph(variables = variables,
                    treatments = treatments,
                    outcomes = outcomes,
                    type = "ordered")
+
+```
+
+`full` uses bidirected edges following the ESC-DAGs Mapping Stage in
+Ferguson et al. (2020). `chain` connects adjacent temporal positions within
+each role except instrumental variables and adds no arrows between roles
+apart from explicit latent targets and instrument edges. `last` adds arrows
+between roles from the last position of the sending role to the first
+position of the receiving role, and `first` sends them from the first
+position instead. `ordered` connects every earlier position to every later
+position within each role except instrumental variables, and `saturated`
+also adds the directed arrows allowed by the package's order of causal
+roles. `first` and `last` are `build_graph()` types. `add_nodes()` and
+`connect_nodes()` use `full`, `chain`, `ordered`, and `saturated`.
+
+Use a list element to place nodes at the same temporal position:
+
+```R
+
+dag <- build_graph(
+  variables = variables,
+  treatments = treatments,
+  outcomes = outcomes,
+  mediators = list("M1", c("M2", "M3"), "M4"),
+  type = "last"
+)
 
 ```
 
@@ -59,19 +84,19 @@ dag <- add_coords(dag)
 
 # Changing the input parameters affects how coordinates are generated
 dag <- add_coords(dag,
-                  x_step = 2, # default horizontal spacing between temporal ranks
-                  y_step = 1) # default vertical spacing between nodes within a rank
+                  x_step = 2, # horizontal spacing between node columns
+                  y_step = 1) # vertical spacing between nodes in the same column
 
 ```
 
-- Connect graph edges in a fully connected or saturated graph:
+- Add edges to existing nodes:
 
 ```R
 
-fc_graph <- connect_nodes(dag) # default connects all nodes in both directions (type = "full")
-fc_graph |> plot_dagitty()
+full_graph <- connect_nodes(dag, type = "full")
+full_graph |> plot_dagitty()
 
-saturated_graph <- connect_nodes(dag, type = "saturated", print_edges = TRUE) # saturated graph connects earlier nodes to later nodes
+saturated_graph <- connect_nodes(dag, type = "saturated", print_edges = TRUE)
 
 ```
 
@@ -80,17 +105,17 @@ saturated_graph <- connect_nodes(dag, type = "saturated", print_edges = TRUE) # 
 
 ```R
 ## Assess edges to keep and build a new graph
-new_graph <- fc_graph |>
-  assess_edges(edges_to_keep = dag,
+new_graph <- full_graph |>
+  assess_edges(keep_edges = dag,
                assess_causal_criteria = TRUE) |> # guided causal criteria sequence
-  keep_edges(dag = fc_graph)
+  keep_edges(dag = full_graph)
 
 
 plot_dagitty(new_graph)
 
 ## Or, save answers to causal criteria in a list
-edges_list <- fc_graph |>
-  assess_edges(edges_to_keep = dag,
+edges_list <- full_graph |>
+  assess_edges(keep_edges = dag,
                assess_causal_criteria = TRUE,
                save_answers = TRUE) # saves answers to causal criteria, output becomes a list
 
@@ -108,7 +133,8 @@ mediators <- "M"
 
 new_dag <- build_graph(treatments = treatments,
                        outcomes = outcomes,
-                       mediators = mediators)
+                       mediators = mediators,
+                       type = "last")
 
 new_dag <- add_coords(new_dag)
 plot_dagitty(new_dag)
@@ -119,7 +145,7 @@ plot_dagitty(dag)
 ```
 
 
-- Output minimal sufficient adjustment sets (returns smallest 5 sets by default):
+- Find single door sets for the direct effect (returns up to five sets, ordered by size):
 
 ```R
 
@@ -132,10 +158,10 @@ minimal_sets(dag, effect = "direct")
 
 ```R
 
-new_nodes <- c("Z4", "Z5")
-descendants <- names(dag)
+nodes <- c("X4", "X5")
+children <- names(dag)
 
-dag <- add_nodes(dag, new_nodes, descendants = descendants)
+dag <- add_nodes(dag, nodes, children = children)
 plot_dagitty(dag)
 
 ```
@@ -146,8 +172,8 @@ plot_dagitty(dag)
 
 dag <- add_nodes(
   dag,
-  new_nodes = "W",
-  node_role = "confounder",
+  nodes = "W",
+  role = "confounder",
   type = "saturated",
   position = first()
 )
@@ -155,23 +181,47 @@ plot_dagitty(dag)
 
 ```
 
-`position` takes four placement helpers, used alone or combined with `c()`:
+`position` takes four placement helpers, used alone or combined with `c()`.
+Their names also work as values, as in `position = "first"` or
+`position = c(after = "X2")`:
 
 ```R
 
 first()       # before every existing node
 last()        # after every existing node
-before("X")   # immediately before an existing anchor node
-after("Z2")   # immediately after an existing anchor node
+before("T")   # immediately before an existing anchor node
+after("X2")   # immediately after an existing anchor node
 
-# Name the new nodes assigned to each position clause.
+# Choose a position for each named new node.
 dag <- add_nodes(
   dag,
-  new_nodes = c("W1", "W2", "U"),
-  node_role = "confounder",
+  nodes = c("W1", "W2", "U"),
+  role = "confounder",
   type = "saturated",
-  position = c(first("W1"), after("Z2", "W2"))
+  position = c(first("W1"), after("X2", "W2"))
 )
+
+```
+
+- Choose which nodes receive and send arrows generated between roles:
+
+```R
+
+dag <- build_graph(
+  variables = variables,
+  treatments = treatments,
+  outcomes = outcomes,
+  mediators = c(incoming("M1"), "M2", outgoing("M3")),
+  type = "ordered"
+)
+
+```
+
+- Copy a node into successive positions:
+
+```R
+
+dag <- copy_nodes(dag, "M2", copy_suffix = c("survey", "harvest"))
 
 ```
 
@@ -180,7 +230,9 @@ dag <- add_nodes(
 ```R
 get_edges(dag)
 
-get_ancestor_edges(dag)
+get_node_edges(dag)
+
+get_paths(dag)
 
 get_structure(dag)
 

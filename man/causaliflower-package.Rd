@@ -6,7 +6,7 @@
 \alias{causaliflower-package}
 \title{causaliflower: Build and Assess Causal Graphs}
 \description{
-The causaliflower package aims to provide simple ways of working with causal graphs in R. It extends 'dagitty' and 'ggdag' functions to enable cohesive and reproducible causal analysis workflows.
+Extends 'dagitty' and 'ggdag' with functions to build, edit and plot causal graphs in R. Also provides guided assessment of causal arrows and checks whether causal effects are identifiable.
 }
 \seealso{
 Useful links:

@@ -4,5 +4,7 @@
 ^\.github($|/)
 ^data-raw$
 ^LICENSE\.md$
-^\.Rproj\.user$
 ^dev($|/)
+^Rplots\.pdf$
+^tests/testthat/Rplots\.pdf$
+^\.Rproj\.user$

@@ -11,23 +11,29 @@ get_diff_roles(dag1, dag2, compare_all = TRUE, nodes_in_common = FALSE)
 
 \item{dag2}{A dagitty object.}
 
-\item{compare_all}{Compare and return mutually all exclusive roles  (compare_all = TRUE) e.g. dag1 roles not in dag2 AND dag2 roles not in dag1, or set compare_all = FALSE to return only dag1 mutually exclusive roles, e.g. dag1 roles not in dag2. Defaults to compare_all = TRUE.}
+\item{compare_all}{With \code{TRUE} (the default), the result includes nodes
+assigned to a role in one graph but not the other. With \code{FALSE}, it
+includes only nodes assigned to a role in \code{dag1} but not that role in
+\code{dag2}.}
 
-\item{nodes_in_common}{Determines whether to include only the nodes found in both DAGs. Defaults to nodes_in_common = FALSE (returns all nodes).}
+\item{nodes_in_common}{With \code{TRUE}, the result is restricted to nodes
+present in both graphs. The default, \code{FALSE}, allows nodes found in only
+one graph.}
 }
 \value{
 A list of nodes.
 }
 \description{
-Compare dagitty object node roles
+\code{get_diff_roles()} compares the node names assigned to each causal role
+in the two supplied graphs.
 }
 \examples{
 set.seed(1)
 dag <- build_graph(
-  variables = c("Z1", "Z2"), treatments = "X", outcomes = "Y", type = "saturated"
+  variables = c("X1", "X2"), treatments = "T", outcomes = "Y", type = "saturated"
 )
 dag2 <- build_graph(
-  variables = c("Z1", "Z3"), treatments = "X", outcomes = "Y", type = "saturated"
+  variables = c("X1", "X3"), treatments = "T", outcomes = "Y", type = "saturated"
 )
 get_diff_roles(dag, dag2)
 
