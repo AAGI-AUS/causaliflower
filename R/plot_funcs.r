@@ -195,7 +195,9 @@ plot_dagitty <- function(dag,
   controls <- edge_controls(dag, "plot_dagitty")
   dag <- dag_for_layout(dag, "plot_dagitty")
   if( nrow(controls) > 0L ){
-    if( curve ) controls <- controls[controls$e != "->", , drop = FALSE]
+    if( curve ) {
+      controls <- controls[controls$e != "->", , drop = FALSE]
+    }
     dag <- set_edge_controls(dag, controls, replace = dag_edges(dag, "plot_dagitty()"),
                               caller = "plot_dagitty")
   }
@@ -281,22 +283,28 @@ plot_dagitty <- function(dag,
   # Missing or empty labels are not drawn. Lines wrap at spaces only, and line
   # breaks in supplied labels are kept.
   nodes$label <- vapply(seq_len(nrow(nodes)), function(i){
-    value <- nodes$label[[i]]
-    text <- if( is.null(value) || length(value) == 0L || is.na(value[1L]) ){
+    label <- nodes$label[[i]]
+    text <- if( is.null(label) || length(label) == 0L || is.na(label[1L]) ){
       NA_character_
     }else{
-      as.character(value[1L])
+      as.character(label[1L])
     }
-    if( !is.na(text) && !nzchar(trimws(text)) ) text <- NA_character_
+    if( !is.na(text) && !nzchar(trimws(text)) ) {
+      text <- NA_character_
+    }
 
     return(text)
   }, character(1L))
   nodes$display_label <- vapply(nodes$label, function(label){
-    if( is.na(label) ) return(NA_character_)
+    if( is.na(label) ) {
+      return(NA_character_)
+    }
     lines <- strsplit(label, "\n", fixed = TRUE)[[1L]]
     wrapped <- unlist(lapply(lines, function(line){
       parts <- strwrap(line, width = 26L)
-      if( length(parts) == 0L ) parts <- ""
+      if( length(parts) == 0L ) {
+        parts <- ""
+      }
 
       return(parts)
     }), use.names = FALSE)
@@ -359,11 +367,13 @@ plot_dagitty <- function(dag,
     sides <- plot_label_sides(nodes, label_placement)
     for( side in c("above", "below") ){
       side_nodes <- nodes[sides == side & !is.na(nodes$display_label), , drop = FALSE]
-      if( nrow(side_nodes) == 0L ) next
+      if( nrow(side_nodes) == 0L ) {
+        next
+      }
       ggdag <- ggdag + plot_node_label_layer(
         side_nodes,
-        offset = if( side == "above" ) label_offset else -label_offset,
-        vjust = if( side == "above" ) 0 else 1,
+        offset = if( side == "above" ) { label_offset } else { -label_offset },
+        vjust = if( side == "above" ) { 0 } else { 1 },
         label_size = label_size
       )
     }
@@ -387,8 +397,8 @@ plot_dagitty <- function(dag,
     ggplot2::coord_cartesian(clip = "off", expand = FALSE) +
     ggplot2::labs(x = "", y = "") +
     ggplot2::guides(colour = ggplot2::guide_legend(
-      nrow = if( legend$side %in% c("top", "bottom") && length(present) > 5L ) 2L else NULL,
-      ncol = if( legend$side %in% c("left", "right") ) 1L else NULL,
+      nrow = if( legend$side %in% c("top", "bottom") && length(present) > 5L ) { 2L } else { NULL },
+      ncol = if( legend$side %in% c("left", "right") ) { 1L } else { NULL },
       byrow = TRUE,
       override.aes = list(size = 7)
     )) +
@@ -411,8 +421,8 @@ plot_dagitty <- function(dag,
     size <- plot_fit_size(nodes, sides, node_radius, label_offset, label_size,
                           margin, box_spacing, legend$side, present)
     plot_save_file(ggdag, file, format,
-                   width = if( is.null(width) ) size[["width"]] else width,
-                   height = if( is.null(height) ) size[["height"]] else height,
+                   width = if( is.null(width) ) { size[["width"]] } else { width },
+                   height = if( is.null(height) ) { size[["height"]] } else { height },
                    dpi = dpi)
 
     return(invisible(ggdag))
@@ -438,14 +448,14 @@ plot_legend_position <- function(legend_position){
          "\"top\", \"top-left\" or \"none\".", call. = FALSE)
   }
   parts <- strsplit(tolower(trimws(legend_position)), "[-_ ]+")[[1L]]
-  side <- if( length(parts) == 0L || !nzchar(parts[1L]) ) "top" else parts[1L]
+  side <- if( length(parts) == 0L || !nzchar(parts[1L]) ) { "top" } else { parts[1L] }
   if( !side %in% c("top", "bottom", "left", "right", "none") ){
     stop("plot_dagitty(): legend_position must start with \"top\", ",
          "\"bottom\", \"left\", \"right\" or \"none\".", call. = FALSE)
   }
-  alignment <- if( length(parts) >= 2L ) parts[2L] else "centre"
-  allowed <- if( side %in% c("top", "bottom") ) c("left", "right") else c("top", "bottom")
-  justification <- if( alignment %in% allowed ) alignment else "center"
+  alignment <- if( length(parts) >= 2L ) { parts[2L] } else { "centre" }
+  allowed <- if( side %in% c("top", "bottom") ) { c("left", "right") } else { c("top", "bottom") }
+  justification <- if( alignment %in% allowed ) { alignment } else { "center" }
   if( side == "none" ){
     justification <- "center"
   }
@@ -510,7 +520,7 @@ plot_output_format <- function(file, output_format, format_missing){
 plot_columns <- function(x){
   span <- diff(range(x))
   gaps <- diff(sort(unique(x)))
-  tolerance <- if( span > 0 ) min(0.04 * span, 0.5 * stats::median(gaps)) else 0
+  tolerance <- if( span > 0 ) { min(0.04 * span, 0.5 * stats::median(gaps)) } else { 0 }
   ordering <- order(x)
   groups <- cumsum(c(TRUE, diff(x[ordering]) > tolerance))
   column <- integer(length(x))
@@ -568,9 +578,9 @@ plot_label_sides <- function(nodes, placement){
   sides <- vapply(seq_len(nrow(nodes)), function(i){
     same <- column == column[i] & seq_len(nrow(nodes)) != i
     offsets <- nodes$y[same] - nodes$y[i]
-    room_above <- if( any(offsets > 0) ) min(offsets[offsets > 0]) else Inf
-    room_below <- if( any(offsets < 0) ) min(-offsets[offsets < 0]) else Inf
-    side <- if( room_below > room_above ) "below" else "above"
+    room_above <- if( any(offsets > 0) ) { min(offsets[offsets > 0]) } else { Inf }
+    room_below <- if( any(offsets < 0) ) { min(-offsets[offsets < 0]) } else { Inf }
+    side <- if( room_below > room_above ) { "below" } else { "above" }
 
     return(side)
   }, character(1L))
@@ -590,9 +600,9 @@ plot_label_extent <- function(labels, label_size){
   labels <- ifelse(missing, "", as.character(labels))
   lines <- strsplit(labels, "\n", fixed = TRUE)
   characters <- vapply(lines, function(text){
-    value <- if( length(text) == 0L ) 0L else max(nchar(text))
+    character_count <- if( length(text) == 0L ) { 0L } else { max(nchar(text)) }
 
-    return(value)
+    return(character_count)
   }, numeric(1L))
   line_count <- pmax(1L, lengths(lines))
   padding <- 2 * 0.18 * 1.2 * label_size
@@ -681,9 +691,13 @@ plot_fit_size <- function(nodes, sides, node_radius, label_offset, label_size,
     scale_y <- ifelse(dy > 0, need_y / dy, Inf)
     pair_scale <- pmin(scale_x, scale_y)
     pair_scale <- pair_scale[is.finite(pair_scale)]
-    if( length(pair_scale) > 0L ) scale <- max(pair_scale)
+    if( length(pair_scale) > 0L ) {
+      scale <- max(pair_scale)
+    }
   }
-  if( is.na(scale) ) scale <- 30
+  if( is.na(scale) ) {
+    scale <- 30
+  }
   # Legend text is 12 pt (4.2 mm); keys and spacing add about 16 mm.
   legend_width <- if( legend_side %in% c("left", "right") && length(legend_roles) > 0L ){
     0.56 * 4.2 * max(nchar(legend_roles)) + 16
@@ -691,27 +705,35 @@ plot_fit_size <- function(nodes, sides, node_radius, label_offset, label_size,
     0
   }
   legend_height <- if( legend_side %in% c("top", "bottom") && length(legend_roles) > 0L ){
-    if( length(legend_roles) > 5L ) 20 else 11
+    if( length(legend_roles) > 5L ) {
+      20
+    } else {
+      11
+    }
   }else{
     0
   }
-  spacing <- if( legend_side == "none" ) 0 else box_spacing
+  spacing <- if( legend_side == "none" ) { 0 } else { box_spacing }
   extra_width <- margin[["left"]] + margin[["right"]] + legend_width +
-    if( legend_side %in% c("left", "right") ) spacing else 0
+    if( legend_side %in% c("left", "right") ) { spacing } else { 0 }
   extra_height <- margin[["top"]] + margin[["bottom"]] + legend_height +
-    if( legend_side %in% c("top", "bottom") ) spacing else 0
+    if( legend_side %in% c("top", "bottom") ) { spacing } else { 0 }
   x_span <- diff(range(nodes$x))
   y_span <- diff(range(nodes$y))
   # Keep the larger side within 40 inches by reducing the scale if needed.
   limit <- 40 * 25.4
-  if( x_span > 0 ) scale <- min(scale, max(0, limit - extra_width) / x_span)
-  if( y_span > 0 ) scale <- min(scale, max(0, limit - extra_height) / y_span)
+  if( x_span > 0 ) {
+    scale <- min(scale, max(0, limit - extra_width) / x_span)
+  }
+  if( y_span > 0 ) {
+    scale <- min(scale, max(0, limit - extra_height) / y_span)
+  }
   width <- x_span * scale + extra_width
   height <- y_span * scale + extra_height
   # A top or bottom legend needs its widest row; a side legend its full height.
   if( length(legend_roles) > 0L ){
     item_width <- 0.56 * 4.2 * max(nchar(legend_roles)) + 13
-    per_row <- if( length(legend_roles) > 5L ) ceiling(length(legend_roles) / 2) else length(legend_roles)
+    per_row <- if( length(legend_roles) > 5L ) { ceiling(length(legend_roles) / 2) } else { length(legend_roles) }
     if( legend_side %in% c("top", "bottom") ){
       width <- max(width, per_row * item_width + 8)
     }
@@ -885,7 +907,7 @@ edge_path_ids <- function(edges, kind){
 #'   and kinds.
 #' @noRd
 straight_edge_paths <- function(edges, kind){
-  progress <- if( kind == "directed" ) seq(0, 1, length.out = 17L) else c(0, 1)
+  progress <- if( kind == "directed" ) { seq(0, 1, length.out = 17L) } else { c(0, 1) }
   paths <- lapply(seq_len(nrow(edges)), function(i){
     path <- edges[rep(i, length(progress)), , drop = FALSE]
     path$x <- edges$x[i] + progress * (edges$xend[i] - edges$x[i])
@@ -988,7 +1010,9 @@ stored_edge_paths <- function(dag_df, controls){
     bidirected_edge_paths(bidirected),
     straight_edge_paths(undirected, "undirected")
   ), use.names = TRUE, fill = TRUE))
-  if( nrow(paths) == 0L ) return(paths)
+  if( nrow(paths) == 0L ) {
+    return(paths)
+  }
 
   edge_rows <- dag_df[!is.na(direction), , drop = FALSE]
   keys <- edge_control_keys(as.character(edge_rows$name),
@@ -1046,8 +1070,12 @@ curve_plot_anchors <- function(dag_df){
     out <- NULL
     return(out)
   }
-  if( x_span == 0 ) x_bounds <- mean(x_bounds) + c(-1, 1) * curve_axis_gap(nodes$y)
-  if( y_span == 0 ) y_bounds <- mean(y_bounds) + c(-0.25, 0.25) * curve_axis_gap(nodes$x)
+  if( x_span == 0 ) {
+    x_bounds <- mean(x_bounds) + c(-1, 1) * curve_axis_gap(nodes$y)
+  }
+  if( y_span == 0 ) {
+    y_bounds <- mean(y_bounds) + c(-0.25, 0.25) * curve_axis_gap(nodes$x)
+  }
   anchors <- data.frame(x = x_bounds, y = y_bounds)
 
   return(anchors)
@@ -1215,15 +1243,13 @@ tidy_ggdagitty <- function(dag, labels = NULL, roles = NULL){
 add_labels <- function(dag, dag_df, labels, roles = NULL){
 
   # Labeling variables
-  dag_df$label <- sapply( seq_along( dag_df$name ),
-                          function(x) if( dag_df$name[x] %in% attr(labels, "names")) {
-                            value <- labels[[ dag_df$name[x] ]]
+  dag_df$label <- sapply(seq_along(dag_df$name), function(i){
+    if( dag_df$name[i] %in% attr(labels, "names") ){
+      return(labels[[ dag_df$name[i] ]])
+    }
 
-                            return(value)
-                          }else{
-                            value <- NULL
-                            return(invisible(value))
-                          } )
+    return(invisible(NULL))
+  })
 
   if( is.null(roles) ){
     roles <- classify_node_roles(dag)
@@ -1238,15 +1264,11 @@ add_labels <- function(dag, dag_df, labels, roles = NULL){
         return(matches)
       }, logical(1L)
     )]
-    if( length(matches) == 0L ) {
-      value <- NA_character_
-
-      return(value)
-    } else {
-      value <- matches[1L]
-
-      return(value)
+    if( length(matches) == 0L ){
+      return(NA_character_)
     }
+
+    return(matches[1L])
   }, character(1L), USE.NAMES = FALSE)
 
   return(dag_df)

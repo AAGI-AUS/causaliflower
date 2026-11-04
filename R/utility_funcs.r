@@ -86,7 +86,9 @@ observed <- function(dag){
 #' that function. The replacement form `outcomes(dag) <- value` still works.
 #'
 #' @param dag A dagitty object.
-#' @returns A character vector of outcome names, or `character(0)` if none.
+#' @returns `outcomes()` returns a character vector of outcome names, or
+#'   `character(0)` if none. The replacement function returns the updated
+#'   dagitty object.
 #' @examples
 #' set.seed(1)
 #' dag <- build_graph(
@@ -246,22 +248,30 @@ set_node_status <- function(dag, nodes, keyword, caller){
 
                       return(out)
                     })
-  if( is.null(index) ) failure()
+  if( is.null(index) ) {
+    failure()
+  }
 
   edits <- list()
   written <- character()
   for( block in index$blocks ){
-    if( block$kind != "node" || is.null(block$node) ) next
-    if( !block$node %in% pending || block$node %in% written ) next
+    if( block$kind != "node" || is.null(block$node) ) {
+      next
+    }
+    if( !block$node %in% pending || block$node %in% written ) {
+      next
+    }
     at <- index$tokens$end[block$first] + 1L
     edits[[length(edits) + 1L]] <- list(
       start = at, end = at - 1L,
-      text = paste0(keyword, if( length(block$fields) > 0L ) "," else "")
+      text = paste0(keyword, if( length(block$fields) > 0L ) { "," } else { "" })
     )
     written <- c(written, block$node)
   }
   for( declaration in index$declarations ){
-    if( !declaration$node %in% pending || declaration$node %in% written ) next
+    if( !declaration$node %in% pending || declaration$node %in% written ) {
+      next
+    }
     at <- index$tokens$end[declaration$token]
     edits[[length(edits) + 1L]] <- list(
       start = at + 1L, end = at, text = paste0(" [", keyword, "]")
@@ -288,8 +298,12 @@ set_node_status <- function(dag, nodes, keyword, caller){
     restored <- paste0(substr(restored, 1L, at - 1L),
                        substring(restored, at + nchar(inserted)))
   }
-  if( !identical(restored, text) ) failure()
-  if( !status_write_intact(dag, result, pending, keyword, caller) ) failure()
+  if( !identical(restored, text) ) {
+    failure()
+  }
+  if( !status_write_intact(dag, result, pending, keyword, caller) ) {
+    failure()
+  }
 
   return(result)
 }
@@ -620,18 +634,18 @@ instruments <- function(dag,
 
   result <- lapply(treatments, function(treatment){
     per_outcome <- lapply(outcomes, function(outcome){
-      values <- instrumental_vars$instrument[
+      instrument_names <- instrumental_vars$instrument[
         instrumental_vars$treatment == treatment &
           instrumental_vars$outcome == outcome
       ]
-      if( length(values) == 0L ) {
+      if( length(instrument_names) == 0L ) {
         out <- NULL
 
         return(out)
       } else {
-        value <- unique(as.character(values))
+        unique_instruments <- unique(as.character(instrument_names))
 
-        return(value)
+        return(unique_instruments)
       }
     })
     names(per_outcome) <- outcomes
@@ -714,9 +728,9 @@ minimal_sets <- function(dag,
       return(matches)
     })
     is_cyclic <- isFALSE(tryCatch(dag_is_acyclic(dag), error = function(e) {
-      value <- NA
+      acyclic <- NA
 
-      return(value)
+      return(acyclic)
     }))
     why <- character(0)
     if( isTRUE(is_cyclic) ){ why <- c(why, "the graph is not acyclic (contains a cycle)") }
@@ -725,8 +739,8 @@ minimal_sets <- function(dag,
     message("No available adjustment sets for the ", effect, " effect.", reason,
             "\n Try adjusting parameters, or assess edges using assess_edges(dag, assess_causal_criteria = TRUE).")
 
-    value <- NULL
-    return(invisible(value))
+    adjustment_result <- NULL
+    return(invisible(adjustment_result))
   }
   adjustment_sets_list <- lapply(seq_along(adjustment_sets), function(x){
     adjustment_sets <- adjustment_sets[[x]]
@@ -780,9 +794,9 @@ nodes_between_treatment_and_outcome <- function(dag,
 
     paths_trt_to_y <- lapply(1:length(treatments), function(x){
 
-      paths_trt_to_y[[x]] <- lapply(1:length(outcomes), function(y){
+      outcome_paths <- lapply(1:length(outcomes), function(y){
 
-        value <- tryCatch({
+        path_nodes <- tryCatch({
           paths_trt_y <- NA
           paths_trt_y <- ggdag::dag_paths(dag,
                                           from = treatments[x],
@@ -799,12 +813,11 @@ nodes_between_treatment_and_outcome <- function(dag,
           return(invisible(paths_trt_y))
         })
 
-        return(value)
+        return(path_nodes)
       })
-      names(paths_trt_to_y[[x]]) <- outcomes
-      value <- paths_trt_to_y[[x]]
+      names(outcome_paths) <- outcomes
 
-      return(value)
+      return(outcome_paths)
     })
 
     names(paths_trt_to_y) <- treatments

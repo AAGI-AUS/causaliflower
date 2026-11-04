@@ -18,6 +18,21 @@ This loads the package's functions together.
   about individual steps beside those steps.
 - Leave the final full stop off single-sentence comments. Use normal
   punctuation for multiple sentences and roxygen documentation.
+- Use braces for `if` and `else` branches, including single statements.
+  Keep explicit returns and name local results for what they contain.
+
+
+## Helper placement
+
+Check callers, callback references and exports before moving a function.
+Keep domain algorithms with their implementation and nested functions with
+the code whose local state they use.
+
+Shared helpers appear once in `helper_funcs.r`, under their main caller's
+filename. Keep these sections in alphabetical filename order, with 80-hash
+banners. Within a section, follow the callers' source order and put a helper's
+own helpers directly below it. `string_to_dag()` remains the public function
+in the `helper_funcs.r` section, followed by its parser helpers.
 
 
 ## Checking a change

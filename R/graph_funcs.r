@@ -180,13 +180,13 @@ build_graph <- function(variables = NA,
 
       latents <- lapply(1:length(latent_vec), function(x){
         if( length(unlist(latent_descendants_list[x])) == 0 ){
-          value <- latent_variables_list[[x]]
+          latent_mapping <- latent_variables_list[[x]]
 
-          return(value)
+          return(latent_mapping)
         }else{
-          value <- (latent_variables_list[[x]] <- c( latent_variables_list[x], list(as.list(unlist(latent_descendants_list[x]))) ))
+          latent_mapping <- c( latent_variables_list[x], list(as.list(unlist(latent_descendants_list[x]))) )
 
-          return(invisible(value))
+          return(invisible(latent_mapping))
         }
       })
 
@@ -398,7 +398,7 @@ add_nodes <- function(dag,
     stop("add_nodes(): 'role' must be one role name.", call. = FALSE)
   }
   if( length(role) == 1L && !role %in% VALID_NODE_ROLES ){
-    role_name <- if( role_alias_used ) "node_role" else "role"
+    role_name <- if( role_alias_used ) { "node_role" } else { "role" }
     stop("Invalid ", role_name, ": \"", role, "\". Must be one of: ",
          paste(VALID_NODE_ROLES, collapse = ", "), ".", call. = FALSE)
   }
@@ -960,7 +960,9 @@ assess_edges <- function(dag,
     keep_edges <- edges_to_keep
     keep_missing <- FALSE
   }
-  if( keep_missing ) keep_edges <- NULL
+  if( keep_missing ) {
+    keep_edges <- NULL
+  }
 
   allowed_modes <- c("all", "bidirectional", "bidirected",
                      "bi-directional", "bi-directed")
@@ -977,7 +979,9 @@ assess_edges <- function(dag,
   empty_edges <- graph_edges[0L]
 
   normalise_selection <- function(value, argument){
-    if( is.null(value) || length(value) == 0L ) return(empty_edges)
+    if( is.null(value) || length(value) == 0L ) {
+      return(empty_edges)
+    }
     if( length(value) == 1L && is.atomic(value) && is.na(value) ){
       return(empty_edges)
     }
@@ -1012,7 +1016,9 @@ assess_edges <- function(dag,
            "' must be a character vector, an edge table, or a dagitty object.",
            call. = FALSE)
     }
-    if( nrow(selected) == 0L ) return(empty_edges)
+    if( nrow(selected) == 0L ) {
+      return(empty_edges)
+    }
     selected <- selected[!duplicated(edge_key(selected)), , drop = FALSE]
     selected_edges <- data.table::as.data.table(selected)
 
@@ -1386,7 +1392,7 @@ add_edges <- function(dag, edges){
     return(out)
   })
   expected_keys <- unique(c(existing_keys, edge_key(new_edges)))
-  actual_keys <- if( is.null(actual_edges) ) character() else edge_key(actual_edges)
+  actual_keys <- if( is.null(actual_edges) ) { character() } else { edge_key(actual_edges) }
   if( is.null(candidate_nodes) ||
       !setequal(candidate_nodes, names(dag)) ||
       length(candidate_nodes) != length(names(dag)) ||
@@ -1681,7 +1687,7 @@ causal_criteria_sequence <- function(edges,
 
       return(edges)
     }
-    set_noun <- if( any( unlist( edges[, "e"] ) %in% c("<->", "--") ) ) "edges" else "directed arrows"
+    set_noun <- if( any( unlist( edges[, "e"] ) %in% c("<->", "--") ) ) { "edges" } else { "directed arrows" }
     cat( "\nThere are ", num_edges, " ", set_noun, " to be assessed.","\n", "\n", sep="" )
     print(edges, quote=FALSE)
     cat( "\nAssess the posited causal relationships using causal criteria?", "\n" )
@@ -1721,7 +1727,7 @@ causal_criteria_sequence <- function(edges,
         criterion_num <- 1
         check_ans <- FALSE
         arrow <- noquote( paste( edges[ arrow_count ], collapse=" " ) )
-        arrow_noun <- if( unlist( edges[ arrow_count, "e" ] ) %in% c("<->", "--") ) "edge" else "directed arrow"
+        arrow_noun <- if( unlist( edges[ arrow_count, "e" ] ) %in% c("<->", "--") ) { "edge" } else { "directed arrow" }
         cat( "For the ", arrow_noun, " '", arrow, "' consider each of the following:", "\n", "\n", sep="")
 
         while( check_ans == FALSE ){
@@ -1862,21 +1868,18 @@ add_nodes_helper <- function(dag,
   nodes_ordered <- sort( unlist( dagitty::topologicalOrdering(dag) ) ) # Existing graph nodes in topological order
 
   dag_roles <- lapply(dag_roles, function(x) {
-    value <- x[order(match(x, names(nodes_ordered)))]
+    ordered_nodes <- x[order(match(x, names(nodes_ordered)))]
 
-    return(value)
+    return(ordered_nodes)
   })
 
   dag_roles <- lapply(dag_roles, function(x) {
-    if( identical( x[complete.cases(x)], logical(0) ) ) {
-      value <- NA_character_
-
-      return(value)
-    } else {
-      value <- x[complete.cases(x)]
-
-      return(value)
+    nodes <- x[complete.cases(x)]
+    if( identical(nodes, logical(0)) ){
+      nodes <- NA_character_
     }
+
+    return(nodes)
   })
 
   outcomes  <- dag_roles$outcome[complete.cases(dag_roles$outcome)]
@@ -1944,7 +1947,7 @@ connect_nodes_helper <- function(dag, nodes, dag_node_names, type){
   instrumental_variables <- instrumental_variables[
     !is.na(instrumental_variables)
   ]
-  planner_type <- if( type %in% c("first", "last") ) "ordered" else type
+  planner_type <- if( type %in% c("first", "last") ) { "ordered" } else { type }
   edges <- if( identical(type, "full") ){
     full_pair_edges(dag, nodes)
   }else{

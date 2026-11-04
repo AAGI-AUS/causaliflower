@@ -140,13 +140,13 @@ empty_role_edges <- function(){
 #' @noRd
 role_input_names <- function(x){
   if( length(x) == 0L ) {
-    values <- character()
+    nodes <- character()
 
-    return(values)
+    return(nodes)
   } else {
-    values <- as.character(x)
+    nodes <- as.character(x)
 
-    return(values)
+    return(nodes)
   }
 }
 
@@ -366,14 +366,14 @@ normalise_role_input <- function(x, role, caller = "role input"){
         stop(caller, ": nested lists are not supported for this role.",
              call. = FALSE)
       }
-      value <- role_leaf(entry, top_name = top_names[[i]], caller = caller)
+      leaf <- role_leaf(entry, top_name = top_names[[i]], caller = caller)
 
-      return(value)
+      return(leaf)
     })
   }else{
     leaf <- role_leaf(x, caller = caller)
     leaves <- lapply(seq_along(leaf$nodes), function(i){
-      values <- list(
+      position <- list(
         nodes = leaf$nodes[[i]],
         incoming = intersect(leaf$nodes[[i]], leaf$incoming),
         outgoing = intersect(leaf$nodes[[i]], leaf$outgoing),
@@ -381,14 +381,14 @@ normalise_role_input <- function(x, role, caller = "role input"){
         outgoing_marked = leaf$nodes[[i]] %in% leaf$outgoing
       )
 
-      return(values)
+      return(position)
     })
   }
 
   positions <- lapply(leaves, function(leaf) {
-    value <- leaf$nodes
+    position_nodes <- leaf$nodes
 
-    return(value)
+    return(position_nodes)
   })
   positions <- Filter(length, positions)
   nodes <- role_input_names(unlist(positions, use.names = FALSE))
@@ -405,14 +405,14 @@ normalise_role_input <- function(x, role, caller = "role input"){
   spec$positions <- positions
   spec$nodes <- nodes
   spec$incoming <- unique(unlist(lapply(leaves, function(leaf){
-    value <- leaf$incoming
+    incoming_nodes <- leaf$incoming
 
-    return(value)
+    return(incoming_nodes)
   }), use.names = FALSE))
   spec$outgoing <- unique(unlist(lapply(leaves, function(leaf){
-    value <- leaf$outgoing
+    outgoing_nodes <- leaf$outgoing
 
-    return(value)
+    return(outgoing_nodes)
   }), use.names = FALSE))
   spec$incoming_marked <- any(vapply(leaves, function(leaf){
     matches <- isTRUE(leaf$incoming_marked)
@@ -430,14 +430,14 @@ normalise_role_input <- function(x, role, caller = "role input"){
     return(matches)
   }, logical(1L))
   spec$mapping_sources <- unique(role_input_names(unlist(lapply(leaves[mapped], function(leaf){
-    value <- leaf$nodes
+    source_nodes <- leaf$nodes
 
-    return(value)
+    return(source_nodes)
   }), use.names = FALSE)))
   spec$mapping_edges <- do.call(bind_role_edges, lapply(leaves[mapped], function(leaf){
-    value <- role_edge_frame(leaf$nodes, leaf$mapping_targets, "->")
+    mapping_edges <- role_edge_frame(leaf$nodes, leaf$mapping_targets, "->")
 
-    return(value)
+    return(mapping_edges)
   }))
   spec$mapping <- length(spec$mapping_sources) > 0L
 
@@ -606,15 +606,15 @@ position_edges <- function(spec, type, edge){
   }
   if( type %in% CF_CHAIN_TYPES ){
     pieces <- lapply(seq_len(nrow(pairs)), function(i){
-      value <- role_edge_frame(positions[[pairs[i, 1L]]], positions[[pairs[i, 2L]]], edge)
+      edges <- role_edge_frame(positions[[pairs[i, 1L]]], positions[[pairs[i, 2L]]], edge)
 
-      return(value)
+      return(edges)
     })
   }else{
     pieces <- lapply(seq_len(ncol(pairs)), function(i){
-      value <- role_edge_frame(positions[[pairs[1L, i]]], positions[[pairs[2L, i]]], edge)
+      edges <- role_edge_frame(positions[[pairs[1L, i]]], positions[[pairs[2L, i]]], edge)
 
-      return(value)
+      return(edges)
     })
   }
   edges <- do.call(bind_role_edges, pieces)
@@ -715,7 +715,7 @@ cross_role_rules <- function(type){
 #' @noRd
 plan_graph_edges <- function(specs, type, instrumental_variables = NA,
                                  existing_dag = NA, include_iv = TRUE){
-  edge <- if( identical(type, "full") ) "<->" else "->"
+  edge <- if( identical(type, "full") ) { "<->" } else { "->" }
   same_role <- lapply(specs, position_edges, type = type, edge = edge)
 
   rules <- cross_role_rules(type)
@@ -724,13 +724,13 @@ plan_graph_edges <- function(specs, type, instrumental_variables = NA,
     target_role <- rules[i, 2L]
     source <- specs[[source_role]]
     target <- specs[[target_role]]
-    value <- role_edge_frame(
+    edges <- role_edge_frame(
       role_side(source, "outgoing", type),
       role_side(target, "incoming", type),
       edge
     )
 
-    return(value)
+    return(edges)
   })
 
   latent_mapping <- specs$latent$mapping_edges
@@ -804,12 +804,12 @@ role_specs <- function(confounders, treatments, outcomes, mediators,
     observed = observed
   )
   specs <- Map(function(input, role){
-    value <- normalise_role_input(
+    spec <- normalise_role_input(
       input, role,
       caller = paste0(caller, " ", role, " input")
     )
 
-    return(value)
+    return(spec)
   }, inputs, names(inputs))
   names(specs) <- names(inputs)
 
@@ -847,16 +847,16 @@ role_positions <- function(dag, nodes){
   }
 
   parents <- lapply(nodes, function(node) {
-    value <- unique(from[to == node])
+    parent_nodes <- unique(from[to == node])
 
-    return(value)
+    return(parent_nodes)
   })
   names(parents) <- nodes
   rank <- topological_rank(parents)
   positions <- lapply(sort(unique(rank)), function(step) {
-    value <- nodes[rank == step]
+    position_nodes <- nodes[rank == step]
 
-    return(value)
+    return(position_nodes)
   })
 
   return(positions)
@@ -975,9 +975,9 @@ position_blocks <- function(existing, supplied, strict = TRUE){
 
   existing_blocks <- existing$positions[moving_indices]
   new_blocks <- Filter(length, lapply(supplied$positions, function(position){
-    value <- setdiff(position, existing$nodes)
+    new_nodes <- setdiff(position, existing$nodes)
 
-    return(value)
+    return(new_nodes)
   }))
   position_blocks <- list(
     blocks = c(existing_blocks, new_blocks),
@@ -1103,9 +1103,9 @@ resolve_position_blocks <- function(position, blocks, spine,
   }
 
   clause_blocks <- lapply(seq_along(clauses), function(i){
-    value <- blocks[which(block_clause == i)]
+    selected_blocks <- blocks[which(block_clause == i)]
 
-    return(value)
+    return(selected_blocks)
   })
   order <- spine
   first_blocks <- list()
@@ -1136,7 +1136,9 @@ resolve_position_blocks <- function(position, blocks, spine,
         order <- append(order, insert, after = anchor_index - 1L)
       }else if( identical(clause$kind, "after") ){
         prior <- after_counts[[clause$anchor]]
-        if( is.null(prior) ) prior <- 0L
+        if( is.null(prior) ) {
+          prior <- 0L
+        }
         order <- append(order, insert, after = anchor_index + prior)
         after_counts[[clause$anchor]] <- prior + length(insert)
       }else{
@@ -1182,9 +1184,9 @@ merge_role_spec <- function(existing, supplied, position = NULL,
     )
   }else{
     new_positions <- Filter(length, lapply(supplied$positions, function(item){
-      value <- setdiff(item, existing$nodes)
+      new_nodes <- setdiff(item, existing$nodes)
 
-      return(value)
+      return(new_nodes)
     }))
     positions <- c(existing$positions, new_positions)
   }
@@ -1194,12 +1196,12 @@ merge_role_spec <- function(existing, supplied, position = NULL,
   for(side in c("incoming", "outgoing")){
     flag <- paste0(side, "_marked")
     if( isTRUE(supplied[[flag]]) ){
-      values <- if( isTRUE(existing[[flag]]) ){
+      routed_nodes <- if( isTRUE(existing[[flag]]) ){
         union(existing[[side]], supplied[[side]])
       }else{
         supplied[[side]]
       }
-      existing[[side]] <- intersect(values, existing$nodes)
+      existing[[side]] <- intersect(routed_nodes, existing$nodes)
       existing[[flag]] <- length(existing[[side]]) > 0L
     }
   }
@@ -1234,7 +1236,7 @@ specs_after_role_operation <- function(dag, supplied, role, type,
   specs <- existing_role_specs(dag)
   specs[[role]] <- merge_role_spec(
     specs[[role]], supplied, position = position,
-    legacy_type = if( type %in% c("first", "last") ) type else NULL
+    legacy_type = if( type %in% c("first", "last") ) { type } else { NULL }
   )
 
   return(specs)
@@ -1285,7 +1287,7 @@ role_operation_edges <- function(dag, supplied, role, type,
     )
   }
   legacy <- type %in% c("first", "last")
-  planner_type <- if( legacy ) "ordered" else type
+  planner_type <- if( legacy ) { "ordered" } else { type }
   planning_specs <- specs
 
   boundary <- empty_role_edges()
@@ -1384,8 +1386,12 @@ NULL
 #' @return A cf_position object containing one placement clause.
 #' @noRd
 position_clause <- function(kind, anchor, nodes) {
-  if (!is.null(nodes))  nodes  <- as.character(nodes)
-  if (!is.null(anchor)) anchor <- as.character(anchor)[1]
+  if (!is.null(nodes))  {
+    nodes  <- as.character(nodes)
+  }
+  if (!is.null(anchor)) {
+    anchor <- as.character(anchor)[1]
+  }
   clause <- structure(list(list(kind = kind, anchor = anchor, nodes = nodes)),
                       class = "cf_position")
 
@@ -1483,9 +1489,9 @@ resolve_position <- function(position, new_nodes, spine) {
   }
 
   claimed <- unlist(lapply(clauses, function(cl) {
-    value <- cl$nodes
+    nodes <- cl$nodes
 
-    return(value)
+    return(nodes)
   }), use.names = FALSE)
   dups <- unique(claimed[duplicated(claimed)])
   if (length(dups)) {
@@ -1521,28 +1527,34 @@ resolve_position <- function(position, new_nodes, spine) {
              "' is not an existing node in this role.", call. = FALSE)
       }
       prior <- after_counts[[cl$anchor]]
-      if( is.null(prior) ) prior <- 0L
+      if( is.null(prior) ) {
+        prior <- 0L
+      }
       order <- append(order, cl$nodes,
                       after = match(cl$anchor, order) + prior)
       after_counts[[cl$anchor]] <- prior + length(cl$nodes)
     }
   }
 
-  firsts <- unlist(lapply(clauses, function(cl) if (cl$kind == "first") {
-    value <- cl$nodes
+  firsts <- unlist(lapply(clauses, function(cl){
+    if( cl$kind == "first" ){
+      nodes <- cl$nodes
 
-    return(value)
-  }else{
-    value <- NULL
-    return(invisible(value))
+      return(nodes)
+    }else{
+      nodes <- NULL
+      return(invisible(nodes))
+    }
   }), use.names = FALSE)
-  lasts  <- unlist(lapply(clauses, function(cl) if (cl$kind == "last")  {
-    value <- cl$nodes
+  lasts  <- unlist(lapply(clauses, function(cl){
+    if( cl$kind == "last" ){
+      nodes <- cl$nodes
 
-    return(value)
-  }else{
-    value <- NULL
-    return(invisible(value))
+      return(nodes)
+    }else{
+      nodes <- NULL
+      return(invisible(nodes))
+    }
   }), use.names = FALSE)
   positions <- c(firsts, order, lasts)
 

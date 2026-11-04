@@ -17,7 +17,9 @@ outcomes(x) <- value
 \item{value}{Character vector of outcome names to declare.}
 }
 \value{
-A character vector of outcome names, or \code{character(0)} if none.
+\code{outcomes()} returns a character vector of outcome names, or
+\code{character(0)} if none. The replacement function returns the updated
+dagitty object.
 }
 \description{
 \code{outcomes()} returns node names marked \verb{[outcome]} in a dagitty object,

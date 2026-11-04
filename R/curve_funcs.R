@@ -114,7 +114,9 @@ add_curves <- function(dag,
   edges <- dag_edges(dag, "add_curves()")
   directed <- edges[edges$e == "->", , drop = FALSE]
   node_names <- names(dag)
-  if( length(node_names) == 0L ) return(dag)
+  if( length(node_names) == 0L ) {
+    return(dag)
+  }
 
   coordinates <- dagitty::coordinates(dag)
   missing_coordinates <- !all(node_names %in% names(coordinates$x)) ||
@@ -135,7 +137,9 @@ add_curves <- function(dag,
       any(!is.finite(coordinates$y[node_names])) ){
     stop("add_curves(): node coordinates must be finite.", call. = FALSE)
   }
-  if( nrow(directed) == 0L ) return(dag)
+  if( nrow(directed) == 0L ) {
+    return(dag)
+  }
   if( height == 0 ){
     dag_out <- set_edge_controls(dag, empty_controls, replace = directed,
                                   caller = "add_curves()")
@@ -154,12 +158,12 @@ add_curves <- function(dag,
 
     return(matches)
   }, plan$controls)
-  controls <- if( length(curved) == 0L ) empty_controls else {
+  controls <- if( length(curved) == 0L ) { empty_controls } else {
     do.call(rbind, lapply(curved, function(control){
-      values <- data.frame(v = control$from, e = "->", w = control$to,
+      edge_control <- data.frame(v = control$from, e = "->", w = control$to,
                            x = control$control_x, y = -control$control_y)
 
-      return(values)
+      return(edge_control)
     }))
   }
   dag_out <- set_edge_controls(dag, controls, replace = directed,
@@ -202,14 +206,14 @@ checked_curve_edge_plan <- function(dag_df,
   }
   x_span <- diff(range(dag_df$x))
   y_span <- diff(range(dag_df$y))
-  x_reference <- if(x_span > 0) x_span else 2*curve_axis_gap(dag_df$y)
-  y_reference <- if(y_span > 0) y_span else curve_axis_gap(dag_df$x)/2
+  x_reference <- if(x_span > 0) { x_span } else { 2*curve_axis_gap(dag_df$y) }
+  y_reference <- if(y_span > 0) { y_span } else { curve_axis_gap(dag_df$x)/2 }
   if( any(!is.finite(c(x_reference, y_reference))) ||
       x_reference <= 0 || y_reference <= 0 ){
     fail("the requested height cannot be represented in this coordinate layout.")
   }
   lateral <- curve_is_lateral(arrow$x, arrow$xend)
-  base_height <- if(mode == "absolute") rep(height, nrow(arrow)) else {
+  base_height <- if(mode == "absolute") { rep(height, nrow(arrow)) } else {
     curve_relative_base_height(dx, dy, x_reference, y_reference,
                                 height, lateral)
   }
@@ -229,7 +233,7 @@ checked_curve_edge_plan <- function(dag_df,
       matches <- TRUE
       return(matches)
     }
-    axis <- if(control$lateral) "x" else "y"
+    axis <- if(control$lateral) { "x" } else { "y" }
     endpoints <- plan$nodes[match(c(control$from, control$to), plan$nodes$name), axis]
     midpoint <- endpoints[1L]/2+endpoints[2L]/2
     matches <- control[[paste0("control_", axis)]] != midpoint
@@ -309,26 +313,30 @@ curve_edge_plan <- function(df, height = 0.2, mode = "relative",
   rownames(xy) <- nodes$name
   edges <- df[!is.na(df$direction) & as.character(df$direction) == "->", , drop = FALSE]
   n <- nrow(edges)
-  if( !n ) return(initial)
+  if( !n ) {
+    return(initial)
+  }
   # Clearance is measured in normalised graph coordinates.
   nearest <- as.matrix(stats::dist(xy))
   diag(nearest) <- Inf
   margin <- min(.1, .35 * stats::median(apply(nearest, 1, min)))
-  if( !is.finite(margin) || margin <= 0 ) margin <- .05
+  if( !is.finite(margin) || margin <= 0 ) {
+    margin <- .05
+  }
   states <- lapply(seq_len(n), function(i){
     control <- initial$controls[[i]]
     a <- xy[as.character(edges$name[i]),]
     b <- xy[as.character(edges$to[i]),]
-    values <- list(a = unname(a), b = unname(b), from = as.character(edges$name[i]), to = as.character(edges$to[i]),
-                   lateral = control$lateral, h = control$height / scale[if( control$lateral ) 1L else 2L],
+    state <- list(a = unname(a), b = unname(b), from = as.character(edges$name[i]), to = as.character(edges$to[i]),
+                   lateral = control$lateral, h = control$height / scale[if( control$lateral ) { 1L } else { 2L }],
                    sign = control$sign)
 
-    return(values)
+    return(state)
   })
   coordinates <- function(s, t = seq(0, 1, length.out = 33L)){ # Sample one candidate path in normalised coordinates
     out <- (1 - t) %o% s$a + t %o% s$b
-    axis <- if( s$lateral ) 1L else 2L
-    out[, axis] <- out[, axis] + (if( s$lateral ) -1 else 1) * s$sign * 4 * s$h * t * (1 - t)
+    axis <- if( s$lateral ) { 1L } else { 2L }
+    out[, axis] <- out[, axis] + (if( s$lateral ) { -1 } else { 1 }) * s$sign * 4 * s$h * t * (1 - t)
 
     return(out)
   }
@@ -336,13 +344,13 @@ curve_edge_plan <- function(df, height = 0.2, mode = "relative",
   cache_geometry <- function(s){ # Cache sampled points and bounding boxes for one candidate curve
     next_geometry_id <<- next_geometry_id + 1L
     s$geometry_id <- next_geometry_id
-    s$points <- if( !is.null(s$points) ) s$points else coordinates(s, seq(0, 1, length.out = 33L))
+    s$points <- if( !is.null(s$points) ) { s$points } else { coordinates(s, seq(0, 1, length.out = 33L)) }
     p <- s$points
     s$low <- c(min(p[, 1]), min(p[, 2]))
     s$high <- c(max(p[, 1]), max(p[, 2]))
     if( !is.null(s[["h"]]) && s[["h"]] > 0 ){
-      axis <- if( s$lateral ) 1L else 2L
-      bend <- (if( s$lateral ) -1 else 1) * s$sign * s$h
+      axis <- if( s$lateral ) { 1L } else { 2L }
+      bend <- (if( s$lateral ) { -1 } else { 1 }) * s$sign * s$h
       t <- .5 + (s$b[axis] - s$a[axis]) / (8 * bend)
       if( t > 0 && t < 1 ){
         extreme <- coordinates(s, t)[1,]
@@ -368,9 +376,9 @@ curve_edge_plan <- function(df, height = 0.2, mode = "relative",
     distances <- apply(others, 1, function(point){
       w <- matrix(point, nrow(a), 2, byrow = TRUE) - a
       t <- pmax(0, pmin(1, rowSums(w * v) / pmax(vv, 1e-30)))
-      value <- min(sqrt(rowSums((w - v * t)^2)))
+      distance <- min(sqrt(rowSums((w - v * t)^2)))
 
-      return(value)
+      return(distance)
     })
     score <- c(sum(distances < margin - 1e-8), sum((pmax(0, margin - distances) / margin)^2))
 
@@ -463,10 +471,12 @@ curve_edge_plan <- function(df, height = 0.2, mode = "relative",
       contact <- TRUE
       return(contact)
     }
-    if( abs(a) < 1e-10 ) roots <- if( abs(b) < 1e-10 ) numeric() else -c / b else{
+    if( abs(a) < 1e-10 ) {
+      roots <- if( abs(b) < 1e-10 ) { numeric() } else { -c / b }
+    } else{
       discriminant <- b * b - 4 * a * c
       tolerance <- 1e-12 * (b * b + abs(4 * a * c))
-      roots <- if( discriminant < -tolerance ) numeric() else (-b + c(-1, 1) * sqrt(max(0, discriminant))) / (2 * a)
+      roots <- if( discriminant < -tolerance ) { numeric() } else { (-b + c(-1, 1) * sqrt(max(0, discriminant))) / (2 * a) }
     }
     roots <- roots[roots >= -1e-8 & roots <= 1 + 1e-8]
     roots <- roots[abs(a * roots^2 + b * roots + c) <= 1e-9 * max(abs(c(a, b, c)), 1e-12)]
@@ -481,10 +491,15 @@ curve_edge_plan <- function(df, height = 0.2, mode = "relative",
   }
   contact_cache <- new.env(hash = TRUE, parent = emptyenv())
   cached_contact <- function(s, r){
-    key <- if( s$lateral || r$lateral ) paste(s$geometry_id, r$geometry_id, sep = ":") else
+    key <- if( s$lateral || r$lateral ){
+      paste(s$geometry_id, r$geometry_id, sep = ":")
+    }else{
       paste(min(s$geometry_id, r$geometry_id), max(s$geometry_id, r$geometry_id), sep = ":")
+    }
     result <- contact_cache[[key]]
-    if( !is.null(result) ) return(result)
+    if( !is.null(result) ) {
+      return(result)
+    }
     result <- contact(s, r)
     contact_cache[[key]] <- result
 
@@ -503,30 +518,33 @@ curve_edge_plan <- function(df, height = 0.2, mode = "relative",
   other <- other_paths
   fixed <- lapply(split(other, other$edge_id), function(path){
     points <- sweep(sweep(as.matrix(path[, c("x", "y")]), 2, origin), 2, scale, "/")
-    value <- cache_geometry(list(from = path$from[1], to = path$to[1], lateral = TRUE, points = points))
+    geometry <- cache_geometry(list(from = path$from[1], to = path$to[1], lateral = TRUE, points = points))
 
-    return(value)
+    return(geometry)
   })
   contacts <- function(s, index) {
     contacts <- sum(vapply(c(states[-index], fixed), function(r) {
-    value <- cached_contact(s, r)
+      intersects <- cached_contact(s, r)
 
-    return(value)
-  }, logical(1)))
+      return(intersects)
+    }, logical(1)))
 
     return(contacts)
   }
   candidates <- lapply(seq_len(n), function(i){
     state <- states[[i]]
     v <- state$b - state$a
-    bend_axis <- if( state$lateral ) 1L else 2L
+    bend_axis <- if( state$lateral ) { 1L } else { 2L }
     delta <- v * scale
-    base <- if( mode == "absolute" ) height / scale[bend_axis] else
+    base <- if( mode == "absolute" ){
+      height / scale[bend_axis]
+    }else{
       curve_relative_base_height(delta[1L], delta[2L], scale[1L], scale[2L],
                                   height, state$lateral) / scale[bend_axis]
+    }
     if( sum(v * v) < 1e-24 || base == 0 ) {
-      values <- list(state)
-      return(values)
+      unchanged_states <- list(state)
+      return(unchanged_states)
     }
     options <- list(state)
     straight <- state
@@ -538,12 +556,12 @@ curve_edge_plan <- function(df, height = 0.2, mode = "relative",
       s$h <- base
       options[[length(options) + 1L]] <- s
       if( mode == "relative" ){
-        axis <- if( state$lateral ) 2L else 1L
+        axis <- if( state$lateral ) { 2L } else { 1L }
         dep <- 3L - axis
         t <- (xy[, axis] - state$a[axis]) / v[axis]
         inside <- t > 1e-8 & t < 1 - 1e-8
         if( any(inside) ){
-          direction <- sign * (if( state$lateral ) -1 else 1)
+          direction <- sign * (if( state$lateral ) { -1 } else { 1 })
           # Fit above or below the node margin, allowing for the arc's slope.
           angle <- seq(0, pi, length.out = 13L)
           obstacle_axis <- as.vector(outer(xy[inside, axis], margin * cos(angle), "+"))
@@ -565,24 +583,24 @@ curve_edge_plan <- function(df, height = 0.2, mode = "relative",
 
       return(text)
     }, character(1))
-    value <- options[!duplicated(key)]
+    unique_options <- options[!duplicated(key)]
 
-    return(value)
+    return(unique_options)
   })
   candidates <- lapply(candidates, function(opts) {
-    values <- lapply(opts, cache_geometry)
+    geometries <- lapply(opts, cache_geometry)
 
-    return(values)
+    return(geometries)
   })
   states <- lapply(candidates, function(opts) {
-    value <- opts[[1L]]
+    state <- opts[[1L]]
 
-    return(value)
+    return(state)
   })
   candidate_node_scores <- lapply(candidates, function(opts) {
-    values <- lapply(opts, node_score)
+    scores <- lapply(opts, node_score)
 
-    return(values)
+    return(scores)
   })
   order_edges <- order(-abs(edges$xend - edges$x) / initial$xref, as.character(edges$name), as.character(edges$to)) # Process wider horizontal spans first
   changes <- 0L
@@ -594,15 +612,17 @@ curve_edge_plan <- function(df, height = 0.2, mode = "relative",
       current <- states[[i]]
       own_score <- node_score(current)
       current_score <- c(own_score, contacts(current, i))
-      if( current_score[1] == 0 && current_score[3] == 0 ) next
+      if( current_score[1] == 0 && current_score[3] == 0 ) {
+        next
+      }
       node_scores <- t(vapply(candidate_node_scores[[i]], identity, numeric(2)))
       node_scores[, 2] <- round(node_scores[, 2], 8)
       best <- do.call(order, as.data.frame(node_scores))[1]
       eligible <- which(node_scores[, 1] == node_scores[best, 1] & node_scores[, 2] == node_scores[best, 2])
       scores <- t(vapply(eligible, function(j){
-        values <- c(candidate_node_scores[[i]][[j]], contacts(candidates[[i]][[j]], i), candidates[[i]][[j]]$h)
+        score <- c(candidate_node_scores[[i]][[j]], contacts(candidates[[i]][[j]], i), candidates[[i]][[j]]$h)
 
-        return(values)
+        return(score)
       }, numeric(4)))
       scores[, 2] <- round(scores[, 2], 8)
       ranked <- do.call(order, as.data.frame(scores))[1]
@@ -616,19 +636,33 @@ curve_edge_plan <- function(df, height = 0.2, mode = "relative",
         changed <- TRUE
       }
     }
-    if( !changed ) break
+    if( !changed ) {
+      break
+    }
   }
   default_signs <- vapply(states, function(s) {
-    value <- s$sign
+    direction <- s$sign
 
-    return(value)
+    return(direction)
   }, numeric(1))
-  if( position == "flipped" ) for(i in seq_len(n)) states[[i]]$sign <- -states[[i]]$sign
-  if( position %in% c("over", "under") ) for(i in seq_len(n)) states[[i]]$sign <- if( position == "over" ) 1 else -1
+  if( position == "flipped" ){
+    for(i in seq_len(n)){
+      states[[i]]$sign <- -states[[i]]$sign
+    }
+  }
+  if( position %in% c("over", "under") ){
+    for(i in seq_len(n)){
+      states[[i]]$sign <- if( position == "over" ){
+        1
+      }else{
+        -1
+      }
+    }
+  }
   paths <- lapply(seq_len(n), function(i){
     s <- states[[i]]
     # Intermediate straight-path samples retain short capped arrows.
-    t <- seq(0, 1, length.out = if( s$h > 0 ) 201L else 17L)
+    t <- seq(0, 1, length.out = if( s$h > 0 ) { 201L } else { 17L })
     points <- sweep(sweep(coordinates(s, t), 2, scale, "*"), 2, origin, "+")
     p <- edges[rep(i, length(t)), , drop = FALSE]
     p$x <- points[, 1]
@@ -645,19 +679,22 @@ curve_edge_plan <- function(df, height = 0.2, mode = "relative",
   })
   controls <- lapply(seq_len(n), function(i){
     s <- states[[i]]
-    axis <- if( s$lateral ) 1L else 2L
+    axis <- if( s$lateral ) { 1L } else { 2L }
     delta <- (s$b - s$a) * scale
-    base <- if( mode == "absolute" ) height else
+    base <- if( mode == "absolute" ){
+      height
+    }else{
       curve_relative_base_height(delta[1L], delta[2L], scale[1L], scale[2L],
                                   height, s$lateral)
+    }
     cp <- (s$a + s$b) / 2
-    cp[axis] <- cp[axis] + (if( s$lateral ) -1 else 1) * 2 * s$sign * s$h
+    cp[axis] <- cp[axis] + (if( s$lateral ) { -1 } else { 1 }) * 2 * s$sign * s$h
     cp <- cp * scale + origin
-    values <- list(edge_id = paste(s$from, s$to, sep = "->"), from = s$from, to = s$to, curved = s$h > 0,
-                   height = s$h * scale[axis], base_height = base, height_multiplier = if( base > 0 ) s$h * scale[axis] / base else 0,
+    edge_control <- list(edge_id = paste(s$from, s$to, sep = "->"), from = s$from, to = s$to, curved = s$h > 0,
+                   height = s$h * scale[axis], base_height = base, height_multiplier = if( base > 0 ) { s$h * scale[axis] / base } else { 0 },
                    control_x = cp[1], control_y = cp[2], sign = s$sign, default_sign = default_signs[i], lateral = s$lateral)
 
-    return(values)
+    return(edge_control)
   })
   initial$paths <- do.call(rbind, paths)
   initial$controls <- controls
@@ -722,8 +759,8 @@ initial_curve_plan <- function(df, height, mode, position){
   nodes$name <- as.character(nodes$name)
   X <- diff(range(nodes$x))
   Y <- diff(range(nodes$y))
-  xref <- if( X > 0 ) X else 2 * curve_axis_gap(nodes$y)
-  yref <- if( Y > 0 ) Y else curve_axis_gap(nodes$x) / 2
+  xref <- if( X > 0 ) { X } else { 2 * curve_axis_gap(nodes$y) }
+  yref <- if( Y > 0 ) { Y } else { curve_axis_gap(nodes$x) / 2 }
   edges <- df[!is.na(df$direction) & as.character(df$direction) == "->", , drop = FALSE]
   specifications <- vector("list", nrow(edges))
   errors <- character()
@@ -747,18 +784,27 @@ initial_curve_plan <- function(df, height, mode, position){
       perpendicular <- (normalised[1] * offsets[, 2] - normalised[2] * offsets[, 1]) / sqrt(length_squared)
       obstruction <- any(projections > 1e-10 & projections < 1 - 1e-10 & abs(perpendicular) < 1e-9)
     }
-    h <- if( !obstruction ) 0 else if( mode == "absolute" ) height else
+    h <- if( !obstruction ){
+      0
+    }else if( mode == "absolute" ){
+      height
+    }else{
       curve_relative_base_height(v[1L], v[2L], xref, yref, height, lateral)
+    }
     specifications[[i]] <- list(index = i, key = key, from = as.character(e$name), to = as.character(e$to),
       a = a, b = b, v = v, lateral = lateral, obstruction = obstruction, h = h, length = sqrt(length_squared))
   }
   path_for <- function(spec, sign, n = 201L){
-    t <- if( spec$h > 0 ) seq(0, 1, length.out = n) else c(0, 1)
+    t <- if( spec$h > 0 ) { seq(0, 1, length.out = n) } else { c(0, 1) }
     path <- edges[rep(spec$index, length(t)), , drop = FALSE]
     path$x <- spec$a[1] + t * spec$v[1]
     path$y <- spec$a[2] + t * spec$v[2]
-    if( spec$lateral ) path$x <- path$x - sign * 4 * spec$h * t * (1 - t)
-    else path$y <- path$y + sign * 4 * spec$h * t * (1 - t)
+    if( spec$lateral ) {
+      path$x <- path$x - sign * 4 * spec$h * t * (1 - t)
+    }
+    else {
+      path$y <- path$y + sign * 4 * spec$h * t * (1 - t)
+    }
     path$index <- t
     path$.edge_group <- spec$index
     path$edge_id <- paste("directed", spec$from, spec$to, sep = "\036")
@@ -773,7 +819,9 @@ initial_curve_plan <- function(df, height, mode, position){
   tied <- rep(FALSE, length(signs))
   for(i in seq_along(specifications)){
     spec <- specifications[[i]]
-    if( !spec$obstruction ) next
+    if( !spec$obstruction ) {
+      next
+    }
     others <- nodes[!nodes$name %in% c(spec$from, spec$to),]
     others$x <- others$x / xref
     others$y <- others$y / yref
@@ -781,38 +829,44 @@ initial_curve_plan <- function(df, height, mode, position){
       path <- path_for(spec, sign)
       path$x <- path$x / xref
       path$y <- path$y / yref
-      value <- min(vapply(seq_len(nrow(others)), function(j) {
-        value <- curve_point_path_distance(c(others$x[j], others$y[j]), path)
+      clearance <- min(vapply(seq_len(nrow(others)), function(j) {
+        distance <- curve_point_path_distance(c(others$x[j], others$y[j]), path)
 
-        return(value)
+        return(distance)
       }, numeric(1)))
 
-      return(value)
+      return(clearance)
     }, numeric(1))
     tied[i] <- abs(diff(scores)) <= 1e-9
-    signs[i] <- if( scores[1] >= scores[2] ) 1L else -1L
+    signs[i] <- if( scores[1] >= scores[2] ) { 1L } else { -1L }
   }
   # Retain deterministic alternation for tied, collinear overlapping routes.
   free <- which(tied)
   adjacency <- matrix(FALSE, length(signs), length(signs))
-  if( length(free) > 1 ) for(aa in seq_len(length(free) - 1L)) for(bb in seq.int(aa + 1L, length(free))){
-    i <- free[aa]
-    j <- free[bb]
-    first <- specifications[[i]]
-    second <- specifications[[j]]
-    a <- first$a / c(xref, yref)
-    u <- first$v / c(xref, yref)
-    u <- u / sqrt(sum(u * u))
-    c0 <- second$a / c(xref, yref)
-    d0 <- second$b / c(xref, yref)
-    cross <- function(z) {
-      cross_product <- u[1] * z[2] - u[2] * z[1]
+  if( length(free) > 1 ){
+    for(aa in seq_len(length(free) - 1L)){
+      for(bb in seq.int(aa + 1L, length(free))){
+        i <- free[aa]
+        j <- free[bb]
+        first <- specifications[[i]]
+        second <- specifications[[j]]
+        a <- first$a / c(xref, yref)
+        u <- first$v / c(xref, yref)
+        u <- u / sqrt(sum(u * u))
+        c0 <- second$a / c(xref, yref)
+        d0 <- second$b / c(xref, yref)
+        cross <- function(z) {
+          cross_product <- u[1] * z[2] - u[2] * z[1]
 
-      return(cross_product)
-    }
-    if( abs(cross(c0 - a)) < 1e-9 && abs(cross(d0 - a)) < 1e-9 ){
-      interval <- sort(c(sum((c0 - a) * u), sum((d0 - a) * u)))
-      if( min(first$length, interval[2]) - max(0, interval[1]) > 1e-9 ) adjacency[i, j] <- adjacency[j, i] <- TRUE
+          return(cross_product)
+        }
+        if( abs(cross(c0 - a)) < 1e-9 && abs(cross(d0 - a)) < 1e-9 ){
+          interval <- sort(c(sum((c0 - a) * u), sum((d0 - a) * u)))
+          if( min(first$length, interval[2]) - max(0, interval[1]) > 1e-9 ){
+            adjacency[i, j] <- adjacency[j, i] <- TRUE
+          }
+        }
+      }
     }
   }
   unassigned <- free
@@ -827,40 +881,50 @@ initial_curve_plan <- function(df, height, mode, position){
     unassigned <- setdiff(unassigned, component)
     if( length(component) > 1 ){
       ranking <- order(-vapply(specifications[component], function(s) {
-        value <- s$length
+        span <- s$length
 
-        return(value)
+        return(span)
       }, numeric(1)),
                        vapply(specifications[component], function(s) {
-                         value <- s$key
+                         key <- s$key
 
-                         return(value)
+                         return(key)
                        }, character(1)))
       signs[component[ranking]] <- rep(c(-1L, 1L), length.out = length(component))
     }
   }
   default_signs <- signs
-  if( position == "flipped" ) signs <- -signs
-  if( position == "over" ) signs[] <- 1L
-  if( position == "under" ) signs[] <- -1L
-  paths <- if( length(specifications) ) do.call(rbind, lapply(seq_along(specifications), function(i) {
-    value <- path_for(specifications[[i]], signs[i])
+  if( position == "flipped" ) {
+    signs <- -signs
+  }
+  if( position == "over" ) {
+    signs[] <- 1L
+  }
+  if( position == "under" ) {
+    signs[] <- -1L
+  }
+  paths <- if( length(specifications) ) { do.call(rbind, lapply(seq_along(specifications), function(i) {
+    path <- path_for(specifications[[i]], signs[i])
 
-    return(value)
-  })) else NULL
+    return(path)
+  })) } else { NULL }
   controls <- lapply(seq_along(specifications), function(i){
     spec <- specifications[[i]]
     control <- (spec$a + spec$b) / 2
-    if( spec$lateral ) control[1] <- control[1] - 2 * signs[i] * spec$h
-    else control[2] <- control[2] + 2 * signs[i] * spec$h
-    values <- list(edge_id = spec$key, from = spec$from, to = spec$to, curved = spec$h > 0, height = spec$h,
+    if( spec$lateral ) {
+      control[1] <- control[1] - 2 * signs[i] * spec$h
+    }
+    else {
+      control[2] <- control[2] + 2 * signs[i] * spec$h
+    }
+    edge_control <- list(edge_id = spec$key, from = spec$from, to = spec$to, curved = spec$h > 0, height = spec$h,
                    control_x = control[1], control_y = control[2], sign = signs[i], default_sign = default_signs[i], lateral = spec$lateral)
 
-    return(values)
+    return(edge_control)
   })
-  anchors <- if( X == 0 || Y == 0 ) data.frame(
-    x = if( X == 0 ) mean(range(nodes$x)) + c(-.5, .5) * xref else range(nodes$x),
-    y = if( Y == 0 ) mean(range(nodes$y)) + c(-.5, .5) * yref else range(nodes$y)) else NULL
+  anchors <- if( X == 0 || Y == 0 ) { data.frame(
+    x = if( X == 0 ) { mean(range(nodes$x)) + c(-.5, .5) * xref } else { range(nodes$x) },
+    y = if( Y == 0 ) { mean(range(nodes$y)) + c(-.5, .5) * yref } else { range(nodes$y) }) } else { NULL }
   plan <- list(paths = paths, controls = controls, nodes = nodes, anchors = anchors, errors = errors,
                xref = xref, yref = yref, X = X, Y = Y, specifications = specifications)
 

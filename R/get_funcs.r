@@ -111,7 +111,9 @@ get_roles <- function(dag, multiple_roles = FALSE){
 #' @noRd
 classify_node_roles <- function(dag, multiple_roles = FALSE, .cache = NULL){
   # Reuse structural reads within a public operation.
-  if( is.null(.cache) ) .cache <- graph_cache()
+  if( is.null(.cache) ) {
+    .cache <- graph_cache()
+  }
 
   ## classify edgeless nodes by their declared status ##
   if( nrow( as.data.frame( cached_edges(dag, .cache) ) ) == 0L ){
@@ -120,14 +122,14 @@ classify_node_roles <- function(dag, multiple_roles = FALSE, .cache = NULL){
     role_of    <- ifelse(all_nodes %in% unobserved(dag), "latent",
                   ifelse(all_nodes %in% treatments(dag), "treatment",
                   ifelse(all_nodes %in% get_outcome_names(dag),  "outcome", "observed")))
-    roles_list <- lapply(node_roles, function(r){ v <- all_nodes[role_of == r]; if( length(v) > 0L ) {
+    roles_list <- lapply(node_roles, function(role){
+      nodes <- all_nodes[role_of == role]
+      if( length(nodes) == 0L ) {
+        nodes <- NA
+      }
 
-      return(v)
-    } else {
-      value <- NA
-
-      return(value)
-    } })
+      return(nodes)
+    })
     names(roles_list) <- node_roles
     return(roles_list)
   }
@@ -206,14 +208,13 @@ classify_node_roles <- function(dag, multiple_roles = FALSE, .cache = NULL){
 
   names(roles_list) <- node_roles # assign node roles as list element names
 
-  roles_list <- lapply( roles_list, function(x) if( identical(x, character(0)) ) {
-    value <- NA
+  roles_list <- lapply(roles_list, function(nodes){
+    if( identical(nodes, character(0)) ) {
+      nodes <- NA
+    }
 
-    return(value)
-  } else {
-
-    return(x)
-  } )
+    return(nodes)
+  })
   return(roles_list)
 }
 
@@ -243,7 +244,8 @@ get_nodes <- function(dag){
     role_of   <- ifelse(all_nodes %in% unobserved(dag), "latent",
                  ifelse(all_nodes %in% treatments(dag), "treatment",
                  ifelse(all_nodes %in% get_outcome_names(dag),  "outcome", "observed")))
-    out <- as.list(role_of); names(out) <- all_nodes
+    out <- as.list(role_of)
+    names(out) <- all_nodes
     return(out)
   }
 
@@ -330,7 +332,8 @@ get_nodes <- function(dag){
     iso_role <- ifelse(isolated %in% unobserved(dag), "latent",
                 ifelse(isolated %in% treatments(dag), "treatment",
                 ifelse(isolated %in% get_outcome_names(dag),  "outcome", "observed")))
-    iso_list <- as.list(iso_role); names(iso_list) <- isolated
+    iso_list <- as.list(iso_role)
+    names(iso_list) <- isolated
     edges_list <- c(edges_list, iso_list)
   }
 
@@ -392,7 +395,7 @@ get_structure <- function(dag, max_paths = 100L, max_length = Inf){
     attr(paths, "max_paths") <- max_paths
     attr(paths, "max_length") <- max_length
 
-    values <- list(
+    node_structure <- list(
       role = node_roles[[focal]],
       parents = adjacency$parents[[focal]],
       children = adjacency$children[[focal]],
@@ -411,7 +414,7 @@ get_structure <- function(dag, max_paths = 100L, max_length = Inf){
       paths = paths
     )
 
-    return(values)
+    return(node_structure)
   })
   names(result) <- node_names
   class(result) <- c("causaliflower_structure", "list")
@@ -553,25 +556,20 @@ get_diff_roles <- function(dag1,
   roles <- get_roles(dag1)
   roles_y <- get_roles(dag2)
 
-  diff_list <- list()
-
   diff_list <- lapply(1:length(roles), function(x){
-
-    diff_list[[x]] <- roles[[x]][ !roles[[x]] %in% roles_y[[x]] ]
+    nodes <- roles[[x]][ !roles[[x]] %in% roles_y[[x]] ]
 
     if( compare_all == TRUE){
-      diff_list[[x]] <- c( diff_list[[x]], roles_y[[x]][ !roles_y[[x]] %in% roles[[x]] ] )
+      nodes <- c( nodes, roles_y[[x]][ !roles_y[[x]] %in% roles[[x]] ] )
     }
     if( nodes_in_common == TRUE){
       dag_names <- names(dag1)
       dag2_names <- names(dag2)
-      diff_list[[x]] <- diff_list[[x]][ diff_list[[x]] %in% dag_names &
-                                          diff_list[[x]] %in% dag2_names ]
+      nodes <- nodes[ nodes %in% dag_names & nodes %in% dag2_names ]
     }
-    diff_list[[x]] <- diff_list[[x]][ complete.cases(diff_list[[x]]) ] # drop NA placeholders from empty role buckets
-    value <- diff_list[[x]]
+    nodes <- nodes[ complete.cases(nodes) ] # drop NA placeholders from empty role buckets
 
-    return(value)
+    return(nodes)
   })
 
   names(diff_list) <- names(roles)
@@ -620,9 +618,9 @@ get_ancestor_edges <- function(dag){
     return(edges_out)
   }
   edges_list <- lapply(unique_ancestors, function(node){
-    value <- edges[ edges[["v"]] == node, ]
+    node_edges <- edges[ edges[["v"]] == node, ]
 
-    return(value)
+    return(node_edges)
   })
   names(edges_list) <- unique_ancestors
 
@@ -1183,7 +1181,9 @@ inspection_nodes <- function(dag, nodes, caller){
   dag_graph_type(dag)
   graph_nodes <- get_node_names(dag)
 
-  if( is.null(nodes) ) return(graph_nodes)
+  if( is.null(nodes) ) {
+    return(graph_nodes)
+  }
   if( !is.character(nodes) || anyNA(nodes) || any(!nzchar(nodes)) ){
     stop(caller, ": 'nodes' must contain non-missing, non-empty node names.",
          call. = FALSE)
@@ -1245,14 +1245,14 @@ directed_adjacency <- function(edges, node_names){
   }
 
   parents <- lapply(node_names, function(node){
-    value <- in_node_order(directed$v[directed$w == node])
+    parents <- in_node_order(directed$v[directed$w == node])
 
-    return(value)
+    return(parents)
   })
   children <- lapply(node_names, function(node){
-    value <- in_node_order(directed$w[directed$v == node])
+    children <- in_node_order(directed$w[directed$v == node])
 
-    return(value)
+    return(children)
   })
   names(parents) <- node_names
   names(children) <- node_names
@@ -1304,7 +1304,9 @@ enumerate_maximal_paths <- function(focal, adjacency, direction,
       next
     }
 
-    if( length(next_nodes) == 0L ) next
+    if( length(next_nodes) == 0L ) {
+      next
+    }
 
     ## reverse stack insertion to visit paths in graph node order ##
     for( next_node in rev(next_nodes) ){
@@ -1405,7 +1407,7 @@ focal_path_index <- function(focal, node_names, incoming, outgoing,
     })
     any_other <- c(incoming_other, outgoing_other)
 
-    values <- list(
+    node_paths <- list(
       incoming = incoming_other,
       outgoing = outgoing_other,
       starts_at = subset_paths(any_other,
@@ -1422,7 +1424,7 @@ focal_path_index <- function(focal, node_names, incoming, outgoing,
       any = any_other
     )
 
-    return(values)
+    return(node_paths)
   })
   names(index) <- other_nodes
   class(index) <- c("causaliflower_path_index", "list")
@@ -1472,12 +1474,12 @@ paths_from_edges <- function(edges, node_names, focal_nodes,
       list()
     }
 
-    value <- focal_path_index(
+    path_index <- focal_path_index(
       focal, node_names, incoming_paths, outgoing_paths,
       list(incoming = incoming$truncated, outgoing = outgoing$truncated)
     )
 
-    return(value)
+    return(path_index)
   })
   names(result) <- focal_nodes
   class(result) <- c("causaliflower_paths", "list")
@@ -1630,7 +1632,9 @@ print.causaliflower_paths <- function(x, ...){
       attr(focal_paths, "truncated"), attr(x, "max_paths"),
       attr(x, "max_length")
     )
-    if( focal != tail(names(x), 1L) ) cat("\n")
+    if( focal != tail(names(x), 1L) ) {
+      cat("\n")
+    }
   }
 
   return(invisible(x))
@@ -1673,9 +1677,9 @@ get_node_edges <- function(dag, nodes = NULL, direction = "any"){
     }else{
       edges$v == focal | edges$w == focal
     }
-    value <- edges[keep, c("v", "e", "w"), with = FALSE]
+    node_edges <- edges[keep, c("v", "e", "w"), with = FALSE]
 
-    return(value)
+    return(node_edges)
   })
   names(result) <- focal_nodes
   return(result)
@@ -1698,7 +1702,9 @@ directed_distances <- function(focal, adjacency){
     current_distance <- current_distance + 1L
     candidates <- unique(unlist(adjacency[frontier], use.names = FALSE))
     candidates <- candidates[!candidates %in% names(distance)]
-    if( length(candidates) == 0L ) break
+    if( length(candidates) == 0L ) {
+      break
+    }
     distance[candidates] <- current_distance
     frontier <- candidates
   }
@@ -1727,13 +1733,13 @@ distance_path_groups <- function(distances, paths, node_names){
     members <- node_names[node_names %in%
       names(distances)[as.integer(distances) == distance]]
     keys <- lapply(members, function(node){
-      value <- names(paths)[vapply(paths, function(path) {
+      path_keys <- names(paths)[vapply(paths, function(path) {
         matches <- node %in% path
 
         return(matches)
       }, logical(1L))]
 
-      return(value)
+      return(path_keys)
     })
     names(keys) <- members
 
@@ -1814,13 +1820,13 @@ print.causaliflower_structure <- function(x, ...){
   }
 
   print_values <- function(label, values){
-    value <- cat(label, ": ", if( length(values) > 0L ){
+    printed <- cat(label, ": ", if( length(values) > 0L ){
                paste(values, collapse = ", ")
              }else{
                "None"
              }, "\n", sep = "")
 
-    return(invisible(value))
+    return(invisible(printed))
   }
 
   for( focal in names(x) ){
@@ -1839,7 +1845,9 @@ print.causaliflower_structure <- function(x, ...){
       attr(node$paths, "truncated"), attr(node$paths, "max_paths"),
       attr(node$paths, "max_length")
     )
-    if( focal != tail(names(x), 1L) ) cat("\n")
+    if( focal != tail(names(x), 1L) ) {
+      cat("\n")
+    }
   }
 
   return(invisible(x))

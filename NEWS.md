@@ -1,5 +1,11 @@
 # causaliflower 0.0.2
 
+- Reworked internal role grouping for readability, with the same results.
+- Expanded the readability cleanup across construction, copying, routing,
+  layout, curves and identification: descriptive local names, braced
+  conditions and explicit callback returns, preserving existing behaviour.
+- Clarified the outcome replacement return value and documented helper placement.
+
 - Adds `collapse_nodes()` to marginalise named nodes, replacing their paths
   with directed or bidirected edges as required by the graph.
 - Adds `merge_nodes()` to combine an explicitly selected group into one named
