@@ -41,16 +41,24 @@ cross_edges <- function(ancestors, descendants, e) {
 connect_in_order <- function(order, new_nodes, type, e) {
   n <- length(order)
   empty <- data.table::data.table(ancestor = character(0), edge = character(0), descendant = character(0))
-  if (n < 2L) return(empty)
+  if (n < 2L) {
+    return(empty)
+  }
   if (type == "chain") {
-    i <- seq_len(n - 1L); a <- order[i]; b <- order[i + 1L]
+    i <- seq_len(n - 1L)
+    a <- order[i]
+    b <- order[i + 1L]
   } else {
     g <- which(upper.tri(matrix(0L, n, n)), arr.ind = TRUE)  # row < col -> earlier, later
-    a <- order[g[, "row"]]; b <- order[g[, "col"]]
+    a <- order[g[, "row"]]
+    b <- order[g[, "col"]]
   }
   keep <- (a %in% new_nodes) | (b %in% new_nodes)             # only edges involving a new node
-  a <- a[keep]; b <- b[keep]
-  if (length(a) == 0L) return(empty)
+  a <- a[keep]
+  b <- b[keep]
+  if (length(a) == 0L) {
+    return(empty)
+  }
   edges <- data.table::data.table(ancestor = a, edge = e, descendant = b)
 
   return(edges)
@@ -142,28 +150,30 @@ draw_iv_edges <- function(type,
 
       instrumental_list <- suppressWarnings( lapply( seq_along(instrumental_variables), function(x){
 
-        value <- (instrumental_list[x] <- lapply(seq_along( instrumental_variables[[x]][[2]] ), function(y){
+        target_edges <- lapply(seq_along( instrumental_variables[[x]][[2]] ), function(y){
 
-          values <- list( c( ancestor = instrumental_variables[[x]][[1]], edge = e, descendant = instrumental_variables[[x]][[2]][[y]] ) )
+          instrument_edges <- list( c( ancestor = instrumental_variables[[x]][[1]], edge = e, descendant = instrumental_variables[[x]][[2]][[y]] ) )
 
-          return(values)
+          return(instrument_edges)
 
-        } ))
+        })
 
-        return(invisible(value))
+        return(invisible(target_edges))
 
       } ) )
 
       instrumental_list <- Filter(Negate(anyNA), unlist(instrumental_list, recursive = FALSE))
-      if( length(instrumental_list) == 0L ) return(empty)
+      if( length(instrumental_list) == 0L ) {
+        return(empty)
+      }
       instrumental_df <- as.data.table( do.call( rbind, unlist(instrumental_list, recursive = FALSE) ) )
 
     }else{
 
       instrumental_vec <- as.vector( unlist( lapply( instrumental_variables, function(x) if( identical( x, character(0) ) ) {
-        value <- NA_character_
+        instrument <- NA_character_
 
-        return(value)
+        return(instrument)
       } else {
 
         return(x)
@@ -171,24 +181,26 @@ draw_iv_edges <- function(type,
 
       if( any( type == "full" | type == "saturated" ) ){
 
-      # connect treatments
-      instrumental_list <- suppressWarnings( lapply(seq_along(instrumental_vec), function(x){
+        # connect treatments
+        instrumental_list <- suppressWarnings( lapply(seq_along(instrumental_vec), function(x){
 
-        value <- (instrumental_list[x] <- lapply(seq_along(treatments), function(y){
+          target_edges <- lapply(seq_along(treatments), function(y){
 
-          values <- list( c( ancestor = instrumental_vec[x], edge = e, descendant = treatments[y]) )
+            instrument_edges <- list( c( ancestor = instrumental_vec[x], edge = e, descendant = treatments[y]) )
 
-          return(values)
+            return(instrument_edges)
 
-        }))
+          })
 
-        return(invisible(value))
+          return(invisible(target_edges))
 
-      }) )
+        }) )
 
-      instrumental_list <- Filter(Negate(anyNA), unlist(instrumental_list, recursive = FALSE))
-      if( length(instrumental_list) == 0L ) return(empty)
-      instrumental_df <- as.data.table( do.call( rbind, unlist(instrumental_list, recursive = FALSE) ) )
+        instrumental_list <- Filter(Negate(anyNA), unlist(instrumental_list, recursive = FALSE))
+        if( length(instrumental_list) == 0L ) {
+          return(empty)
+        }
+        instrumental_df <- as.data.table( do.call( rbind, unlist(instrumental_list, recursive = FALSE) ) )
 
       }else{
 
@@ -199,27 +211,29 @@ draw_iv_edges <- function(type,
 
           if( x <= len_trt ){
 
-            value <- (instrumental_list[x] <- list( c( ancestor = instrumental_vec[x], edge = e, descendant = treatments[x]) ))
+            instrument_edges <- list( c( ancestor = instrumental_vec[x], edge = e, descendant = treatments[x]) )
 
-            return(invisible(value))
+            return(invisible(instrument_edges))
 
-            }else{
+          }else{
 
-            value <- (instrumental_list[x] <- list( c( ancestor = instrumental_vec[x], edge = e, descendant = treatments[1]) ))
+            instrument_edges <- list( c( ancestor = instrumental_vec[x], edge = e, descendant = treatments[1]) )
 
-            return(invisible(value))
+            return(invisible(instrument_edges))
 
-            }
+          }
 
-          } ) )
+        } ) )
 
-        }
+      }
 
-        instrumental_list <- Filter(Negate(anyNA), unlist(instrumental_list, recursive = FALSE))
-        if( length(instrumental_list) == 0L ) return(empty)
-        instrumental_df <- as.data.table( do.call( rbind, instrumental_list ) )
+      instrumental_list <- Filter(Negate(anyNA), unlist(instrumental_list, recursive = FALSE))
+      if( length(instrumental_list) == 0L ) {
+        return(empty)
+      }
+      instrumental_df <- as.data.table( do.call( rbind, instrumental_list ) )
 
-        }
+    }
 
     return( instrumental_df )
   }
@@ -317,15 +331,15 @@ connect_new_nodes <- function(dag,
     ## connect new_nodes to descendants
     node_list <- suppressWarnings( lapply(seq_along(new_nodes), function(x){
 
-      value <- (node_list[x] <- lapply(seq_along(descendants), function(y){
+      child_edges <- lapply(seq_along(descendants), function(y){
 
-        values <- list( c( v = new_nodes[x], e = e, w = descendants[y]) )
+        child_edges <- list( c( v = new_nodes[x], e = e, w = descendants[y]) )
 
-        return(values)
+        return(child_edges)
 
-      }))
+      })
 
-      return(invisible(value))
+      return(invisible(child_edges))
 
     }) )
 
@@ -337,15 +351,15 @@ connect_new_nodes <- function(dag,
     ## connect new_nodes to ancestors
     node_list <- suppressWarnings( lapply(seq_along(ancestors), function(x){
 
-      value <- (node_list[x] <- lapply(seq_along(new_nodes), function(y){
+      child_edges <- lapply(seq_along(new_nodes), function(y){
 
-        values <- list( c( v = ancestors[x], e = e, w = new_nodes[y]) )
+        child_edges <- list( c( v = ancestors[x], e = e, w = new_nodes[y]) )
 
-        return(values)
+        return(child_edges)
 
-      }))
+      })
 
-      return(invisible(value))
+      return(invisible(child_edges))
 
     }) )
 

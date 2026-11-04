@@ -106,8 +106,10 @@ topological_rank <- function(parents){
 #' @noRd
 feedback_arcs <- function( node_names, from, to ){
   n <- length( node_names )
-  if( n == 0L || length( from ) == 0L ){ arcs <- integer(0)
-  return(arcs) }
+  if( n == 0L || length( from ) == 0L ){
+    arcs <- integer(0)
+    return(arcs)
+  }
   idx_by_node <- split( seq_along(from), factor(from, levels = node_names) )
   color <- stats::setNames( rep(0L, n), node_names )   # 0 unseen, 1 on stack, 2 done
   back  <- integer(0)
@@ -175,7 +177,9 @@ set_coords_preserving_curves <- function(dag, coordinates, caller = "add_coords"
 write_node_coordinates <- function(dag, coordinates, caller){
   nodes <- intersect(names(coordinates$x), names(coordinates$y))
   nodes <- intersect(nodes, names(dag))
-  if( !length(nodes) ) return(dag)
+  if( !length(nodes) ) {
+    return(dag)
+  }
   if( any(!is.finite(coordinates$x[nodes]) | !is.finite(coordinates$y[nodes])) ){
     curve_layout_error(caller)
   }
@@ -186,7 +190,9 @@ write_node_coordinates <- function(dag, coordinates, caller){
   edits <- list()
   positioned <- character()
   for( block in index$blocks ){
-    if( block$kind != "node" || !block$node %in% nodes ) next
+    if( block$kind != "node" || !block$node %in% nodes ) {
+      next
+    }
     edits <- c(edits, native_pos_edits(index, block))
     retained <- any(vapply(block$fields, function(field) {
       matches <- field$key != "pos"
@@ -195,12 +201,14 @@ write_node_coordinates <- function(dag, coordinates, caller){
     }, logical(1L)))
     edits[[length(edits) + 1L]] <- list(start = index$tokens$start[block$last],
                                        end = index$tokens$start[block$last] - 1L,
-                                       text = paste0(if( retained ) "," else "", position[block$node]))
+                                       text = paste0(if( retained ) { "," } else { "" }, position[block$node]))
     positioned <- union(positioned, block$node)
   }
   for( declaration in index$declarations ){
     node <- declaration$node
-    if( !node %in% setdiff(nodes, positioned) ) next
+    if( !node %in% setdiff(nodes, positioned) ) {
+      next
+    }
     last <- index$tokens$end[declaration$token]
     edits[[length(edits) + 1L]] <- list(start = last + 1L, end = last,
                                        text = paste0(" [", position[node], "]"))
@@ -267,20 +275,28 @@ transfer_edge_controls <- function(controls, before, after, caller){
     endpoints <- c(controls$v[i], controls$w[i])
     old <- cbind(before$x[endpoints], before$y[endpoints])
     new <- cbind(after$x[endpoints], after$y[endpoints])
-    if( identical(as.numeric(old), as.numeric(new)) ) next
-    if( any(!is.finite(old)) || any(!is.finite(new)) ) curve_layout_error(caller, TRUE)
+    if( identical(as.numeric(old), as.numeric(new)) ) {
+      next
+    }
+    if( any(!is.finite(old)) || any(!is.finite(new)) ) {
+      curve_layout_error(caller, TRUE)
+    }
     old_chord <- old[2L, ] - old[1L, ]
     new_chord <- new[2L, ] - new[1L, ]
     old_length <- sqrt(sum(old_chord^2))
     new_length <- sqrt(sum(new_chord^2))
     if( !is.finite(old_length) || !is.finite(new_length) ||
-        old_length == 0 || new_length == 0 ) curve_layout_error(caller, TRUE)
+        old_length == 0 || new_length == 0 ) {
+      curve_layout_error(caller, TRUE)
+    }
     unit <- old_chord / old_length
     displacement <- c(controls$x[i], controls$y[i]) - old[1L, ]
     along <- sum(displacement * unit) / old_length
     normal <- sum(displacement * c(-unit[2L], unit[1L])) / old_length
     control <- new[1L, ] + along * new_chord + normal * c(-new_chord[2L], new_chord[1L])
-    if( any(!is.finite(control)) ) curve_layout_error(caller, TRUE)
+    if( any(!is.finite(control)) ) {
+      curve_layout_error(caller, TRUE)
+    }
     controls$x[i] <- control[1L]
     controls$y[i] <- control[2L]
   }
@@ -303,7 +319,9 @@ transfer_edge_controls <- function(controls, before, after, caller){
 copy_rename_native_nodes <- function(dag, rename_map, caller){
   unchanged <- names(rename_map) == unname(rename_map)
   rename_map <- rename_map[!unchanged]
-  if( length(rename_map) == 0L ) return(dag)
+  if( length(rename_map) == 0L ) {
+    return(dag)
+  }
 
   index <- copy_native_node_index(dag, caller)
   raw_values <- index$tokens$value[index$node_tokens]
@@ -318,13 +336,13 @@ copy_rename_native_nodes <- function(dag, rename_map, caller){
   selected <- which(decoded %in% names(rename_map))
   edits <- lapply(selected, function(i){
     token <- index$node_tokens[i]
-    values <- list(
+    edit <- list(
       start = index$tokens$start[token],
       end = index$tokens$end[token],
       text = native_layout_quote(unname(rename_map[decoded[i]]))
     )
 
-    return(values)
+    return(edit)
   })
   result <- native_layout_value(
     dag, native_layout_edits(index$text, edits)
@@ -358,7 +376,9 @@ copy_native_node_index <- function(dag, caller){
   tokens <- native_layout_tokens(text, caller)
   values <- tokens$value
   position <- which(values == "{")[1L]
-  if( is.na(position) ) curve_layout_error(caller)
+  if( is.na(position) ) {
+    curve_layout_error(caller)
+  }
   node_tokens <- integer()
 
   decode <- function(value){
@@ -371,12 +391,12 @@ copy_native_node_index <- function(dag, caller){
   }
   record <- function(endpoint){
     if( !is.null(endpoint) ) {
-      value <- (node_tokens <<- c(node_tokens, endpoint$token))
+      recorded_tokens <- (node_tokens <<- c(node_tokens, endpoint$token))
 
-      return(invisible(value))
+      return(invisible(recorded_tokens))
     }else{
-      value <- NULL
-      return(invisible(value))
+      recorded_tokens <- NULL
+      return(invisible(recorded_tokens))
     }
   }
   skip_attributes <- function(){
@@ -384,10 +404,12 @@ copy_native_node_index <- function(dag, caller){
     while( position <= length(values) && values[position] != "]" ){
       position <<- position + 1L
     }
-    if( position > length(values) ) curve_layout_error(caller)
-    value <- (position <<- position + 1L)
+    if( position > length(values) ) {
+      curve_layout_error(caller)
+    }
+    next_position <- (position <<- position + 1L)
 
-    return(invisible(value))
+    return(invisible(next_position))
   }
   endpoint <- function(record_now = TRUE){
     if( values[position] == "{" ){
@@ -400,7 +422,9 @@ copy_native_node_index <- function(dag, caller){
     }
     result <- list(node = decode(values[position]), token = position)
     position <<- position + 1L
-    if( record_now ) record(result)
+    if( record_now ) {
+      record(result)
+    }
 
     return(result)
   }
@@ -426,10 +450,12 @@ copy_native_node_index <- function(dag, caller){
         skip_attributes()
       }
     }
-    if( position > length(values) ) curve_layout_error(caller)
-    value <- (position <<- position + 1L)
+    if( position > length(values) ) {
+      curve_layout_error(caller)
+    }
+    next_position <- (position <<- position + 1L)
 
-    return(invisible(value))
+    return(invisible(next_position))
   }
   body()
   node_index <- list(text = text, tokens = tokens, node_tokens = unique(node_tokens))
@@ -551,7 +577,9 @@ set_edge_controls <- function(dag, controls,
   }
   clear <- is.na(controls$x) & is.na(controls$y)
   if( any(!clear & (!is.finite(controls$x) | !is.finite(controls$y))) ||
-      any(!keys(controls) %in% keys(replace)) ) curve_layout_error(caller)
+      any(!keys(controls) %in% keys(replace)) ) {
+    curve_layout_error(caller)
+  }
   controls <- controls[!clear, , drop = FALSE]
   controls <- rbind(previous[!keys(previous) %in% keys(replace), , drop = FALSE],
                     controls[, c("v", "e", "w", "x", "y"), drop = FALSE])
@@ -559,13 +587,13 @@ set_edge_controls <- function(dag, controls,
   index <- native_layout_index(text, caller)
   edits <- unlist(lapply(index$blocks, function(block){
     if( block$kind == "edge" ) {
-      value <- native_pos_edits(index, block)
+      position_edits <- native_pos_edits(index, block)
 
-      return(value)
+      return(position_edits)
     } else {
-      values <- list()
+      position_edits <- list()
 
-      return(values)
+      return(position_edits)
     }
   }), recursive = FALSE)
   lines <- character()
@@ -587,7 +615,7 @@ set_edge_controls <- function(dag, controls,
       }, logical(1L)))
       edits[[length(edits) + 1L]] <- list(start = index$tokens$start[block$last],
                                          end = index$tokens$start[block$last] - 1L,
-                                         text = paste0(if( retained ) "," else "", pos))
+                                         text = paste0(if( retained ) { "," } else { "" }, pos))
     }else{
       lines <- c(lines, paste0(native_layout_quote(control$v), " ", control$e, " ",
                                 native_layout_quote(control$w), " [", pos, "]"))
@@ -657,7 +685,9 @@ native_pos_edits <- function(index, block){
   values <- index$tokens$value
   removed <- integer()
   for( field in block$fields ){
-    if( field$key != "pos" ) next
+    if( field$key != "pos" ) {
+      next
+    }
     removed <- c(removed, seq.int(field$first, field$last))
     if( values[field$last + 1L] == "," ){
       removed <- c(removed, field$last + 1L)
@@ -666,9 +696,9 @@ native_pos_edits <- function(index, block){
     }
   }
   edits <- lapply(unique(removed), function(i){
-    values <- list(start = index$tokens$start[i], end = index$tokens$end[i], text = "")
+    edit <- list(start = index$tokens$start[i], end = index$tokens$end[i], text = "")
 
-    return(values)
+    return(edit)
   })
 
   return(edits)
@@ -689,9 +719,9 @@ children_edge_order <- function(edges, nodes){
   edges <- normalise_edge_frame(edges)
   directed <- edges[edges$e == "->", , drop = FALSE]
   children <- Reduce(function(found, node){
-    value <- union(found, directed$w[directed$v == node])
+    children <- union(found, directed$w[directed$v == node])
 
-    return(value)
+    return(children)
   }, nodes, character())
 
   return(children)
@@ -709,9 +739,9 @@ parents_edge_order <- function(edges, nodes){
   edges <- normalise_edge_frame(edges)
   directed <- edges[edges$e == "->", , drop = FALSE]
   parents <- Reduce(function(found, node){
-    value <- union(found, directed$v[directed$w == node])
+    parents <- union(found, directed$v[directed$w == node])
 
-    return(value)
+    return(parents)
   }, nodes, character())
 
   return(parents)
@@ -746,9 +776,9 @@ graph_cache <- function() { # Create a cache for one operation on one unchanged 
 #' @noRd
 cached_edges <- function(dag, .cache = NULL) {
   edges <- cached_graph_value(.cache, "edges", function() {
-    value <- dag_edges(dag)
+    edges <- dag_edges(dag)
 
-    return(value)
+    return(edges)
   })
 
   return(edges)
@@ -843,7 +873,9 @@ dag_to_string <- function(dag){
                   return(out)
                 }))
   for( s in cands ){
-    if( is.null(s) ) next
+    if( is.null(s) ) {
+      next
+    }
     s <- paste(as.character(s), collapse = "\n")
     if( grepl("\\{|->|--|<->|\\[", s) ){
       graph_type <- sub("^\\s*([[:alpha:]]+).*", "\\1", s)
@@ -964,17 +996,17 @@ extract_instrumental_variables <- function(dag,
       per_treatment <- lapply(seq_along(outcomes), function(y){
         ivs <- tryCatch(dagitty::instrumentalVariables(dag, exposure = treatments[x], outcome = outcomes[y]),
                         error = function(e) {
-                          values <- list()
+                          instruments <- list()
 
-                          return(values)
+                          return(instruments)
                         })
-        value <- unlist( lapply(ivs, function(iv) {
-          value <- iv$I
+        instruments <- unlist( lapply(ivs, function(iv) {
+          instrument <- iv$I
 
-          return(value)
+          return(instrument)
         }) )
 
-        return(value)
+        return(instruments)
       })
 
       per_treatment <- unique( unlist(per_treatment) )
@@ -987,7 +1019,9 @@ extract_instrumental_variables <- function(dag,
     }) )
   }
   instrumental_vars <- as.character(unique(unlist(instrumental_vars)))
-  if( is.null(instrumental_vars) ) instrumental_vars <- character()
+  if( is.null(instrumental_vars) ) {
+    instrumental_vars <- character()
+  }
 
   return(instrumental_vars)
 }
@@ -1059,11 +1093,11 @@ construct_graph <- function(edges,
                         selected_vec))
   declarations <- vapply(all_nodes, function(node){
     attributes <- c(
-      if( node %in% treatments ) "exposure",
-      if( node %in% outcomes ) "outcome",
-      if( node %in% latent_vec ) "latent",
-      if( node %in% adjusted_vec ) "adjusted",
-      if( node %in% selected_vec ) "selected"
+      if( node %in% treatments ) { "exposure" },
+      if( node %in% outcomes ) { "outcome" },
+      if( node %in% latent_vec ) { "latent" },
+      if( node %in% adjusted_vec ) { "adjusted" },
+      if( node %in% selected_vec ) { "selected" }
     )
     quoted <- quote_dag_names(node)
     if( length(attributes) ){
@@ -1279,7 +1313,7 @@ native_append_graph <- function(dag, new_nodes, new_edges, statuses = list(),
   declarations <- vapply(new_nodes, function(node){
     status <- statuses[[node]]
     text <- paste0(native_layout_quote(node),
-                   if( length(status) ) paste0(" [", paste(status, collapse = ","), "]") else "")
+                   if( length(status) ) { paste0(" [", paste(status, collapse = ","), "]") } else { "" })
 
     return(text)
   }, character(1L), USE.NAMES = FALSE)
@@ -1321,7 +1355,7 @@ native_append_graph <- function(dag, new_nodes, new_edges, statuses = list(),
   })
   expected_nodes <- c(names(dag), new_nodes)
   expected_keys <- unique(c(existing_keys, edge_key(new_edges)))
-  actual_keys <- if( is.null(actual_edges) ) character() else edge_key(actual_edges)
+  actual_keys <- if( is.null(actual_edges) ) { character() } else { edge_key(actual_edges) }
   if( is.null(candidate_nodes) ||
       !setequal(candidate_nodes, expected_nodes) ||
       length(candidate_nodes) != length(expected_nodes) ||
@@ -1381,7 +1415,9 @@ native_layout_index <- function(text, caller){ # Nested readers update this call
   tokens <- native_layout_tokens(text, caller)
   values <- tokens$value
   position <- which(values == "{")[1L]
-  if( is.na(position) ) curve_layout_error(caller)
+  if( is.na(position) ) {
+    curve_layout_error(caller)
+  }
   blocks <- list()
   declarations <- list()
   arrows <- list()
@@ -1411,13 +1447,15 @@ native_layout_index <- function(text, caller){ # Nested readers update this call
       fields[[length(fields) + 1L]] <- list(key = key, first = first,
                                            last = position - 1L)
     }
-    if( position > length(values) ) curve_layout_error(caller)
+    if( position > length(values) ) {
+      curve_layout_error(caller)
+    }
     blocks[[length(blocks) + 1L]] <<- list(kind = kind, node = node,
                                           first = start, last = position,
                                           fields = fields, keys = keys)
-    value <- (position <<- position + 1L)
+    next_position <- (position <<- position + 1L)
 
-    return(invisible(value))
+    return(invisible(next_position))
   }
   endpoint <- function(){
     if( values[position] == "{" ){
@@ -1471,12 +1509,14 @@ native_layout_index <- function(text, caller){ # Nested readers update this call
         declarations[[length(declarations) + 1L]] <<- first
       }
       while( position <= length(values) && values[position] == "[" ){
-        attributes(if( edge ) "edge" else "node",
-                   if( !edge && !is.null(first) ) first$node else NULL,
-                   if( grouped ) character() else keys)
+        attributes(if( edge ) { "edge" } else { "node" },
+                   if( !edge && !is.null(first) ) { first$node } else { NULL },
+                   if( grouped ) { character() } else { keys })
       }
     }
-    if( position > length(values) ) curve_layout_error(caller)
+    if( position > length(values) ) {
+      curve_layout_error(caller)
+    }
     closing <- position
     position <<- position + 1L
 
@@ -1503,7 +1543,9 @@ native_layout_tokens <- function(text, caller){ # Keep character offsets so late
                     '#[^\\r\\n]*|<->|->|<-|--|[{}\\[\\]=,;]|',
                     '(?:(?!<->|->|<-|--)[^\\s{}\\[\\]=,;"])+')
   starts <- gregexpr(pattern, text, perl = TRUE)[[1L]]
-  if( starts[1L] < 0L ) curve_layout_error(caller)
+  if( starts[1L] < 0L ) {
+    curve_layout_error(caller)
+  }
   lengths <- attr(starts, "match.length")
   values <- substring(text, starts, starts + lengths - 1L)
   comment <- startsWith(values, "//") | startsWith(values, "/*") |
@@ -1537,7 +1579,9 @@ native_layout_value <- function(dag, text){
 #' @return The edited model string.
 #' @noRd
 native_layout_edits <- function(text, edits){
-  if( length(edits) == 0L ) return(text)
+  if( length(edits) == 0L ) {
+    return(text)
+  }
   order <- order(vapply(edits, `[[`, numeric(1L), "start"), decreasing = TRUE)
   for( i in order ){
     edit <- edits[[i]]
@@ -1576,11 +1620,21 @@ rebuild_dag <- function(dag,
                         selected_vec = NULL,
                         .curve_caller = "connect_nodes"
                         ){
-  if( is.null(latent_vec) ) latent_vec <- unobserved(dag)
-  if( is.null(treatments) ) treatments <- treatments(dag)
-  if( is.null(outcomes) ) outcomes <- get_outcome_names(dag)
-  if( is.null(adjusted_vec) ) adjusted_vec <- dagitty::adjustedNodes(dag)
-  if( is.null(selected_vec) ) selected_vec <- selected_nodes(dag)
+  if( is.null(latent_vec) ) {
+    latent_vec <- unobserved(dag)
+  }
+  if( is.null(treatments) ) {
+    treatments <- treatments(dag)
+  }
+  if( is.null(outcomes) ) {
+    outcomes <- get_outcome_names(dag)
+  }
+  if( is.null(adjusted_vec) ) {
+    adjusted_vec <- dagitty::adjustedNodes(dag)
+  }
+  if( is.null(selected_vec) ) {
+    selected_vec <- selected_nodes(dag)
+  }
   graph_type <- dag_graph_type(dag)
 
   controls <- edge_controls(dag, .curve_caller)
@@ -1662,18 +1716,18 @@ print_edges_helper <- function(new_edges){
 
   # Group edges by their first endpoint
   new_edges_list <- suppressWarnings( lapply(seq_len(num_unique_ancestors), function(x){
-    value <- new_edges[ unlist(new_edges[,1]) %in% unlist(unique_ancestors)[x], ]
+    ancestor_edges <- new_edges[ unlist(new_edges[,1]) %in% unlist(unique_ancestors)[x], ]
 
-    return(value)
+    return(ancestor_edges)
   }) )
 
   # Format each group as quoted edges for the caller to display
   new_edges_list <- lapply(seq_len(num_unique_ancestors), function(x){
     new_edges_list <- noquote(
       paste0( paste0( "'", sapply(seq_len(nrow(new_edges_list[[x]])), function(y){
-        value <- (new_edges_list[x] <- noquote( paste( new_edges_list[[x]][y,], collapse=" "  ) ))
+        edge_text <- (new_edges_list[x] <- noquote( paste( new_edges_list[[x]][y,], collapse=" "  ) ))
 
-        return(invisible(value))
+        return(invisible(edge_text))
         }), "'", collapse=", " ), sep = "")
       )
 
@@ -1714,14 +1768,18 @@ native_remove_edges <- function(dag, edges, caller){
   edges <- normalise_edge_frame(edges, paste0(caller, "()"))
   removed <- unique(edge_control_keys(edges$v, edges$e, edges$w))
   removed <- removed[removed %in% existing_keys]
-  if( length(removed) == 0L ) return(dag)
+  if( length(removed) == 0L ) {
+    return(dag)
+  }
   result <- tryCatch(native_edge_removal(dag, existing_keys, removed, caller),
                      error = function(error) {
                        out <- NULL
 
                        return(out)
                      })
-  if( !is.null(result) ) return(result)
+  if( !is.null(result) ) {
+    return(result)
+  }
   dag_out <- rebuild_dag(dag, existing[!existing_keys %in% removed, , drop = FALSE],
                          .curve_caller = caller)
 
@@ -1757,7 +1815,9 @@ native_edge_removal <- function(dag, existing_keys, removed, caller){
   cut <- integer()
   ends <- list()
   for( arrow in index$arrows ){
-    if( !arrow$key %in% removed ) next
+    if( !arrow$key %in% removed ) {
+      next
+    }
     matched <- c(matched, arrow$key)
     cut <- c(cut, arrow$operator)
     ends <- c(ends, list(arrow$source, arrow$target))
@@ -1767,7 +1827,9 @@ native_edge_removal <- function(dag, existing_keys, removed, caller){
     return(out)
   }
   for( block in index$blocks ){
-    if( block$kind != "edge" || !any(block$keys %in% removed) ) next
+    if( block$kind != "edge" || !any(block$keys %in% removed) ) {
+      next
+    }
     if( length(block$keys) != 1L ) {
       out <- NULL
       return(out)
@@ -1786,17 +1848,23 @@ native_edge_removal <- function(dag, existing_keys, removed, caller){
   }
   present <- vapply(index$declarations, `[[`, character(1L), "node")
   for( i in which(values %in% operators) ){
-    if( i %in% cut ) next
+    if( i %in% cut ) {
+      next
+    }
     present <- c(present, decode(values[i - 1L]), decode(values[i + 1L]))
   }
   orphans <- list()
   for( end in ends ){
-    if( linked(end$token - 1L) || linked(end$token + 1L) ) next
+    if( linked(end$token - 1L) || linked(end$token + 1L) ) {
+      next
+    }
     orphans <- c(orphans, list(end))
   }
   restore <- integer()
   for( orphan in orphans ){
-    if( orphan$node %in% present ) next
+    if( orphan$node %in% present ) {
+      next
+    }
     present <- c(present, orphan$node)
     restore <- c(restore, orphan$token)
   }
@@ -2002,9 +2070,9 @@ parse_graph_text <- function(text, caller, allow_isolated = FALSE,
     starts <- c(1L, matches$position + matches$length)
     ends <- c(matches$position - 1L, nchar(line))
     nodes <- vapply(seq_along(starts), function(i){
-      value <- strip_dag_quotes(substr(line, starts[i], ends[i]), caller)
+      node <- strip_dag_quotes(substr(line, starts[i], ends[i]), caller)
 
-      return(value)
+      return(node)
     }, character(1L))
 
     for( i in seq_along(operators) ){
@@ -2094,9 +2162,9 @@ find_graph_operators <- function(line, caller){
       remaining <- paste0(chars[i:length(chars)], collapse = "")
       candidates <- c("<->", "->", "<-", "--")
       operator <- candidates[vapply(candidates, function(candidate){
-        value <- startsWith(remaining, candidate)
+        matches <- startsWith(remaining, candidate)
 
-        return(value)
+        return(matches)
       }, logical(1L))]
       if( length(operator) > 0L ){
         operator <- operator[1L]
@@ -2106,7 +2174,9 @@ find_graph_operators <- function(line, caller){
         i <- i + nchar(operator)
         next
       }
-      if( chars[i] %in% c("<", ">") ) invalid_marker <- TRUE
+      if( chars[i] %in% c("<", ">") ) {
+        invalid_marker <- TRUE
+      }
     }
     i <- i + 1L
   }
@@ -2133,7 +2203,9 @@ strip_dag_quotes <- function(x, caller){
   if( xor(starts, ends) ){
     stop(caller, ": unmatched quote in node name '", x, "'.", call. = FALSE)
   }
-  if( starts && ends ) x <- substr(x, 2L, nchar(x) - 1L)
+  if( starts && ends ) {
+    x <- substr(x, 2L, nchar(x) - 1L)
+  }
   if( !nzchar(x) ){
     stop(caller, ": node names cannot be empty.", call. = FALSE)
   }
@@ -2203,7 +2275,9 @@ node_status_attributes <- function(s){
   out <- list()
   for( i in seq_along(starts) ){
     chunk <- substr(s, starts[i], starts[i] + lens[i] - 1L)
-    if( !grepl(pat, chunk, perl = TRUE) ) next
+    if( !grepl(pat, chunk, perl = TRUE) ) {
+      next
+    }
     nm   <- unquote_node(sub(pat, "\\1", chunk, perl = TRUE))
     att  <- sub(pat, "\\2", chunk, perl = TRUE)
     att  <- gsub('[A-Za-z0-9_.]+\\s*=\\s*"[^"]*"', "", att)     # drop key="value" pairs, e.g. pos="x,y"
@@ -2257,20 +2331,20 @@ instrumental_variables_helper <- function(dag,
     per_outcome <- lapply(seq_along(outcomes), function(y){
       ivs <- tryCatch(dagitty::instrumentalVariables(dag, exposure = treatments[x], outcome = outcomes[y]),
                       error = function(e) {
-                        values <- list()
+                        instruments <- list()
 
-                        return(values)
+                        return(instruments)
                       })
-      values <- lapply(ivs, function(iv){
-        values <- c( treatment        = treatments[x],
+      instrument_rows <- lapply(ivs, function(iv){
+        instrument_row <- c( treatment        = treatments[x],
                      outcome          = outcomes[y],
                      instrument       = iv$I,
                      conditioning_set = paste0(iv$Z, collapse = ", ") )
 
-        return(values)
+        return(instrument_row)
       })
 
-      return(values)
+      return(instrument_rows)
     })
 
     per_treatment <- unlist(per_outcome, recursive = FALSE)

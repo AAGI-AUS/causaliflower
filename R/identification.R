@@ -371,7 +371,7 @@ get_identification <- function(dag, treatment = NULL, outcome = NULL,
         z_result$zid,
         "nonparametric",
         if( z_result$zid ){
-          id_render_set(if( observational ) experiments else z_result$set)
+          id_render_set(if( observational ) { experiments } else { z_result$set })
         }else{
           "none"
         },
@@ -440,7 +440,7 @@ get_identification <- function(dag, treatment = NULL, outcome = NULL,
       outcome = outcome,
       effect = effect,
       conditioning = conditioning,
-      experiments = if( isTRUE(z_result$zid) ) z_result$set else experiments,
+      experiments = if( isTRUE(z_result$zid) ) { z_result$set } else { experiments },
       direct_path = direct_path,
       direct_arrow = direct_arrow,
       observational = observational,
@@ -469,8 +469,10 @@ get_identification <- function(dag, treatment = NULL, outcome = NULL,
 id_mediation <- function(dag, G, treatment, outcome, mediator = NULL){
   on_path <- sort(Filter(
     function(node){
-      id_directed_reachable(G, treatment, node) &&
+      matches <- id_directed_reachable(G, treatment, node) &&
         id_directed_reachable(G, node, outcome)
+
+      return(matches)
     },
     setdiff(G$V, c(treatment, outcome))
   ))
@@ -483,7 +485,9 @@ id_mediation <- function(dag, G, treatment, outcome, mediator = NULL){
     }
     targets <- list(sort(unique(as.character(mediator))))
   }else{
-    targets <- lapply(on_path, function(node) node)
+    targets <- lapply(on_path, function(node){
+      return(node)
+    })
     if( length(on_path) > 1L ){
       targets[[length(targets) + 1L]] <- on_path
     }
@@ -497,7 +501,7 @@ id_mediation <- function(dag, G, treatment, outcome, mediator = NULL){
   entries <- lapply(targets, function(mediators){
     sets <- id_mediation_adjustment(dag, G, treatment, outcome, mediators)
     feasible <- length(sets) > 0L
-    list(
+    entry <- list(
       mediators = mediators,
       feasible = feasible,
       adjustment_sets = sets,
@@ -516,6 +520,8 @@ id_mediation <- function(dag, G, treatment, outcome, mediator = NULL){
       },
       assumptions = assumptions
     )
+
+    return(entry)
   })
 
   return(unname(entries))
@@ -534,20 +540,26 @@ id_mediation <- function(dag, G, treatment, outcome, mediator = NULL){
 #' @noRd
 id_mediation_adjustment <- function(dag, G, treatment, outcome, mediators){
   descendants <- Filter(
-    function(node) id_directed_reachable(G, treatment, node), G$V
+    function(node){
+      reachable <- id_directed_reachable(G, treatment, node)
+
+      return(reachable)
+    }, G$V
   )
   eligible <- sort(setdiff(
     id_ancestors(G, c(treatment, mediators, outcome)),
     c(treatment, mediators, outcome, descendants)
   ))
   qualifies <- function(covariates){
-    all(covariates %in% eligible) &&
+    qualifies <- all(covariates %in% eligible) &&
       isTRUE(dagitty::isAdjustmentSet(
         dag, Z = covariates, exposure = treatment, outcome = mediators
       )) &&
       isTRUE(dagitty::isAdjustmentSet(
         dag, Z = covariates, exposure = c(treatment, mediators), outcome = outcome
       ))
+
+    return(qualifies)
   }
   reduce_set <- function(covariates){
     for(node in covariates){
@@ -835,9 +847,9 @@ id_admg <- function(dag){
 
   children <- stats::setNames(
     lapply(vertices, function(node) {
-      value <- character()
+      child_nodes <- character()
 
-      return(value)
+      return(child_nodes)
     }),
     vertices
   )
@@ -1460,9 +1472,9 @@ id_adjustment <- function(dag, treatment, outcome){
     effect = "total"
   )
   sets <- lapply(unclass(sets), function(set) {
-    value <- sort(as.character(set))
+    adjustment_set <- sort(as.character(set))
 
-    return(value)
+    return(adjustment_set)
   })
   canonical <- dagitty::adjustmentSets(
     dag,
@@ -1472,9 +1484,9 @@ id_adjustment <- function(dag, treatment, outcome){
     effect = "total"
   )
   canonical <- lapply(unclass(canonical), function(set){
-    value <- sort(as.character(set))
+    adjustment_set <- sort(as.character(set))
 
-    return(value)
+    return(adjustment_set)
   })
   adjustment <- list(
     feasible = length(sets) > 0L,
@@ -1623,12 +1635,12 @@ id_instruments <- function(dag, treatment, outcome){
     outcome = outcome
   )
   entries <- lapply(unclass(entries), function(entry){
-    values <- list(
+    instrument <- list(
       instrument = as.character(entry$I),
       conditioning = sort(as.character(entry$Z))
     )
 
-    return(values)
+    return(instrument)
   })
   instruments <- list(feasible = length(entries) > 0L, entries = unname(entries))
 
@@ -1669,9 +1681,9 @@ id_zidentifiable <- function(G, treatment, outcome, experiments,
       bypasses_treatment <- any(vapply(
         experiment_set,
         function(node){
-          value <- id_directed_reachable(graph_without_treatment, node, outcome)
+          reaches_outcome <- id_directed_reachable(graph_without_treatment, node, outcome)
 
-          return(value)
+          return(reaches_outcome)
         },
         logical(1L)
       ))
@@ -1913,9 +1925,9 @@ id_roles <- function(G, treatment, outcome, effect, adjustment,
       vapply(
         instruments$entries,
         function(entry) {
-          value <- entry$instrument
+          instrument <- entry$instrument
 
-          return(value)
+          return(instrument)
         },
         character(1L)
       ),

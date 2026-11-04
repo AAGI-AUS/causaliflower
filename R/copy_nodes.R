@@ -151,13 +151,13 @@ copy_nodes <- function(dag,
     placements <- vapply(nodes, function(node){
       ancestors <- directed_reachable(original_edges, node, direction = "to")
       if( anchor %in% ancestors ) {
-        value <- "before"
+        placement <- "before"
 
-        return(value)
+        return(placement)
       } else {
-        value <- "after"
+        placement <- "after"
 
-        return(value)
+        return(placement)
       }
     }, character(1L), USE.NAMES = TRUE)
   }
@@ -330,9 +330,9 @@ copy_suffix_positions <- function(value, argument){
            " list element must contain non-missing, non-empty character suffixes.",
            call. = FALSE)
     }
-    value <- as.character(position)
+    suffixes <- as.character(position)
 
-    return(value)
+    return(suffixes)
   })
   flattened <- unlist(positions, use.names = FALSE)
   if( anyDuplicated(flattened) ){
@@ -407,33 +407,33 @@ copy_name_specification <- function(nodes, suffix, copy_suffix, repeats){
     }
     groups <- positions
   }else if( !is.null(original_suffix$value) ){
-    count <- if( is.null(repeats) ) 1L else repeats
+    count <- if( is.null(repeats) ) { 1L } else { repeats }
     original_names <- paste0(nodes, "_", original_suffix$value, "1")
     suffixes <- paste0(original_suffix$value, seq.int(2L, count + 1L))
-    groups <- if( original_suffix$parallel ) list(suffixes) else as.list(suffixes)
+    groups <- if( original_suffix$parallel ) { list(suffixes) } else { as.list(suffixes) }
   }else{
-    count <- if( is.null(repeats) ) 1L else repeats
+    count <- if( is.null(repeats) ) { 1L } else { repeats }
     original_names <- nodes
-    suffixes <- if( count == 1L ) "copy" else paste0("copy", seq_len(count))
+    suffixes <- if( count == 1L ) { "copy" } else { paste0("copy", seq_len(count)) }
     groups <- as.list(suffixes)
   }
 
   copy_names <- lapply(nodes, function(node){
-    values <- lapply(groups, function(group) {
+    group_names <- lapply(groups, function(group) {
       text <- paste0(node, "_", group)
 
       return(text)
     })
 
-    return(values)
+    return(group_names)
   })
   names(copy_names) <- nodes
   all_copies <- unname(unlist(copy_names, recursive = TRUE,
                               use.names = FALSE))
   source_for_copy <- rep(nodes, vapply(copy_names, function(groups){
-    value <- length(unlist(groups, recursive = TRUE, use.names = FALSE))
+    copy_count <- length(unlist(groups, recursive = TRUE, use.names = FALSE))
 
-    return(value)
+    return(copy_count)
   }, integer(1L)))
   names(source_for_copy) <- all_copies
 
@@ -529,29 +529,31 @@ copy_generate_edges <- function(original_edges, nodes, renamed, copy_names,
   rerouted <- list()
   add_piece <- function(piece){
     if( nrow(piece) > 0L ) {
-      value <- (pieces[[length(pieces) + 1L]] <<- piece)
+      added_edges <- (pieces[[length(pieces) + 1L]] <<- piece)
 
-      return(invisible(value))
+      return(invisible(added_edges))
     }else{
-      value <- NULL
-      return(invisible(value))
+      added_edges <- NULL
+      return(invisible(added_edges))
     }
   }
   add_removal <- function(piece){
     if( nrow(piece) > 0L ) {
-      value <- (removals[[length(removals) + 1L]] <<- piece)
+      removed_edges <- (removals[[length(removals) + 1L]] <<- piece)
 
-      return(invisible(value))
+      return(invisible(removed_edges))
     }else{
-      value <- NULL
-      return(invisible(value))
+      removed_edges <- NULL
+      return(invisible(removed_edges))
     }
   }
   add_reroute <- function(from, to, replacement_from, replacement_to){
-    if( !length(from) || !length(to) ) return()
+    if( !length(from) || !length(to) ) {
+      return()
+    }
     size <- max(length(from), length(to), length(replacement_from),
                 length(replacement_to))
-    value <- (rerouted[[length(rerouted) + 1L]] <<- data.frame(
+    rerouted_edges <- (rerouted[[length(rerouted) + 1L]] <<- data.frame(
       old_v = rep(from, length.out = size),
       old_w = rep(to, length.out = size),
       new_v = rep(replacement_from, length.out = size),
@@ -559,7 +561,7 @@ copy_generate_edges <- function(original_edges, nodes, renamed, copy_names,
       stringsAsFactors = FALSE
     ))
 
-    return(invisible(value))
+    return(invisible(rerouted_edges))
   }
 
   anchor_ancestors <- anchor_descendants <- character()
@@ -675,7 +677,7 @@ copy_generate_edges <- function(original_edges, nodes, renamed, copy_names,
       }
     }
     if( identical(type, "chain") ){
-      pivot <- if( is.null(anchor) ) source else anchor
+      pivot <- if( is.null(anchor) ) { source } else { anchor }
       end <- if( placements[[source]] == "before" ){
         groups[[1L]]
       }else{
@@ -741,12 +743,12 @@ copy_append_graph <- function(dag, new_nodes, new_edges, source_for_copy,
   declarations <- vapply(new_nodes, function(node){
     source <- unname(source_for_copy[[node]])
     status <- c(
-      if( source %in% exposures ) "exposure",
-      if( source %in% outcomes ) "outcome",
-      if( source %in% latents ) "latent"
+      if( source %in% exposures ) { "exposure" },
+      if( source %in% outcomes ) { "outcome" },
+      if( source %in% latents ) { "latent" }
     )
     text <- paste0(native_layout_quote(node),
-                   if( length(status) ) paste0(" [", paste(status, collapse = ","), "]") else "")
+                   if( length(status) ) { paste0(" [", paste(status, collapse = ","), "]") } else { "" })
 
     return(text)
   }, character(1L), USE.NAMES = FALSE)

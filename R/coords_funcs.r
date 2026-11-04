@@ -69,9 +69,9 @@ respace_y_taper <- function( coordinates,
 
   ## directed adjacency restricted to the laid-out nodes (parents in, children derived).
   parents_in <- lapply( parents[ node_names ], function( ps ) {
-    value <- ps[ ps %in% node_names ]
+    parents <- ps[ ps %in% node_names ]
 
-    return(value)
+    return(parents)
   } )
   names( parents_in ) <- node_names
   children <- vector( "list", length( node_names ) )
@@ -85,9 +85,9 @@ respace_y_taper <- function( coordinates,
   ## order each rank by incoming y, then refine using neighbouring ranks ##
   layer <- lapply( rank_levels, function( r ){
     column <- node_names[ ranks == r ]
-    value <- column[ order( -y[ column ] ) ]
+    ordered_nodes <- column[ order( -y[ column ] ) ]
 
-    return(value)
+    return(ordered_nodes)
   } )
   names( layer ) <- as.character( rank_levels )
 
@@ -116,13 +116,13 @@ respace_y_taper <- function( coordinates,
         key <- vapply( column, function( nd ){
           v <- neighbours[[ nd ]]
           if ( length( v ) == 0L ) {
-            value <- NA_real_
+            centre <- NA_real_
 
-            return(value)
+            return(centre)
           } else {
-            value <- mean( pos[ v ] )
+            centre <- mean( pos[ v ] )
 
-            return(value)
+            return(centre)
           }
         }, numeric( 1 ) )
         key[ is.na( key ) ] <- pos[ column ][ is.na( key ) ]   # no neighbours: hold position
@@ -152,12 +152,12 @@ respace_y_taper <- function( coordinates,
     column <- layer[[ as.character( r ) ]]
     k <- length( column )
     if ( r == 0L ){
-      lane[ column ] <- if ( k == 1L ) 0 else 1 - ( seq_len( k ) - 1L ) / ( k - 1L ) * 2
+      lane[ column ] <- if ( k == 1L ) { 0 } else { 1 - ( seq_len( k ) - 1L ) / ( k - 1L ) * 2 }
     } else {
       for ( nd in column ){
         node_parents <- parents_in[[ nd ]]
         node_parents <- node_parents[ node_parents %in% node_names ]
-        lane[ nd ] <- if ( length( node_parents ) > 0L ) mean( lane[ node_parents ] ) else 0
+        lane[ nd ] <- if ( length( node_parents ) > 0L ) { mean( lane[ node_parents ] ) } else { 0 }
       }
     }
   }
@@ -165,9 +165,9 @@ respace_y_taper <- function( coordinates,
   ## taper towards the outcome while allowing the required gap in each rank ##
   root_fill <- 1.2   # roots sit this factor wider than the widest inner rank
   counts    <- vapply( rank_levels, function( r ) {
-    value <- sum( ranks == r, na.rm = TRUE )
+    node_count <- sum( ranks == r, na.rm = TRUE )
 
-    return(value)
+    return(node_count)
   }, integer( 1L ) )
   half_need <- ( counts - 1L ) / 2 * y_step
   h_max     <- max( half_need )
@@ -191,7 +191,7 @@ respace_y_taper <- function( coordinates,
     k <- length( column )
     band <- half_height[[ as.character( r ) ]]
 
-    even <- if ( k == 1L ) 0 else band - ( seq_len( k ) - 1L ) / ( k - 1L ) * 2 * band
+    even <- if ( k == 1L ) { 0 } else { band - ( seq_len( k ) - 1L ) / ( k - 1L ) * 2 * band }
     proximity <- unname( lane[ column ] ) * band
 
     column_y <- ( 1 - shape ) * proximity + shape * even
@@ -240,9 +240,9 @@ layout_parents <- function(dag){
   }
 
   parents <- lapply(node_names, function(nm){
-    value <- sort( unique( from[ to == nm ] ) )
+    parents <- sort( unique( from[ to == nm ] ) )
 
-    return(value)
+    return(parents)
   })
   names(parents) <- node_names
 
@@ -514,8 +514,10 @@ column_height_free <- function(coordinates, node, height, node_rank,
                                 node_names, y_step){
   x <- coordinates$x
   y <- coordinates$y
-  if( !node %in% names(x) ){ free <- TRUE
-  return(free) }
+  if( !node %in% names(x) ){
+    free <- TRUE
+    return(free)
+  }
   others <- setdiff( intersect( names(x), names(y) ), node )
   others <- others[ others %in% node_names & !is.na( x[others] ) & !is.na( y[others] ) ]
   others <- others[ node_rank[ others ] == node_rank[[ node ]] |
