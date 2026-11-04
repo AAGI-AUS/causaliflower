@@ -87,6 +87,8 @@
 #' SVG files are written with the svglite package and PNG files with the ragg
 #' package when they are installed. Otherwise [grDevices::svg()] or
 #' [grDevices::png()] is used.
+#' On macOS, install svglite with `install.packages("svglite")` or install
+#' [XQuartz](https://www.xquartz.org/) if R's SVG device cannot start.
 #'
 #' @return A ggplot object, returned invisibly when `file` is supplied.
 #' @examples
@@ -738,7 +740,15 @@ plot_save_file <- function(plot, file, format, width, height, dpi){
     if( plot_package_available("svglite") ){
       device <- svglite::svglite
     }else if( isTRUE(capabilities("cairo")) ){
-      device <- grDevices::svg
+      device <- function(filename, ...){
+        previous <- grDevices::dev.cur()
+        grDevices::svg(filename = filename, ...)
+        if( identical(grDevices::dev.cur(), previous) ){
+          stop("plot_dagitty(): R's SVG device could not start. ",
+               "Install svglite with install.packages(\"svglite\"), ",
+               "or install XQuartz on macOS.", call. = FALSE)
+        }
+      }
     }else{
       stop("plot_dagitty(): saving SVG files requires the svglite package or ",
            "an R installation with cairo support.", call. = FALSE)

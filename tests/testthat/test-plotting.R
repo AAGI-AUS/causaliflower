@@ -411,6 +411,37 @@ test_that("saving falls back to base devices without svglite or ragg", {
 })
 
 
+test_that("SVG startup failures leave existing devices and files intact", {
+  testthat::skip_if_not(isTRUE(capabilities("cairo")))
+  testthat::local_mocked_bindings(plot_package_available = function(package) FALSE)
+  testthat::local_mocked_bindings(svg = function(...) {
+    warning("failed to load cairo DLL", call. = FALSE)
+    invisible(NULL)
+  }, .package = "grDevices")
+
+  grDevices::pdf(NULL, width = 5, height = 3)
+  device <- grDevices::dev.cur()
+  devices <- grDevices::dev.list()
+  size <- grDevices::dev.size("in")
+  on.exit({
+    if( device %in% grDevices::dev.list() ) grDevices::dev.off(device)
+  }, add = TRUE)
+  svg_file <- tempfile(fileext = ".svg")
+  writeLines("existing SVG", svg_file)
+  on.exit(unlink(svg_file), add = TRUE)
+
+  expect_warning(
+    expect_error(plot_dagitty(string_to_dag("A -> B"), file = svg_file),
+                 "SVG device could not start.*svglite.*XQuartz"),
+    "failed to load cairo DLL", fixed = TRUE
+  )
+  expect_identical(grDevices::dev.cur(), device)
+  expect_identical(grDevices::dev.list(), devices)
+  expect_identical(grDevices::dev.size("in"), size)
+  expect_identical(readLines(svg_file), "existing SVG")
+})
+
+
 test_that("every node keeps its label when labels repeat", {
   drawn_labels <- function(plot){
     built <- ggplot2::ggplot_build(plot)

@@ -2,9 +2,10 @@
 
 > causality + cauliflower = 'causaliflower'!
 
-This package extends `dagitty` and `ggdag` with functions for causal analysis using graphs in R.
+Graph-based causal analysis in R. The `causaliflower` package extends `dagitty` and `ggdag` with functions for building and assessing directed acyclic graphs (DAGs).
 
-It aims to support causal inference in agriculture through reproducible workflows for building and assessing directed acyclic graphs (DAGs) using domain knowledge.
+The goal of `causaliflower` is to support reproducible causal analytical workflows,
+with a focus on applied causal inference techniques in agriculture.
 
 ### Installation
 
@@ -145,7 +146,16 @@ plot_dagitty(dag)
 ```
 
 
-- Find single door sets for the direct effect (returns up to five sets, ordered by size):
+- Check whether the total effect of `T` on `Y` is identifiable:
+
+```R
+
+get_identification(dag, treatment = "T", outcome = "Y")
+
+```
+
+
+- Find single door sets for the direct path coefficient in a linear model (returns up to five sets, ordered by size):
 
 ```R
 
