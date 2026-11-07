@@ -2327,6 +2327,32 @@ id_conditional_frontdoor <- function(dag, G, treatment, outcome){
     return(result)
   }
 
+  # A back door path that avoids all other candidate mediators must be
+  # blocked by pretreatment covariates. Remove a node when no allowed set
+  # can do this, then repeat because its removal can rule out other nodes.
+  repeat {
+    blocked <- Filter(
+      function(node){
+        others <- setdiff(mediator_candidates, node)
+        H <- id_induced(G, setdiff(G$V, others))
+        H$D <- H$D[H$D$from != node, , drop = FALSE]
+        ancestors <- id_ancestors(H, c(node, treatment, outcome))
+        covariates <- intersect(covariate_candidates, ancestors)
+        return(!isTRUE(dagitty::dseparated(
+          id_as_dagitty(H), X = node, Y = outcome,
+          Z = c(treatment, covariates)
+        )))
+      }, mediator_candidates
+    )
+    if( !length(blocked) ){
+      break
+    }
+    mediator_candidates <- setdiff(mediator_candidates, blocked)
+  }
+  if( !length(mediator_candidates) ){
+    return(result)
+  }
+
   # Removing every eligible mediator must interrupt all directed causal paths.
   if( id_directed_reachable(
     id_induced(G, setdiff(G$V, mediator_candidates)), treatment, outcome
@@ -2349,8 +2375,9 @@ id_conditional_frontdoor <- function(dag, G, treatment, outcome){
     return(result)
   }
 
-  # Search by the total number of measured variables. Each returned pair is
-  # complete. Different pairs are not instructions to combine their variables.
+  # Search by the total number of measured variables. Prepare each mediator
+  # set once and reuse its covariate search at successive sizes.
+  searches <- vector("list", length(mediator_candidates))
   largest_size <- length(mediator_candidates) + length(covariate_candidates)
   for(size in seq.int(2L, largest_size)){
     for(mediator_size in seq_len(min(length(mediator_candidates), size - 1L))){
@@ -2358,39 +2385,42 @@ id_conditional_frontdoor <- function(dag, G, treatment, outcome){
       if( covariate_size > length(covariate_candidates) ){
         next
       }
-      mediator_sets <- utils::combn(mediator_candidates, mediator_size, simplify = FALSE)
-      for(mediators in mediator_sets){
-        if( all(mediators %in% ordinary_candidates) ){
-          next
-        }
-        if( id_directed_reachable(
-          id_induced(G, setdiff(G$V, mediators)), treatment, outcome
-        ) ){
-          next
-        }
-
-        ordinary_frontdoor <- isTRUE(dagitty::isAdjustmentSet(
-          dag, Z = character(), exposure = treatment, outcome = mediators
-        )) && isTRUE(dagitty::isAdjustmentSet(
-          dag, Z = treatment, exposure = mediators, outcome = outcome
-        ))
-        if( ordinary_frontdoor ){
-          next
-        }
-
-        covariate_sets <- utils::combn(covariate_candidates, covariate_size, simplify = FALSE)
-        for(covariates in covariate_sets){
-          treatment_to_mediators <- isTRUE(dagitty::isAdjustmentSet(
-            dag, Z = covariates, exposure = treatment, outcome = mediators
+      if( is.null(searches[[mediator_size]]) ){
+        entries <- list()
+        mediator_sets <- utils::combn(mediator_candidates, mediator_size, simplify = FALSE)
+        for(mediators in mediator_sets){
+          if( all(mediators %in% ordinary_candidates) ){
+            next
+          }
+          if( id_directed_reachable(
+            id_induced(G, setdiff(G$V, mediators)), treatment, outcome
+          ) ){
+            next
+          }
+          ordinary_frontdoor <- isTRUE(dagitty::isAdjustmentSet(
+            dag, Z = character(), exposure = treatment, outcome = mediators
+          )) && isTRUE(dagitty::isAdjustmentSet(
+            dag, Z = treatment, exposure = mediators, outcome = outcome
           ))
-          mediators_to_outcome <- isTRUE(dagitty::isAdjustmentSet(
-            dag, Z = c(treatment, covariates), exposure = mediators, outcome = outcome
-          ))
-          if( treatment_to_mediators && mediators_to_outcome ){
-            result$sets[[length(result$sets) + 1L]] <- list(
+          if( ordinary_frontdoor ){
+            next
+          }
+          covariates <- id_frontdoor_covariate_search(
+            dag, G, treatment, outcome, mediators, covariate_candidates
+          )
+          if( !is.null(covariates) ){
+            entries[[length(entries) + 1L]] <- list(
               mediators = mediators, covariates = covariates
             )
           }
+        }
+        searches[[mediator_size]] <- entries
+      }
+      for(entry in searches[[mediator_size]]){
+        for(covariates in entry$covariates(covariate_size)){
+          result$sets[[length(result$sets) + 1L]] <- list(
+            mediators = entry$mediators, covariates = covariates
+          )
         }
       }
     }
@@ -2400,6 +2430,88 @@ id_conditional_frontdoor <- function(dag, G, treatment, outcome){
     }
   }
   return(result)
+}
+
+
+#' Prepare a covariate search for fixed front door mediators
+#'
+#' @param dag A dagitty object.
+#' @param G Mixed graph of observed nodes.
+#' @param treatment Observed treatment node name.
+#' @param outcome Observed outcome node name.
+#' @param mediators A candidate mediator set.
+#' @param candidates Allowed covariates, none descendants of treatment.
+#' @return A function returning all qualifying sets of a requested size, or
+#'   NULL when an adjustment constraint cannot be satisfied.
+#' @noRd
+id_frontdoor_covariate_search <- function(dag, G, treatment, outcome, mediators, candidates){
+  force(mediators)
+  treatment_graph <- G
+  treatment_graph$D <- G$D[G$D$from != treatment, , drop = FALSE]
+  mediator_graph <- G
+  mediator_graph$D <- G$D[!G$D$from %in% mediators, , drop = FALSE]
+  treatment_dag <- id_as_dagitty(treatment_graph)
+  mediator_dag <- id_as_dagitty(mediator_graph)
+
+  can_complete <- function(required, allowed){ # Reject a branch with no possible separator
+    treatment_ancestors <- id_ancestors(treatment_graph, c(treatment, mediators, required))
+    treatment_covariates <- intersect(allowed, treatment_ancestors)
+    if( !isTRUE(dagitty::dseparated(
+      treatment_dag, X = treatment, Y = mediators, Z = treatment_covariates
+    )) ){
+      return(FALSE)
+    }
+    mediator_ancestors <- id_ancestors(mediator_graph, c(mediators, outcome, treatment, required))
+    mediator_covariates <- intersect(allowed, mediator_ancestors)
+    return(isTRUE(dagitty::dseparated(
+      mediator_dag, X = mediators, Y = outcome,
+      Z = c(treatment, mediator_covariates)
+    )))
+  }
+
+  # A separator, if one exists within the allowed nodes, exists within the
+  # ancestors of its endpoints and required nodes. Adding the other allowed
+  # ancestors preserves separation in the corresponding moral graph.
+  if( !can_complete(character(), candidates) ){
+    return(NULL)
+  }
+  required <- Filter(function(node){
+    return(!can_complete(character(), setdiff(candidates, node)))
+  }, candidates)
+  optional <- setdiff(candidates, required)
+
+  search <- function(included, remaining, size){ # Enumerate only branches that can still qualify
+    if( length(included) > size || length(included) + length(remaining) < size ){
+      return(list())
+    }
+    if( length(included) == size ){
+      covariates <- sort(included)
+      if( isTRUE(dagitty::isAdjustmentSet(
+        dag, Z = covariates, exposure = treatment, outcome = mediators
+      )) && isTRUE(dagitty::isAdjustmentSet(
+        dag, Z = c(treatment, covariates), exposure = mediators, outcome = outcome
+      )) ){
+        return(list(covariates))
+      }
+      return(list())
+    }
+    if( !can_complete(included, c(included, remaining)) ){
+      return(list())
+    }
+    node <- remaining[[1L]]
+    remaining <- remaining[-1L]
+    with_node <- search(c(included, node), remaining, size)
+    without_node <- search(included, remaining, size)
+    return(c(with_node, without_node))
+  }
+
+  find_sets <- function(size){ # Reuse this mediator set's constraints at each requested size
+    if( size < max(1L, length(required)) || size > length(candidates) ){
+      return(list())
+    }
+    return(search(required, optional, size))
+  }
+  return(find_sets)
 }
 
 

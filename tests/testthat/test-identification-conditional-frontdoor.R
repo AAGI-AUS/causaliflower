@@ -274,3 +274,48 @@ test_that("conditional front door identifies the intervention probability exactl
   expect_equal(identified, intervention, tolerance = 1e-12)
   expect_equal(diff(identified), 0.18, tolerance = 1e-12)
 })
+
+test_that("conditional front door handles many irrelevant covariates without testing their combinations", {
+  covariates <- paste0("C", seq_len(28L))
+  dag <- dagitty::dagitty(paste(
+    "dag { T [exposure] Y [outcome] U [latent]",
+    "U -> T U -> Y T -> M M -> Y C1 -> T C1 -> M C2 -> T C2 -> M",
+    paste(covariates, "-> Y", collapse = " "), "}"
+  ))
+  calls <- 0L
+  check <- dagitty::isAdjustmentSet
+  testthat::local_mocked_bindings(
+    isAdjustmentSet = function(...){
+      calls <<- calls + 1L
+      return(check(...))
+    },
+    .package = "dagitty"
+  )
+  expect_identical(conditional_frontdoor_result(dag)$sets, list(
+    list(mediators = "M", covariates = c("C1", "C2"))
+  ))
+  expect_lt(calls, 20L)
+})
+
+test_that("conditional front door keeps alternatives among many covariates", {
+  covariates <- paste0("C", seq.int(3L, 28L))
+  dag <- dagitty::dagitty(paste(
+    "dag { T [exposure] Y [outcome] U [latent]",
+    "U -> T U -> Y T -> M M -> Y C1 -> C2 C2 -> T C1 -> M",
+    paste(covariates, "-> Y", collapse = " "), "}"
+  ))
+  expect_identical(conditional_frontdoor_result(dag)$sets, list(
+    list(mediators = "M", covariates = "C1"),
+    list(mediators = "M", covariates = "C2")
+  ))
+})
+
+test_that("conditional front door rejects a long chain with unobserved outcome confounding", {
+  mediators <- paste0("M", seq_len(24L))
+  chain <- paste(c("T", mediators), "->", c(mediators, "Y"), collapse = " ")
+  dag <- dagitty::dagitty(paste(
+    "dag { T [exposure] Y [outcome] U [latent] V [latent]",
+    "U -> T U -> Y V -> M1 V -> Y C -> T C -> M1", chain, "}"
+  ))
+  expect_identical(conditional_frontdoor_result(dag), list(feasible = FALSE, sets = list()))
+})
