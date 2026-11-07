@@ -1,0 +1,7 @@
+crop,node_id,source_expression,status,report_tested,evidence,note
+barley,left_quantity,fixture_left,source_verified_public,FALSE,fixture,Verified fixture quantity
+barley,right_quantity,fixture_right,source_verified_public,FALSE,fixture,Verified fixture quantity
+maize,maize_quantity,fixture_maize,source_verified_public,FALSE,fixture,Other supported crop
+barley,empty_quantity,,source_verified_public,FALSE,fixture,Missing expression
+barley,missing_quantity,NA,source_verified_public,FALSE,fixture,Missing expression
+barley,unverified_quantity,fixture_unverified,unverified,FALSE,fixture,Unverified expression

@@ -749,6 +749,70 @@ parents_edge_order <- function(edges, nodes){
 
 
 ################################################################################
+# get_dag.R
+################################################################################
+.query_order_key <- function(nodes, source_order = NULL, node_ids = NULL){ # Compare recorded occurrences without carrying model identifiers
+  if( is.null(source_order) || !length(nodes) ){
+    return(nodes)
+  }
+  ranks <- source_order$ranks
+  required <- c("node_id", "base_order", "at_order", "post_order", "pre_order", "time_order")
+  if( !identical(source_order$version, 1L) || !is.data.frame(ranks) ||
+      !all(required %in% names(ranks)) || anyDuplicated(ranks$node_id) ){
+    stop("The query's recorded quantity order is invalid.", call. = FALSE)
+  }
+  base <- sub("(_pre_treatment|_post_treatment|_t[0-9]+(?:to[0-9]+)?|@t[0-9]+)$", "", nodes, perl = TRUE)
+  suffix <- substring(nodes, nchar(base) + 1L)
+  if( !is.null(node_ids) ){
+    if( length(node_ids) != length(nodes) ){
+      stop("Canonical node identities must match the requested occurrences.", call. = FALSE)
+    }
+    base <- unname(node_ids)
+  }
+  rows <- match(base, ranks$node_id)
+  if( anyNA(rows) ){
+    return(nodes) # A mixed or external graph retains its ordinary name order
+  }
+  position <- ranks$base_order[rows]
+  at_time <- grepl("^@t[0-9]+$", suffix)
+  indexed_time <- grepl("^_t[0-9]+(?:to[0-9]+)?$", suffix, perl = TRUE)
+  post_treatment <- suffix == "_post_treatment"
+  pre_treatment <- suffix == "_pre_treatment"
+  position[at_time] <- ranks$at_order[rows[at_time]]
+  position[indexed_time] <- ranks$time_order[rows[indexed_time]]
+  position[post_treatment] <- ranks$post_order[rows[post_treatment]]
+  position[pre_treatment] <- ranks$pre_order[rows[pre_treatment]]
+  if( anyNA(position) || any(position < 1L | position > 99999999L | position != floor(position)) ){
+    stop("The query's recorded occurrence ranks are invalid.", call. = FALSE)
+  }
+  return(paste0(sprintf("%08d", as.integer(position)), suffix))
+}
+
+
+.query_sort <- function(nodes, source_order = NULL, node_ids = NULL){ # Sort quantities by their recorded order when it applies
+  keys <- .query_order_key(nodes, source_order, node_ids)
+  if( identical(unname(keys), unname(nodes)) ){
+    return(sort(nodes, method = "radix"))
+  }
+  return(nodes[order(keys, method = "radix")])
+}
+
+
+.query_order_applies <- function(nodes, source_order = NULL, node_ids = NULL){ # Use recorded ranks only when they cover the entire compared scope
+  if( is.null(source_order) || !length(nodes) ){
+    return(FALSE)
+  }
+  keys <- .query_order_key(nodes, source_order, node_ids)
+  return(!identical(unname(keys), unname(nodes)))
+}
+
+
+.query_set_key <- function(nodes, source_order = NULL){ # Compare the complete ordered membership of one candidate set
+  return(paste(.query_order_key(nodes, source_order), collapse = "\r"))
+}
+
+
+################################################################################
 # get_funcs.r
 ################################################################################
 #' Create a graph read cache
@@ -2214,6 +2278,108 @@ strip_dag_quotes <- function(x, caller){
   }
 
   return(x)
+}
+
+
+################################################################################
+# query_graph.R
+################################################################################
+## Convert aliases to lowercase and remove underscores, spaces and hyphens.
+## Keep dots so external dotted identifiers remain distinct.
+.normalise_alias <- function( x ){ # Normalise aliases while retaining dotted segments
+  if( length(x) == 0L ){
+    return(character(0L))
+  }
+  return(gsub("[ _-]", "", tolower(x)))
+}
+
+
+## Index each normalised alias by the node identifiers that use it.
+## An alias can belong to several nodes, so retain every matching identifier.
+## The resolver handles aliases that match more than one node.
+.build_alias_index <- function( node_aliases ){ # Index every alias by all node identifiers that claim it
+  node_ids <- names(node_aliases)
+  flat_alias <- .normalise_alias(unlist(node_aliases, use.names = FALSE))
+  alias_nodes <- rep(node_ids, lengths(node_aliases))
+  index <- split(alias_nodes, flat_alias)
+  index <- lapply(index, function( matching_nodes ){ # Retain each matching node once
+    return(unique(matching_nodes))
+  })
+  return(index)
+}
+
+
+## Prefer a unique match to a normalised node identifier when an alias has
+## several candidates.
+## Otherwise, resolve the alias if exactly one candidate is visible.
+## A single hidden candidate still resolves. Return every candidate when the
+## ambiguity remains, or character(0L) when there is no match.
+.resolve_one <- function( col, alias_index, hidden_ids = character(0L) ){ # Resolve an alias by normalised identity or a unique visible node
+  candidates <- alias_index[[ .normalise_alias(col) ]]
+  if( is.null(candidates) ){
+    return(character(0L))
+  }
+  if( length(candidates) == 1L ){
+    return(candidates)
+  }
+  exact <- candidates[ .normalise_alias(candidates) == .normalise_alias(col) ]
+  if( length(exact) == 1L ){
+    return(exact)
+  }
+  visible <- setdiff(candidates, hidden_ids)
+  if( length(visible) == 1L ){
+    return(visible)
+  }
+  return(candidates)
+}
+
+
+## Classify each column as resolved, ambiguous or unmatched.
+## The optional disambiguate vector assigns a column to a chosen node_id.
+## Name resolved entries by the input column so query_graph can use the
+## supplied column name as the node label.
+.resolve_columns <- function( columns, alias_index, disambiguate = NULL, hidden_ids = character(0L) ){ # Resolve supplied columns and retain ambiguous or unmatched inputs
+  resolved <- character(0L)
+  ambiguous <- list()
+  unmatched <- character(0L)
+  if( length(columns) == 0L ){
+    return(list(resolved = resolved, ambiguous = ambiguous, unmatched = unmatched))
+  }
+  ## In c(display = token), resolve the token and retain display as its label.
+  ## An unnamed element uses the token as its label. Resolved values remain
+  ## node identifiers, named by their display labels. Ambiguous and unmatched
+  ## entries retain the input tokens so the caller can identify unresolved names.
+  display_names <- names(columns)
+  for( column_index in seq_along(columns) ){
+    column <- unname(columns[ column_index ])
+    display <- if ( !is.null(display_names) && nzchar(display_names[ column_index ]) ){
+      display_names[ column_index ]
+    }else{
+      column
+    }
+    if( length(disambiguate) > 0L && column %in% names(disambiguate) ){
+      resolved[ display ] <- unname(disambiguate[ column ])
+      next
+    }
+    candidates <- .resolve_one(column, alias_index, hidden_ids)
+    if( length(candidates) == 0L ){
+      unmatched <- c(unmatched, column)
+    }else if( length(candidates) == 1L ){
+      resolved[ display ] <- candidates
+    }else{
+      ambiguous[[ column ]] <- candidates
+    }
+  }
+  return(list(resolved = resolved, ambiguous = ambiguous, unmatched = unmatched))
+}
+
+
+## Remove a temporal suffix to recover the base node identifier.
+## Accepted suffixes are @t or _t followed by a nonnegative integer, and
+## _pre_treatment or _post_treatment.
+## A vertex has at most one of these suffixes.
+.strip_slice <- function( x ){ # Remove the temporal suffix to recover the base node identifier
+  return(sub("(_pre_treatment|_post_treatment|_t[0-9]+|@t[0-9]+)$", "", x))
 }
 
 
