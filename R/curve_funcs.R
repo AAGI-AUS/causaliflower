@@ -443,7 +443,7 @@ curve_edge_plan <- function(df, height = 0.2, mode = "relative",
 
     return(contact)
   }
-  contact <- function(s, r){
+  reference_contact <- function(s, r) { # Retain the released R contact predicate
     if( any(s$low > r$high + 1e-9) || any(r$low > s$high + 1e-9) ) {
       contact <- FALSE
       return(contact)
@@ -488,6 +488,16 @@ curve_edge_plan <- function(df, height = 0.2, mode = "relative",
     }, logical(1)))
 
     return(contact)
+  }
+  native_contact <- .cf_native_symbol("C_cf_curve_contact")
+  contact <- function(s, r) { # Use the native predicate only when it accepts the supplied geometry
+    if (!is.null(native_contact)) {
+      native_result <- .Call(C_cf_curve_contact, s, r, xy)
+      if (!is.na(native_result)) {
+        return(native_result)
+      }
+    }
+    return(reference_contact(s, r))
   }
   contact_cache <- new.env(hash = TRUE, parent = emptyenv())
   cached_contact <- function(s, r){

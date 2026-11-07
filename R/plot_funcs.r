@@ -2,7 +2,7 @@
 # plot_funcs.r
 
 
-# plot_dagitty() and its drawing helpers
+# Role and adjustment set plots and their shared drawing helpers
 # ==============================================================================
 
 
@@ -137,7 +137,123 @@ plot_dagitty <- function(dag,
                          width = NULL,
                          height = NULL,
                          dpi = 300
-                         ){
+                         ){ # Draw causal roles with the shared renderer
+  return(plot_dag_engine(
+    dag, seed = seed, x_step = x_step, y_step = y_step,
+    layout_shape = layout_shape, labels = labels, label_type = label_type,
+    label_placement = label_placement, include_legend = include_legend,
+    curve = curve, legend_position = legend_position, node_size = node_size,
+    label_size = label_size, arrow_size = arrow_size, edge_gap = edge_gap,
+    file = file, output_format = output_format, width = width, height = height,
+    dpi = dpi, format_missing = missing(output_format)
+  ))
+}
+
+
+#' Plot a minimal adjustment set
+#'
+#' Highlights the first set returned by `minimal_sets()` in orange, alongside
+#' treatment, outcome, latent and observed nodes. Other plotting controls follow
+#' `plot_dagitty()`. The supplied graph is unchanged.
+#'
+#' @param dag A dagitty object.
+#' @param treatment,outcome Endpoint names, defaulting to the graph's declared
+#'   roles. Multiple endpoints are queried jointly.
+#' @param effect `"total"` by default, or `"direct"`, passed to `minimal_sets()`.
+#' @param include_legend Groups drawn in colour and listed in the legend. Defaults
+#'   to outcome, treatment, adjustment set, latent and observed. Only present
+#'   groups appear. Omitted groups use a colour close to black. `FALSE` applies
+#'   that colour to all nodes and removes the legend.
+#' @param ... Further arguments control labels, curves, sizes, legend placement and export
+#'   as in `plot_dagitty()`.
+#'
+#' @details
+#' Sets are ordered by size, preserving returned order for ties. Multiple sets
+#' produce a warning naming the displayed set. No available set produces a
+#' warning and no orange nodes. A valid empty set needs no adjustment and does
+#' not produce that warning. Computation errors remain errors.
+#'
+#' Direct sets use the single door criterion for a direct path coefficient in a
+#' linear structural equation model. They are not a general mediation or natural
+#' direct effect calculation. This plotting function does not check for a direct
+#' treatment to outcome arrow.
+#'
+#' @return A ggplot object, invisibly when a file is supplied.
+#' @examples
+#' dag <- dagitty::dagitty("dag { T [exposure] Y [outcome] Z -> T; Z -> Y; T -> Y }")
+#' plot_sets(dag)
+#' plot_sets(dag, effect = "direct", legend_position = "bottom")
+#' @md
+#' @export
+plot_sets <- function(dag, treatment = NULL, outcome = NULL, effect = "total",
+                      include_legend = c("outcome", "treatment", "adjustment set",
+                                         "latent", "observed"), ...){ # Draw the first complete minimal set without classifying causal roles
+  if( !dagitty::is.dagitty(dag) ){
+    stop("plot_sets(): dag must be a dagitty object.", call. = FALSE)
+  }
+  if( !is.character(effect) || length(effect) != 1L || is.na(effect) ||
+      !effect %in% c("total", "direct") ){
+    stop('plot_sets(): effect must be "total" or "direct".', call. = FALSE)
+  }
+  if( is.null(treatment) ){
+    treatment <- dagitty::exposures(dag)
+  }
+  if( is.null(outcome) ){
+    outcome <- dagitty::outcomes(dag)
+  }
+  if( !is.character(treatment) || length(treatment) == 0L || anyNA(treatment) ||
+      any(!treatment %in% names(dag)) ){
+    stop("plot_sets(): treatment must name at least one node in dag.", call. = FALSE)
+  }
+  if( !is.character(outcome) || length(outcome) == 0L || anyNA(outcome) ||
+      any(!outcome %in% names(dag)) ){
+    stop("plot_sets(): outcome must name at least one node in dag.", call. = FALSE)
+  }
+
+  sets <- suppressMessages(minimal_sets(dag, treatment = treatment,
+    outcome = outcome, effect = effect, num_sets = .Machine$integer.max))
+  selected <- if( length(sets) > 0L ){
+    as.character(unlist(sets[[1L]], use.names = FALSE))
+  }else{
+    warning("plot_sets(): no adjustment set is available for the ", effect,
+            " effect; no adjustment nodes are highlighted.", call. = FALSE)
+    character(0)
+  }
+  if( length(sets) > 1L ){
+    warning("plot_sets(): ", length(sets), " adjustment sets are available for the ",
+            effect, " effect; displaying the first in minimal_sets() order: {",
+            paste(selected, collapse = ", "), "}.", call. = FALSE)
+  }
+
+  groups <- list(outcome = outcome, treatment = treatment,
+                 "adjustment set" = selected, latent = dagitty::latents(dag))
+  groups$observed <- setdiff(names(dag), unlist(groups, use.names = FALSE))
+  return(plot_dag_engine(dag, groups = groups, include_legend = include_legend, ...))
+}
+
+
+plot_dag_engine <- function(dag,
+                            seed = NULL,
+                            x_step = 3,
+                            y_step = 1.5,
+                            layout_shape = 1,
+                            labels = NULL,
+                            label_type = "name",
+                            label_placement = "above",
+                            include_legend = names(groups),
+                            curve = TRUE,
+                            legend_position = "top",
+                            node_size = 13,
+                            label_size = 4.5,
+                            arrow_size = 4.5,
+                            edge_gap = 1,
+                            file = NULL,
+                            output_format = "svg",
+                            width = NULL,
+                            height = NULL,
+                            dpi = 300,
+                            format_missing = missing(output_format),
+                            groups = NULL){ # Render supplied groups or causal roles with the same layout and export controls
 
   if( !is.logical(curve) || length(curve) != 1L ||
       is.na(curve) ){
@@ -173,7 +289,7 @@ plot_dagitty <- function(dag,
          call. = FALSE)
   }
   format <- plot_output_format(file, output_format,
-                               missing(output_format))
+                               format_missing)
   for( argument in c("width", "height") ){
     value <- get(argument)
     if( !is.null(value) && ( !is.numeric(value) || length(value) != 1L ||
@@ -190,7 +306,11 @@ plot_dagitty <- function(dag,
     stop("plot_dagitty() requires a graph with at least one edge. Roles and coordinates for graphs without edges remain available via get_roles() and add_coords().")
   }
 
-  roles <- classify_node_roles(dag, .cache = .cache)
+  roles <- if( is.null(groups) ){
+    classify_node_roles(dag, .cache = .cache)
+  }else{
+    groups
+  }
 
   controls <- edge_controls(dag, "plot_dagitty")
   dag <- dag_for_layout(dag, "plot_dagitty")
@@ -214,6 +334,7 @@ plot_dagitty <- function(dag,
   # aesthetics for the role legend
   col <- c("outcome"="deepskyblue",
            "treatment"="darkolivegreen2",
+           "adjustment set"="coral2",
            "confounder"="coral2",
            "mediator"="darkorchid1",
            "mediator_outcome_confounder"="magenta4",
@@ -230,6 +351,7 @@ plot_dagitty <- function(dag,
   # variable for legend order
   order_col <- c("outcome",
                  "treatment",
+                 "adjustment set",
                  "confounder",
                  "mediator",
                  "mediator_outcome_confounder",

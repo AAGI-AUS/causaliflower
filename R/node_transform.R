@@ -139,7 +139,29 @@ collapse_validate_graph <- function(dag){
 #' @param nodes Existing node names to omit.
 #' @return An edge table on the remaining vertices.
 #' @noRd
-collapse_project_edges <- function(vertices, edges, nodes){
+collapse_project_edges <- function(vertices, edges, nodes) { # Use the registered projection when its inputs match the R path
+  symbol <- .cf_native_symbol("C_cf_project_edges")
+  if (is.null(symbol)) {
+    return(collapse_project_edges_R(vertices, edges, nodes))
+  }
+  vertices <- sort(as.character(vertices))
+  endpoints <- cbind(match(edges$v, vertices), match(edges$w, vertices))
+  arrows <- edges$e == "->"
+  if (anyDuplicated(vertices) || anyNA(vertices) || anyNA(endpoints) || anyNA(arrows)) {
+    return(collapse_project_edges_R(vertices, edges, nodes))
+  }
+  projected_indices <- .Call(C_cf_project_edges, as.integer(length(vertices)), as.integer(endpoints[, 1L]),
+    as.integer(endpoints[, 2L]), !arrows, vertices %in% nodes)
+  projected <- data.frame(v = vertices[projected_indices[, 1L]],
+    e = as.character(ifelse(projected_indices[, 3L] == 0L, "->", "<->")),
+    w = vertices[projected_indices[, 2L]], stringsAsFactors = FALSE)
+  projected <- projected[order(edge_key(projected)), , drop = FALSE]
+  rownames(projected) <- NULL
+  return(projected)
+}
+
+
+collapse_project_edges_R <- function(vertices, edges, nodes) { # Keep the released R projection as the complete fallback
   vertices <- sort(as.character(vertices))
   directed <- matrix(FALSE, length(vertices), length(vertices),
                      dimnames = list(vertices, vertices))

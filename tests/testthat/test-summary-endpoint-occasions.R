@@ -1,0 +1,20 @@
+test_that("time summaries do not change an endpoint intervention by merging occasions", {
+  g <- dagitty::dagitty('dag { X_t2 [exposure] Y_t3 [outcome] X_t1 -> Y_t3 }')
+  result <- .gd_summary(g, keep = 'X_t1')
+  expect_false(result$applied)
+  expect_match(result$reason, 'distinct occasions of an endpoint')
+  expect_identical(dagitty::exposures(result$graph), 'X_t2')
+  expect_false('Y_t3' %in% dagitty::descendants(result$graph, 'X_t2'))
+  expect_setequal(names(result$graph), names(g))
+})
+
+test_that("multiple tagged occasions of an endpoint are not silently combined", {
+  g <- dagitty::dagitty('dag { X_t1 [exposure] X_t2 [exposure] Y [outcome] X_t1 -> X_t2 -> Y }')
+  result <- .gd_summary(g)
+  expect_false(result$applied)
+  expect_setequal(dagitty::exposures(result$graph), c('X_t1', 'X_t2'))
+  h <- dagitty::dagitty('dag { X [exposure] Y_t1 [outcome] Y_t2 [outcome] X -> Y_t1 -> Y_t2 }')
+  result <- .gd_summary(h)
+  expect_false(result$applied)
+  expect_setequal(dagitty::outcomes(result$graph), c('Y_t1', 'Y_t2'))
+})

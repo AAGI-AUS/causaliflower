@@ -46,7 +46,7 @@ devtools::test()
 ```
 
 Edit function help in the roxygen source. Use `@noRd` for internal functions
-that do not need a help page. For 0.0.2, regenerate with roxygen2 7.3.3.
+that do not need a help page. Regenerate with roxygen2 7.3.3.
 The RStudio project also runs roxygen when building, so check its version.
 
 ```r

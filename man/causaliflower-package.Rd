@@ -6,7 +6,7 @@
 \alias{causaliflower-package}
 \title{causaliflower: Build and Assess Causal Graphs}
 \description{
-Extends 'dagitty' and 'ggdag' with functions to build, edit and plot causal graphs in R. Also provides guided assessment of causal arrows and checks whether causal effects are identifiable.
+Extends 'dagitty' and 'ggdag' with functions to build, edit and plot causal graphs in R. Also provides guided assessment of causal arrows, checks whether causal effects are identifiable, and constructs directed acyclic graphs by querying a structural causal model derived from APSIM for barley, wheat and maize.
 }
 \seealso{
 Useful links:

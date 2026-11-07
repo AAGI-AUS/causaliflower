@@ -20,8 +20,44 @@ pak::pak("AAGI-AUS/causaliflower")
 
 ```
 
+Development version 0.0.2.9000 requires `dagitty` exactly 0.3.4.
+Installing from source also requires a C++17 compiler.
+
 Examples are included below. If the introductory vignette is installed,
 open it with `vignette("causaliflower-introduction")`.
+
+
+### DAG-by-query
+
+`get_dag()` constructs a DAG by querying the bundled structural causal model
+derived from APSIM. The slice contains 576 quantities with readable names
+across barley, wheat and maize. Supply the crop, treatment and outcome, and state
+whether the treatment was randomised.
+
+```R
+library(causaliflower)
+
+crop_dag <- get_dag(
+  crop = "barley",
+  treatments = "nitrogen_applied",
+  outcomes = "grain_protein",
+  randomised_treatment = FALSE,
+  latents = NULL,
+  quiet = TRUE
+)
+
+plot_dagitty(crop_dag)
+```
+
+Here `latents = NULL` assumes all quantities are observed for this example.
+The ranked search reports its step budget and completion
+limits, including when larger adjustment options may remain. `quiet = TRUE`
+suppresses routine progress, while these warnings remain visible.
+
+Inspect the saved query, ranked options and construction checks with
+`original_query(crop_dag)`, `dag_options(crop_dag)` and `dag_checks(crop_dag)`.
+`dag_history(crop_dag)` records the transformations. The selected adjustment
+sets and the catalogue of alternatives are checked separately.
 
 
 ### Example code
