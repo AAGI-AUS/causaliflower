@@ -146,13 +146,19 @@ plot_dagitty(dag)
 ```
 
 
-- Check whether the total effect of `T` on `Y` is identifiable:
+- Check if the effects are identifiable:
 
 ```R
 
-get_identification(dag, treatment = "T", outcome = "Y")
+get_identification(dag)
 
 ```
+
+The result is grouped by effect. Identification verdicts are shown separately
+from the strategies. Each strategy shows its method, assumptions, variables
+and identification status. Use `id_status = "all"` to include unsuccessful
+strategy checks. Identification depends on the supplied graph and the
+assumptions stated with each result.
 
 
 - Find single door sets for the direct path coefficient in a linear model (returns up to five sets, ordered by size):

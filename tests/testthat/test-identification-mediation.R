@@ -1,17 +1,25 @@
-mediation_entries <- function(result) {
-  attr(result, "mediation")
+################################################################################
+# test-identification-mediation.R
+
+
+# Check mediation formulas and mediator validation
+
+# Mediation formula checks use the private query records.
+# Explicit get_identification() calls test public argument handling.
+mediation_entries <- function(result) { # Read the private mediation strategy entries
+  return(attr(result, "mediation"))
 }
 
-mediation_entry <- function(result, mediators) {
+mediation_entry <- function(result, mediators) { # Select one mediator set without losing alternatives
   entries <- mediation_entries(result)
   matches <- vapply(entries, function(entry) {
-    identical(entry$mediators, sort(unique(mediators)))
+    return(identical(entry$mediators, sort(unique(mediators))))
   }, logical(1))
   expect_equal(sum(matches), 1L)
-  entries[[which(matches)]]
+  return(entries[[which(matches)]])
 }
 
-expect_mediation_formula <- function(dag, result, mediators, adjustment) {
+expect_mediation_formula <- function(dag, result, mediators, adjustment) { # Check both adjustment conditions for the mediation formula
   entry <- mediation_entry(result, mediators)
   expect_true(entry$feasible)
   expect_length(entry$adjustment_sets, 1L)
@@ -25,6 +33,7 @@ expect_mediation_formula <- function(dag, result, mediators, adjustment) {
     dag, entry$adjustment_sets[[1L]], exposure = c("T", mediators),
     outcome = "Y"
   ))
+  return(invisible(NULL))
 }
 
 test_that("direct queries report a separate natural-effects strategy", {
@@ -138,7 +147,7 @@ test_that("automatic queries include singleton and joint observed mediators", {
   expect_mediation_formula(dag, result, "M2", character())
   expect_mediation_formula(dag, result, c("M1", "M2"), character())
   expect_false(any(c("D", "X", "I") %in% unlist(lapply(
-    entries, function(entry) entry$mediators
+    entries, function(entry) { return(entry$mediators) }
   ), use.names = FALSE)))
 
   selected <- identification_result(
@@ -165,7 +174,7 @@ test_that("mediation reporting does not require a direct treatment-outcome arrow
     "dag { T [exposure] Y [outcome] T -> M M -> Y }"
   )
   result <- identification_result(dag, effect = "direct")
-  expect_false(result$feasible[[1L]])
+  expect_true(result$feasible[[1L]])
   expect_true(attr(result, "identifiable"))
   expect_mediation_formula(dag, result, "M", character())
 
@@ -252,7 +261,9 @@ test_that("mediation leaves total, conditional, and experimental output unchange
   positional <- suppressMessages(get_identification(
     dag, NULL, NULL, "direct", NULL, NULL, TRUE
   ))
-  expect_identical(positional, identification_result(dag, effect = "direct"))
+  expect_identical(
+    positional, get_identification(dag, effect = "direct", quiet = TRUE)
+  )
 })
 
 test_that("explicit mediators must be observed internal causal-path nodes", {
@@ -269,17 +280,17 @@ test_that("explicit mediators must be observed internal causal-path nodes", {
       "mediator"
     )
   }
-  for (effect in list(NULL, "total")) {
-    if (is.null(effect)) {
-      expect_error(get_identification(dag, mediator = "M", quiet = TRUE),
-                   "direct")
-    } else {
-      expect_error(get_identification(dag, effect = effect, mediator = "M",
-                                      quiet = TRUE), "direct")
-    }
-  }
+  overview <- get_identification(dag, mediator = "M", quiet = TRUE)
+  expect_identical(
+    attr(overview, "analyses")$mediation,
+    mediation_entries(identification_result(
+      dag, effect = "direct", mediator = "M"
+    ))
+  )
+  expect_error(get_identification(dag, effect = "total", mediator = "M",
+                                  quiet = TRUE), "direct")
   expect_error(get_identification(dag, mediator = character(), quiet = TRUE),
-               "direct")
+               "mediator")
   expect_error(get_identification(dag, effect = "direct", mediator = "M",
                                   conditioning = "X", quiet = TRUE))
   expect_error(get_identification(dag, effect = "direct", mediator = "M",

@@ -1,4 +1,12 @@
-test_that("successful results use one stable contract", {
+################################################################################
+# test-identification-contract.R
+
+
+# Check private query contracts and public argument handling
+
+# Check the five columns of each private query record. Calls to the public
+# get_identification() separately exercise its validation and messages.
+test_that("private query results use consistent columns and attributes", {
   dag <- dagitty::dagitty(
     "dag { T [exposure] Y [outcome] X X -> T X -> Y T -> Y }"
   )
@@ -44,7 +52,7 @@ test_that("successful results use one stable contract", {
   )
 })
 
-test_that("strategy and role tables use the documented schema", {
+test_that("private strategy and role tables retain their schema", {
   dag <- dagitty::dagitty(
     paste0(
       "dag { T [exposure] Y [outcome] X M ",
@@ -128,7 +136,8 @@ test_that("explicit untagged endpoints are accepted", {
     "dag { T1 [exposure] T2 [exposure] Y1 [outcome] Y2 [outcome]
            T1 -> Y1 T2 -> Y2 }"
   )
-  expect_error(get_identification(multi, quiet = TRUE))
+  joint <- get_identification(multi, quiet = TRUE)
+  expect_true(attr(joint, "analyses")$total$identifiable)
   selected <- identification_result(
     multi, treatment = "T1", outcome = "Y1"
   )
@@ -136,18 +145,16 @@ test_that("explicit untagged endpoints are accepted", {
 
   no_treatment <-
     "No treatment detected: 'get_identification()' requires exactly one named treatment, either tagged in the DAG or supplied through 'treatment'. Please ensure a single treatment is supplied and try again."
-  multiple_treatments <-
-    "Multiple treatments detected: 'get_identification()' requires exactly one named treatment, either tagged in the DAG or supplied through 'treatment'. Please ensure a single treatment is supplied and try again."
   invalid_treatment <-
     "Invalid treatment detected: 'get_identification()' requires exactly one named treatment, either tagged in the DAG or supplied through 'treatment'. Please ensure a single treatment is supplied and try again."
   no_outcome <-
     "No outcome detected: 'get_identification()' requires exactly one named outcome, either tagged in the DAG or supplied through 'outcome'. Please ensure a single outcome is supplied and try again."
-  multiple_outcomes <-
-    "Multiple outcomes detected: 'get_identification()' requires exactly one named outcome, either tagged in the DAG or supplied through 'outcome'. Please ensure a single outcome is supplied and try again."
   invalid_outcome <-
     "Invalid outcome detected: 'get_identification()' requires exactly one named outcome, either tagged in the DAG or supplied through 'outcome'. Please ensure a single outcome is supplied and try again."
   distinct_endpoints <-
     "Identical treatment and outcome detected: 'get_identification()' requires the named treatment and outcome to refer to different nodes in the DAG. Please ensure different treatment and outcome nodes are supplied and try again."
+  overlapping_endpoints <-
+    "Overlapping treatment and outcome sets detected: joint endpoint queries require disjoint observed treatment and outcome sets."
 
   expect_identification_error(
     get_identification(untagged, quiet = TRUE), no_treatment
@@ -158,12 +165,12 @@ test_that("explicit untagged endpoints are accepted", {
   expect_identification_error(
     get_identification(untagged, treatment = c("A", "B"), outcome = "B",
                        quiet = TRUE),
-    multiple_treatments
+    overlapping_endpoints
   )
   expect_identification_error(
     get_identification(untagged, treatment = "A", outcome = c("A", "B"),
                        quiet = TRUE),
-    multiple_outcomes
+    overlapping_endpoints
   )
   expect_identification_error(
     get_identification(untagged, treatment = "A", outcome = "A",
@@ -292,13 +299,13 @@ test_that("unsupported combinations fail instead of being ignored", {
   bad_experiments <-
     "Invalid experiments input detected: 'experiments' requires observed DAG node names as input. Please ensure each supplied name corresponds to an observed node in the supplied DAG other than the treatment and outcome, and try again."
   conditioning_total_only <-
-    "Unsupported input combination detected: 'conditioning' must be 'NULL' when 'effect = \"direct\"'. Please remove the supplied 'conditioning' input or use 'effect = \"total\"' and try again."
+    "Joint endpoints, conditioning and experiments support only total effect queries."
   experiments_total_only <-
-    "Unsupported input combination detected: 'experiments' must be 'NULL' when 'effect = \"direct\"'. Please remove the supplied 'experiments' input or use 'effect = \"total\"' and try again."
+    "Joint endpoints, conditioning and experiments support only total effect queries."
   incompatible_data <-
     "Unsupported input combination detected: 'conditioning' and 'experiments' cannot both be supplied when 'effect = \"total\"'. Please remove either the supplied 'conditioning' input or the supplied 'experiments' input and try again."
   invalid_effect <-
-    "Invalid input detected: only 'total' or 'direct' may be supplied as 'effect' input. Please check the input and try again."
+    "'effect' must be NULL for an overview, or one of 'total', 'direct' and 'indirect'."
   invalid_quiet <-
     "Invalid input detected: only TRUE or FALSE may be supplied as 'quiet' input."
 
@@ -348,117 +355,32 @@ test_that("unsupported combinations fail instead of being ignored", {
   }
 })
 
-test_that("quiet suppresses the summary message", {
-  expect_summary <- function(code, expected) {
-    messages <- testthat::capture_messages(code)
-    expect_identical(messages, paste0(expected, "\n"))
+test_that("quiet suppresses public messages without changing results", {
+  dag <- dagitty::dagitty(
+    "dag { T [exposure] Y [outcome] X X -> T X -> Y T -> M M -> Y T -> Y }"
+  )
+  expect_quiet <- function(...) { # Compare public output with and without messages
+    messages <- testthat::capture_messages(
+      visible <- get_identification(dag, ...)
+    )
+    expect_gt(length(messages), 0L)
+    expect_identical(
+      testthat::capture_messages(
+        quiet <- get_identification(dag, ..., quiet = TRUE)
+      ),
+      character()
+    )
+    expect_identical(quiet, visible)
+    # An overview contains separate causal targets
+    expect_null(attr(quiet, "identifiable", exact = TRUE))
+    expect_type(attr(quiet, "analyses", exact = TRUE), "list")
+    return(invisible(NULL))
   }
-
-  total_identified <- dagitty::dagitty(
-    "dag { T [exposure] Y [outcome] T -> Y }"
-  )
-  expect_summary(
-    get_identification(total_identified),
-    paste0(
-      "The total effect of 'T' on 'Y' is identifiable from ",
-      "observational data under this DAG."
-    )
-  )
-
-  z_rescue <- dagitty::dagitty(
-    "dag { T [exposure] Y [outcome] Z Z -> T T -> Y T <-> Z Z <-> Y }"
-  )
-  expect_summary(
-    get_identification(z_rescue, experiments = "Z"),
-    paste0(
-      "The total effect of 'T' on 'Y' is not identifiable from ",
-      "observational data alone, but is identifiable using surrogate ",
-      "experimental data for {Z} declared through 'experiments'."
-    )
-  )
-
-  bow <- dagitty::dagitty(
-    "dag { T [exposure] Y [outcome] T -> Y T <-> Y }"
-  )
-  expect_summary(
-    get_identification(bow),
-    paste0(
-      "The total effect of 'T' on 'Y' is not identifiable from the ",
-      "supplied data under this DAG."
-    )
-  )
-
-  condition_helps <- dagitty::dagitty(
-    "dag { T [exposure] Y [outcome] Z T -> Z Z -> Y T <-> Z }"
-  )
-  expect_summary(
-    get_identification(condition_helps, conditioning = "Z"),
-    paste0(
-      "The effect of 'T' on 'Y' given {Z} is identifiable from ",
-      "observational data under this DAG."
-    )
-  )
-
-  condition_hurts <- dagitty::dagitty(
-    "dag { T [exposure] Y [outcome] Z T -> Z Y -> Z T <-> Z }"
-  )
-  expect_summary(
-    get_identification(condition_hurts, conditioning = "Z"),
-    paste0(
-      "The effect of 'T' on 'Y' given {Z} is not identifiable from ",
-      "observational data under this DAG."
-    )
-  )
-
-  direct_identified <- dagitty::dagitty(
-    "dag { T [exposure] Y [outcome] M T -> M M -> Y T -> Y }"
-  )
-  expect_summary(
-    get_identification(direct_identified, effect = "direct"),
-    paste0(
-      "The outcome distribution for the controlled direct effect of 'T' ",
-      "on 'Y' is identifiable from observational data in the ",
-      "latent-projected graph (with the outcome's other parents held fixed)."
-    )
-  )
-  expect_summary(
-    get_identification(bow, effect = "direct"),
-    paste0(
-      "The outcome distribution for the controlled direct effect of 'T' ",
-      "on 'Y' is not identifiable from observational data in the ",
-      "latent-projected graph (with the outcome's other parents held fixed)."
-    )
-  )
-
-  no_total_path <- dagitty::dagitty(
-    "dag { T [exposure] Y [outcome] }"
-  )
-  expect_summary(
-    get_identification(no_total_path),
-    paste0(
-      "The DAG contains no directed path from 'T' to 'Y', so it encodes ",
-      "no total causal effect of 'T' on 'Y'."
-    )
-  )
-
-  no_direct_arrow <- dagitty::dagitty(
-    "dag { T [exposure] Y [outcome] M T -> M M -> Y }"
-  )
-  expect_summary(
-    get_identification(no_direct_arrow, effect = "direct"),
-    paste0(
-      "The latent-projected graph contains no direct arrow from 'T' to ",
-      "'Y'. The verdict attributes refer to the intervention on the ",
-      "treatment and fixing set."
-    )
-  )
-
-  expect_identical(
-    testthat::capture_messages(
-      get_identification(total_identified, quiet = TRUE)
-    ),
-    character()
-  )
+  expect_quiet()
+  expect_quiet(effect = "total")
+  expect_quiet(effect = "direct")
+  expect_quiet(conditioning = "X")
+  expect_quiet(experiments = "X")
 })
 
 test_that("names, isolates, and edge order do not change the verdict", {
@@ -530,6 +452,13 @@ test_that("named scalar inputs preserve the requested query", {
     )
     expect_identical(named, plain)
     expect_identical(
+      get_identification(
+        dag, treatment = c(input = "T"), outcome = c(input = "Y"),
+        effect = stats::setNames(effect, "query"), quiet = TRUE
+      ),
+      get_identification(dag, effect = effect, quiet = TRUE)
+    )
+    expect_identical(
       testthat::capture_messages(get_identification(
         dag, effect = stats::setNames(effect, "query")
       )),
@@ -559,11 +488,11 @@ test_that("only NULL omits an incompatible optional argument", {
   )
   expect_error(
     get_identification(dag, effect = "direct", conditioning = character()),
-    "Unsupported input combination detected", fixed = TRUE
+    "support only total effect queries", fixed = TRUE
   )
   expect_error(
     get_identification(dag, effect = "direct", experiments = character()),
-    "Unsupported input combination detected", fixed = TRUE
+    "support only total effect queries", fixed = TRUE
   )
   expect_error(
     get_identification(dag, conditioning = character(), experiments = "M"),

@@ -1,5 +1,19 @@
 # causaliflower 0.0.2
 
+- `get_identification()` now returns a nested list grouped by effect.
+  Identification verdicts are separate from the strategy records, which print
+  as numbered blocks with method, assumptions, variables, identification
+  status and notes. Flat strategy tables are available through
+  `as.data.frame()` and `as.data.table()`.
+- Adds conditional front door adjustment, with a mediator set and covariates
+  for each strategy.
+- For one treatment and one outcome, the default checks total, direct and
+  indirect effects when `conditioning` and `experiments` are `NULL`.
+  Effects and coefficients that are zero by graph are also shown.
+- Adds `method` and `id_status` selections alongside `effect`.
+  Use `id_status = "all"` to include unsuccessful checks for the selected report.
+- Adds joint total effect queries with multiple treatments or outcomes.
+
 - Reworked internal role grouping for readability, with the same results.
 - Expanded the readability cleanup across construction, copying, routing,
   layout, curves and identification: descriptive local names, braced
@@ -88,10 +102,6 @@
   by status accessors and graph inspection functions.
 - Adds `get_identification()` to check whether causal effects are identifiable
   in `dagitty` DAGs.
-- With `effect = "direct"`, `get_identification()` also checks the standard
-  mediation formula for natural direct and indirect effects. Use `mediator`
-  to select a mediator or joint mediator set. These checks report their
-  additional assumptions separately from the controlled direct effect verdict.
 - Adds `add_edges()` for adding specified edges between nodes already present
   in a graph, and `remove_edges()` for removing specified edges while
   preserving the remaining graph.

@@ -666,8 +666,8 @@ instruments <- function(dag,
 #' With `effect = "direct"`, dagitty's single door criterion is used. These
 #' sets identify a direct path coefficient in a linear structural equation
 #' model when the corresponding arrow from treatment to outcome exists. The wrapper
-#' does not check for that arrow. This differs from the nonparametric response
-#' distribution checked by `get_identification(effect = "direct")`.
+#' does not check for that arrow. `get_identification(effect = "direct")`
+#' reports the single door check separately from natural direct effects.
 #'
 #' @importFrom data.table as.data.table is.data.table
 #' @importFrom dagitty adjustmentSets

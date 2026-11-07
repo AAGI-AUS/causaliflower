@@ -1,3 +1,10 @@
+################################################################################
+# test-identification-role-guidance.R
+
+
+# Check overlapping identification roles
+
+# These roles belong to the private query record
 test_that("separate strategies retain truthful overlapping roles", {
   dag <- dagitty::dagitty(paste(
     "dag { T [exposure] Y [outcome] A -> B -> T",

@@ -1,34 +1,43 @@
-identification_result <- function(dag, ...) {
-  suppressMessages(get_identification(dag, ..., quiet = TRUE))
+################################################################################
+# helper-identification.R
+
+
+# Support private identification oracles and public report checks
+
+# Computational checks use one private query at a time. Public behaviour is
+# tested through get_identification().
+identification_result <- function(dag, ...) { # Return the private record for one query
+  return(causaliflower:::id_identification_query(dag, ..., quiet = TRUE))
 }
 
-expect_identification_error <- function(code, message) {
+expect_identification_error <- function(code, message) { # Check the complete validation error
   error <- testthat::capture_error(code)
   testthat::expect_true(inherits(error, "error"))
   testthat::expect_identical(conditionMessage(error), message)
+  return(invisible(NULL))
 }
 
-identification_strategy <- function(result, pattern) {
+identification_strategy <- function(result, pattern) { # Select one private strategy row
   index <- grep(pattern, result$strategy, ignore.case = TRUE)
   testthat::expect_length(index, 1L)
-  result[index]
+  return(result[index])
 }
 
-identification_edge_keys <- function(dag) {
+identification_edge_keys <- function(dag) { # Compare typed graph edges
   edges <- as.data.frame(dagitty::edges(dag))
   if (nrow(edges) == 0L) {
     return(character())
   }
-  sort(paste(edges$v, edges$e, edges$w))
+  return(sort(paste(edges$v, edges$e, edges$w)))
 }
 
-identification_roots <- function(dag) {
+identification_roots <- function(dag) { # Find nodes with no outgoing directed edge
   edges <- as.data.frame(dagitty::edges(dag))
   directed <- edges[edges$e == "->", , drop = FALSE]
-  sort(setdiff(names(dag), as.character(directed$v)))
+  return(sort(setdiff(names(dag), as.character(directed$v))))
 }
 
-identification_is_district <- function(dag) {
+identification_is_district <- function(dag) { # Check bidirected connectivity for a hedge witness
   vertices <- names(dag)
   if (length(vertices) <= 1L) {
     return(TRUE)
@@ -40,7 +49,7 @@ identification_is_district <- function(dag) {
     return(FALSE)
   }
 
-  adjacency <- stats::setNames(lapply(vertices, function(x) character()),
+  adjacency <- stats::setNames(lapply(vertices, function(node) { return(character()) }),
                                vertices)
   for (i in seq_len(nrow(bidirected))) {
     left <- as.character(bidirected$v[i])
@@ -56,11 +65,13 @@ identification_is_district <- function(dag) {
     frontier <- setdiff(neighbours, reached)
     reached <- union(reached, frontier)
   }
-  setequal(reached, vertices)
+  return(setequal(reached, vertices))
 }
 
-expect_identification_shape <- function(result) {
+expect_identification_shape <- function(result) { # Check every private record column and attribute
+  # Check the private worker's five columns
   testthat::expect_s3_class(result, "data.table")
+  testthat::expect_false(inherits(result, "causaliflower_identification"))
   testthat::expect_identical(
     names(result),
     c("strategy", "feasible", "tier", "variable_set", "note")
@@ -77,9 +88,9 @@ expect_identification_shape <- function(result) {
     "conditional"
   )
   for (attribute in scalar_logical_attributes) {
-    value <- attr(result, attribute)
-    testthat::expect_type(value, "logical")
-    testthat::expect_length(value, 1L)
+    attribute_value <- attr(result, attribute)
+    testthat::expect_type(attribute_value, "logical")
+    testthat::expect_length(attribute_value, 1L)
   }
 
   testthat::expect_type(attr(result, "data_availability"), "character")
@@ -97,9 +108,10 @@ expect_identification_shape <- function(result) {
   testthat::expect_type(attr(result, "conditioning_remaining"), "character")
   testthat::expect_type(attr(result, "caveat"), "character")
   testthat::expect_length(attr(result, "caveat"), 1L)
+  return(invisible(NULL))
 }
 
-expect_valid_identification_hedge <- function(result, source_dag) {
+expect_valid_identification_hedge <- function(result, source_dag) { # Validate both hedge forests against the source graph
   hedge <- attr(result, "hedge")
   testthat::expect_type(hedge, "list")
   testthat::expect_named(hedge, c("F", "F_prime", "roots", "query"))
@@ -136,4 +148,5 @@ expect_valid_identification_hedge <- function(result, source_dag) {
   testthat::expect_type(intervention, "character")
   testthat::expect_true(any(intervention %in% names(hedge$F)))
   testthat::expect_false(any(intervention %in% names(hedge$F_prime)))
+  return(invisible(NULL))
 }

@@ -1,3 +1,10 @@
+################################################################################
+# test-identification-adjustment-reporting.R
+
+
+# Check reporting of complete adjustment sets
+
+# These inspect the private record for a total effect retained in public analyses
 test_that("adjustment reporting separates minimal and canonical sets", {
   dag <- dagitty::dagitty(paste(
     "dag { M U T [exposure] Y [outcome] X",

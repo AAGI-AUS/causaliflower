@@ -8,136 +8,226 @@ get_identification(
   dag,
   treatment = NULL,
   outcome = NULL,
-  effect = c("total", "direct"),
+  effect = c("total", "direct", "indirect"),
   experiments = NULL,
   conditioning = NULL,
   quiet = FALSE,
-  mediator = NULL
+  mediator = NULL,
+  method = NULL,
+  id_status = c("identifiable", "all", "not_identifiable", "not_established",
+    "not_assessed", "candidate", "zero_by_graph")
 )
 }
 \arguments{
-\item{dag}{A \code{dagitty} object representing a causal DAG. Bidirected edges
-are supported between observed nodes. All edges connected to explicitly
+\item{dag}{A \code{dagitty} object representing a causal DAG. Bidirected
+edges are supported between observed nodes. All edges connected to explicitly
 declared latent nodes must be directed.}
 
-\item{treatment}{A single character string naming an observed treatment
-node. If left \code{NULL}, the \code{dagitty} object must contain exactly one
-treatment marked with the \verb{[exposure]} tag.}
+\item{treatment}{A nonempty character vector naming observed treatment nodes.
+If \code{NULL}, uses the DAG's \verb{[exposure]} nodes. Repeated names are used once.}
 
-\item{outcome}{A single character string naming an observed outcome node.
-If left \code{NULL}, the \code{dagitty} object must contain exactly one outcome
-marked with the \verb{[outcome]} tag.}
+\item{outcome}{A nonempty character vector naming observed outcome nodes.
+If \code{NULL}, uses the DAG's \verb{[outcome]} nodes. Treatment and outcome must not
+share a node.}
 
-\item{effect}{The effect to check: \code{"total"} (the default) or \code{"direct"}.}
+\item{effect}{Omit this argument or use \code{NULL} for an overview of total,
+direct and indirect effects when there is one treatment and one outcome.
+With several treatments or outcomes, or with \code{conditioning} or
+\code{experiments}, the function checks only the total effect. Supply \code{"total"},
+\code{"direct"} or \code{"indirect"} to request only that effect group.
+Supply one value at a time.}
 
-\item{experiments}{An optional character vector naming observed nodes for
-which surrogate experimental data are available. It cannot include the
-treatment or outcome. When supplied, use \code{effect = "total"} and
-\code{conditioning = NULL}.}
+\item{experiments}{Optional observed node names with experimental data from
+interventions on those nodes. Cannot include treatment or outcome.
+Requires a total effect query and \code{conditioning = NULL}.}
 
-\item{conditioning}{An optional character vector naming observed nodes to
-condition on in \eqn{P(y \mid do(x), z)}. It cannot include the treatment
-or outcome. When supplied, use \code{effect = "total"} and
-\code{experiments = NULL}.}
+\item{conditioning}{Optional observed node names to condition on in
+\eqn{P(y \mid do(x), z)}. Cannot include treatment or outcome.
+Requires a total effect query and \code{experiments = NULL}.}
 
-\item{quiet}{If \code{TRUE}, suppress the summary message.}
+\item{quiet}{If \code{TRUE}, suppress the message emitted during the call.
+The returned object can still be printed, including by R's automatic display.}
 
-\item{mediator}{An optional nonempty character vector of observed mediators
-on directed paths from treatment to outcome. Requires \code{effect = "direct"}.
-Supply several mediator names to assess them jointly. With \code{NULL}, each
-observed mediator is checked separately, followed by all observed
-mediators together if there is more than one.}
+\item{mediator}{Optional nonempty character vector of observed mediators on
+directed paths from treatment to outcome. Defines the mediator set for
+natural direct or indirect effects. With \code{NULL}, each observed mediator
+is checked separately, followed by their joint set if there is more than
+one. Latent mediators cannot be selected. Requires a selection that includes
+natural direct or indirect effects. This does not change either front door
+search, the single door search or the stored parent intervention diagnostic.}
+
+\item{method}{Optional character vector selecting strategies by their exact
+names: \code{"adjustment"}, \code{"front_door"}, \code{"conditional_front_door"},
+\code{"instrumental_variable"}, \code{"single_door"} or \code{"mediation_formula"}.
+With \code{NULL}, includes all compatible strategies. Several values select
+alternatives. Only combinations compatible with \code{effect} are retained.
+An error is returned if none remain. This selection does not remove the
+identification verdicts for the selected effects.}
+
+\item{id_status}{Optional character vector selecting strategy statuses.
+The default \code{"identifiable"} includes successful strategies. Use \code{NULL}
+or \code{"all"} to include all statuses. Other strategy statuses are
+\code{"not_established"}, \code{"not_assessed"} and \code{"candidate"}.
+The values \code{"not_identifiable"} and \code{"zero_by_graph"} are accepted but
+do not match strategy records. They occur only in the separate verdicts,
+which this argument does not filter. Several values select alternatives,
+with \code{"all"} taking precedence.}
 }
 \value{
-A \code{data.table} with columns \code{strategy}, \code{feasible}, \code{tier},
-\code{variable_set}, and \code{note}. \code{feasible} records the graphical check for
-that row. The overall verdict is stored separately. For \code{effect = "direct"}, the general identification row also requires a direct arrow
-in the graph obtained by latent projection. If there is no such arrow,
-\code{FALSE} means the row for the direct effect is not applicable, rather than
-proving that the intervention is unidentifiable. The verdict attributes
-and hedge still report identification of the distribution under the
-intervention on the treatment and fixing set.
-
-Attributes \code{identifiable}, \code{observationally_identifiable},
-\code{z_identifiable}, and \code{data_availability} record the verdict and available
-data. \code{treatment}, \code{outcome}, \code{effect}, \code{conditional}, and \code{conditioning}
-record the query used by the function. For conditional effects,
-\code{conditioning_intervened} lists the conditioning variables that IDC moves
-into the intervention set. \code{conditioning_remaining} lists those that
-remain conditioned on. \code{hedge} is \code{NULL} when ID succeeds. When ID fails,
-it contains two \code{dagitty} graphs, \code{F} and \code{F_prime}, their common roots,
-and the query at the step where identification failed.
-\code{roles} is a table with columns \code{variable}, \code{role}, and
-\code{conditioning_guidance}. A variable may have different roles in separate
-strategies. An instrument role does not exclude membership in a valid
-adjustment set. \code{caveat} distinguishes graphical identification from
-estimation using data.
-
-For a marginal total effect, \code{adjustment_sets} contains all minimal
-adjustment sets and \code{canonical_adjustment} contains dagitty's canonical
-set. Both attributes are lists of character vectors: an empty list means
-no valid set, while \code{list(character())} is a valid empty set. These
-attributes are absent for direct or conditional queries. The adjustment
-row displays at most five minimal sets and counts any remaining sets.
-
-Direct queries additionally have a \code{mediation} attribute: a list of entries
-containing \code{mediators}, \code{feasible}, \code{adjustment_sets}, \code{note}, and
-\code{assumptions}. A successful entry contains one qualifying adjustment set,
-not necessarily a minimal set. \code{list(character())} denotes no adjustment
-required. An unsuccessful entry has an empty list of adjustment sets. If
-there are no observed mediators, \code{mediation} is an empty list and no
-mediation rows are added. Mediation results are reported separately. The
-verdict attributes, hedge, roles and summary describe the intervention on
-the treatment and fixing set.
+A \code{causaliflower_identification} object containing nested lists.
+The first level names effect groups (\code{total}, \code{direct} or \code{indirect}).
+Each group contains complete strategies. Each strategy has five fields:
+\itemize{
+\item \code{method}: the identification strategy.
+\item \code{assumptions}: a character vector of required assumptions.
+\item \code{variables}: a named list of character vectors, labelled by role.
+Node names are preserved exactly. An empty covariate vector means no
+adjustment is required for that strategy.
+\item \code{id_status}: the result of the strategy check.
+Definitions and their scope are in \link{identification_methods}.
+\item \code{notes}: a character vector describing restrictions or the
+reason for the result.
+}
+Selected effect groups remain present when no strategy matches. Their lists
+are empty, while the relevant identification verdicts remain available.
 }
 \description{
-\code{get_identification()} checks whether a causal effect is identifiable under
-the supplied \code{dagitty} DAG. Marginal effects are checked with the ID
-algorithm. When \code{conditioning} contains node names, the conditional effect
-is checked with IDC. When \code{experiments} contains node names,
-z-identification is also checked. For marginal total effects, covariate
-adjustment, front door, instrumental variable, and applicable surrogate
-experiment strategies are reported separately from the overall verdict.
+\code{get_identification()} checks identification strategies for observed treatment
+and outcome nodes in the supplied DAG. Results are grouped by effect, with a
+separate list for each complete strategy. Identification verdicts are stored
+and displayed separately. With one treatment and one outcome, and without
+\code{conditioning} or \code{experiments}, the default call checks total, direct and
+indirect effects. With \code{conditioning} or \code{experiments}, only total effects
+are supported. With several treatments or outcomes, it checks one joint
+total effect.
 }
 \details{
-With \code{effect = "direct"}, the function first uses latent projection to
-obtain a graph containing only observed nodes. ID then checks the outcome
-distribution when the treatment and the outcome's other parents are set by
-intervention. The controlled direct effect is defined for this projected
-graph. The other parents are printed as the \verb{fixing set}, which can include
-confounders and outcome predictors as well as mediators. They are set by
-intervention, not conditioned on. The controlled direct effect can depend
-on the values chosen for the fixing set. The function checks identification
-without choosing those values or estimating the effect.
-
-Explicitly declared latent nodes are not held fixed. Projection can replace
-paths through latent mediators with direct arrows, so the reported query can
-include effects through latent mediators and need not be the controlled
-direct effect in the supplied DAG.
-
-Direct queries also report a separate mediation check for natural direct
-and indirect effects relative to selected mediators. This looks for a common
-observed adjustment set for the treatment's effect on the mediators and the
-joint effect of treatment and mediators on the outcome. Only nondescendants
-of the treatment are considered as covariates. The search first tries the
-empty set, then a single set containing all eligible observed ancestors of
-the treatment, mediators and outcome. Each candidate must pass both checks.
-If neither candidate passes, no covariate set of observed treatment
-nondescendants passes both checks.
-Other methods may still identify the natural direct and indirect effects.
-
-A successful mediation check requires a structural causal model with
-independent background errors in an underlying DAG that includes the latent
-common causes represented by bidirected edges. This entails cross world
-assumptions. Consistency and positivity are also required. The check does
-not verify these assumptions or estimate an effect. With several selected
-mediators, the check concerns their joint natural effects, not an
-effect decomposition for each mediator. The natural direct effect can still
-include paths through mediators outside the selected set. The joint check
-can fail even when a smaller mediator set defines the same natural effects
-and passes the check. This can happen when the treatment affects one
-selected mediator only through other selected mediators.
+The default strategy list includes successful checks. Use \code{id_status = "all"}
+to include unsuccessful checks, candidates and checks not assessed. This
+selection does not hide the separate identification verdicts. Each strategy
+contains its method and one complete set of variables. Their order does not
+rank the methods. See \link{identification_methods} for status definitions,
+assumptions and sources.
 }
+\section{Inspecting the results}{
+
+Printing the result shows identification verdicts and numbered strategies
+within each effect group. HTML documents show the same results and fields.
+Access the nested lists normally, for example \code{result$direct[[1]]}.
+A subset made with \code{[}, such as \code{result["direct"]}, is an independent plain
+list without the report's class or analysis attributes.
+
+\code{summary(result)} returns all strategy statuses within the same effect and
+method selection. It uses stored analyses without performing new
+identification calculations. \code{print(result, details = TRUE)} prints this
+summary. If the nested contents have been edited, both use the current
+contents without restoring removed strategies or displaying stored verdicts.
+
+\code{as.data.frame(result)} and \code{data.table::as.data.table(result)} give one row
+per complete strategy, with columns \code{effect}, \code{method}, \code{assumptions},
+\code{variables}, \code{id_status} and \code{notes}. The \code{variables} column retains a named
+list of character vectors for each row. The other columns are character
+vectors, with assumptions and notes combined into text.
+
+Identification verdicts are available in \code{attr(result, "verdicts")}, grouped
+by effect and named by the check. The table conversions retain this attribute
+while the report contents are unchanged. Verdicts are not strategy rows.
+
+The function does not fit a model, return an identifying formula or prescribe
+an estimator. Results depend on the supplied graph and each method's
+assumptions. There is no single yes/no verdict for the whole result.
+}
+
+\section{Stored analyses}{
+
+The \code{verdicts} attribute contains the assessed identification checks,
+grouped by effect. Each record has \code{method}, \code{query}, \code{id_status},
+\code{assumptions}, \code{variables} and \code{notes}. ID, IDC and z-ID concern the
+requested total effect query. Graph structure records describe an effect
+or coefficient that is zero by graph. An unassessed algorithm has no
+verdict record. These verdicts are independent of the strategy filters.
+
+Attributes \code{treatment}, \code{outcome}, \code{scope} and \code{effect} describe the
+treatment and outcome sets and the effects checked. The \code{selection}
+attribute records the selectors. The \code{analyses} attribute contains named
+records for the included checks:
+\itemize{
+\item \code{total}: the query and its \code{identifiable},
+\code{observationally_identifiable}, \code{z_identifiable},
+\code{data_availability}, \code{hedge}, \code{roles}, \code{adjustment_sets},
+\code{canonical_adjustment}, \code{frontdoor_sets}, \code{instruments},
+\code{experiments}, \code{experiment_set} and \code{caveat}.
+\item \code{conditional_frontdoor}: a \code{feasible} flag and paired \code{sets} of
+\code{mediators} and \code{covariates} for the conditional front door strategies.
+\item \code{direct}: the supplied DAG's \code{direct_arrow}, single door
+\code{feasible}, \code{status} and complete \code{adjustment_sets}, with
+\code{treatment} and \code{outcome}.
+\item \code{controlled}: the same fields as \code{total}, for the separate
+intervention on treatment and the outcome's other parents in the graph
+obtained by latent projection. This diagnostic is not displayed as a
+direct effect or included in the nested results. See
+\link{identification_methods}.
+\item \code{mediation}: entries with \code{mediators}, \code{feasible},
+\code{adjustment_sets}, \code{note} and \code{assumptions}. Empty if there are no
+observed mediators. A passing entry returns one qualifying set,
+not necessarily a minimal one.
+}
+Query records specify \code{intervention}, \code{fixing_set} and \code{conditioning}.
+The fields \code{conditioning_intervened} and \code{conditioning_remaining} record
+which conditioning variables IDC moved into the intervention set and which
+remain conditioned on. The fields \code{direct_arrow} and \code{direct_path} refer to
+the graph obtained by latent projection. When ID fails, \code{hedge} holds the
+two graphs (\code{F} and \code{F_prime}) that demonstrate why the distribution is not
+identifiable, their common roots and the query at the step where ID failed.
+Roles have \code{variable}, \code{role} and \code{conditioning_guidance} columns.
+A variable may have different roles in different strategies. Instrument
+entries hold \code{instrument} and \code{conditioning}.
+
+Adjustment and ordinary front door sets are lists of character vectors.
+Conditional front door sets pair mediator and covariate vectors as described
+above. \code{list()} contains no stored set. Consult the corresponding result
+to distinguish an unsuccessful check from a skipped one.
+\code{list(character())} is a valid empty set. These records and the nested
+strategies preserve variable names without parsing displayed text.
+}
+
+\section{Joint total effects}{
+
+With more than one distinct treatment or outcome, the query is the joint
+distribution \eqn{P(Y \mid do(X))}: intervene simultaneously on every treatment
+and consider every outcome together. It is not a collection of pairwise
+results. Supply at least one observed treatment and one observed outcome,
+with no node in both sets. Ordering and repeated names do not change the sets.
+
+Joint support is limited to unconditional total effect ID and covariate
+adjustment. \code{effect = "direct"} and \code{effect = "indirect"} are rejected,
+as are \code{conditioning}, \code{experiments} or \code{mediator} inputs other than
+\code{NULL}. Front door, conditional front door, instrumental variable, direct,
+natural, conditional (IDC) and experimental (z-ID) checks are not assessed
+when there is more than one treatment or outcome. \code{summary(result)} includes
+only strategy statuses within the selected total effect methods. A \code{not_assessed}
+status is not a failure of identification. The total analysis records
+\code{method_support} (\code{assessed}, \code{not_assessed}, \code{reason}) and
+\code{query$joint = TRUE}. These extra fields are absent when there is only one
+treatment and one outcome.
+Variable roles record membership of complete adjustment sets and otherwise
+give neutral guidance. Joint mediator and instrument roles are not inferred.
+}
+
+\section{Compatibility}{
+
+The earlier default checked only the total effect. Omitting \code{effect} or
+setting it to \code{NULL} now gives an overview. Use \code{effect = "total"} to select
+only total effects. The earlier table columns \code{strategy}, \code{feasible},
+\code{tier}, \code{variable_set} and \code{note} are replaced by the nested lists
+described above. Use the conversion methods for a table.
+Verdicts and structured variable sets remain available in the \code{analyses}
+attribute. For example, use \code{attr(result, "analyses")$total$identifiable}
+for the total effect identification result from the stated data, or
+\code{attr(result, "analyses")$direct$adjustment_sets} for single door sets.
+The stored \code{controlled} record is available only through this attribute.
+}
+
 \examples{
 dag <- dagitty::dagitty("dag {
   rainfall -> irrigation
@@ -158,26 +248,13 @@ get_identification(
 )
 mediation <- get_identification(
   direct_dag, treatment = "treatment", outcome = "yield",
-  effect = "direct", mediator = "growth", quiet = TRUE
+  mediator = "growth", quiet = TRUE
 )
-attr(mediation, "mediation")
+mediation$direct
+mediation$indirect
+as.data.frame(mediation)
 
 }
-\references{
-Shpitser I, VanderWeele TJ (2011). "A Complete Graphical Criterion for the
-Adjustment Formula in Mediation Analysis." \emph{The International Journal of
-Biostatistics}, \strong{7}(1). \doi{10.2202/1557-4679.1297}.
-
-Shpitser I, Pearl J (2006). "Identification of Conditional Interventional
-Distributions." arXiv:1206.6876.
-
-Shpitser I, Pearl J (2008). "Complete Identification Methods for the Causal
-Hierarchy." \emph{Journal of Machine Learning Research}, \strong{9}, 1941--1979.
-
-Bareinboim E, Pearl J (2016). "Causal inference and the data-fusion
-problem." \emph{Proceedings of the National Academy of Sciences}, \strong{113}(27),
-7345--7352. \doi{10.1073/pnas.1510507113}.
-
-Pearl J (2009). \emph{Causality: Models, Reasoning, and Inference}. Second
-edition. Cambridge University Press.
+\seealso{
+\link{identification_methods}, \code{\link[=minimal_sets]{minimal_sets()}}
 }
