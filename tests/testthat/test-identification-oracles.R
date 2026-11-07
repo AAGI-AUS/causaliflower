@@ -1,3 +1,11 @@
+################################################################################
+# test-identification-oracles.R
+
+
+# Compare identification results with independent causal graph oracles
+
+# Computational checks use the private worker through identification_result().
+# Public overview behaviour has its own tests.
 test_that("IDC matches published conditional-effect oracles", {
   # Shpitser and Pearl (2008), Figure 6(a), p. 1954.
   condition_helps <- dagitty::dagitty(
@@ -277,7 +285,7 @@ test_that("direct effect identification uses the outcome parent intervention", {
   absent_result <- identification_result(no_direct_edge, effect = "direct")
   expect_true(attr(absent_result, "observationally_identifiable"))
   expect_true(attr(absent_result, "identifiable"))
-  expect_false(absent_result$feasible[1L])
+  expect_true(absent_result$feasible[1L])
   expect_identical(
     absent_result$note[1L],
     paste(
@@ -353,7 +361,7 @@ test_that("named adjustment and instrument rows cross-check dagitty", {
 })
 
 
-test_that("direct feasibility and intervention identification are distinct without an arrow", {
+test_that("direct identification rows describe the intervention without an arrow", {
   graphs <- c(
     identified = "dag { T [exposure] Y [outcome] M T -> M M -> Y }",
     unidentified = paste(
@@ -365,7 +373,7 @@ test_that("direct feasibility and intervention identification are distinct witho
     dag <- dagitty::dagitty(graphs[[name]])
     result <- identification_result(dag, effect = "direct")
     expected <- identical(name, "identified")
-    expect_false(result$feasible[1L])
+    expect_identical(result$feasible[1L], expected)
     expect_identical(attr(result, "identifiable"), expected)
     expect_identical(attr(result, "observationally_identifiable"), expected)
     expect_identical(result$variable_set[1L], "fixing set: {M}")

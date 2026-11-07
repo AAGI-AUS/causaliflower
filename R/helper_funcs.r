@@ -2271,7 +2271,8 @@ node_status_attributes <- function(s){
     nodes <- list()
     return(nodes)
   }
-  starts <- m; lens <- attr(m, "match.length")
+  starts <- m
+  lens <- attr(m, "match.length")
   out <- list()
   for( i in seq_along(starts) ){
     chunk <- substr(s, starts[i], starts[i] + lens[i] - 1L)

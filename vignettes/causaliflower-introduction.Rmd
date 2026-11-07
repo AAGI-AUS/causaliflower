@@ -92,25 +92,30 @@ dag <- build_graph(
 plot_dagitty(dag)
 ```
 
-`get_identification()` can check identification without data, such as for the direct effect:
+`get_identification()` checks identification strategies without data, such as
+for direct effects:
 
 ```{r identification-mediator-1}
 get_identification(dag, effect = "direct")
 ```
 
-The **controlled direct effect** is identifiable in this graph without
-assuming that the relationships between the variables are linear. Here, the
-function checks the effect of changing `T` while holding `M` and `X` fixed
-by intervention. Holding `M` fixed prevents changes in `T` from reaching
-`Y` through the mediated path `T -> M -> Y`.
-
-The result also includes a **mediation** check for `M`, with adjustment for `X`.
+The report separates the **direct path coefficient**, checked using the single
+door criterion under linear structural equations, from the **natural direct
+effect** relative to `M`. The single door adjustment set is `M` and `X`.
+The natural effect uses a **mediation** check for `M`, with adjustment for `X`.
 The **natural direct effect** asks what would happen if `T` changed while `M`
 took the value it would have had under a reference treatment. Together with the
 corresponding **natural indirect effect**, it gives a decomposition of the
 total effect. This check requires additional structural causal assumptions
 (including *cross world assumptions*), consistency and positivity.
-See `?get_identification`.
+The indirect result is available with `effect = "indirect"` or in the default
+report. See `?get_identification`.
+
+Results are grouped by effect, with identification verdicts separate from
+the numbered strategies. The default report shows successful strategies and
+the identification verdicts, including effects or coefficients that are zero
+by graph. Use `id_status = "all"` to include unsuccessful strategy checks.
+Failure of one method does not rule out every identification strategy.
 
 Use `mediator = "M"` to select a mediator explicitly. If several mediators are
 supplied, they are assessed jointly.
@@ -149,6 +154,20 @@ There is no valid adjustment set for the total effect, because the path
 Every causal path from `T` to `Y` passes through `M`, there is no unblocked
 noncausal path between `T` and `M`, and adjusting for `T` blocks the noncausal
 paths from `M` to `Y`. These conditions allow the total effect to be identified.
+
+If `X` also causes `M`, the path `T <- X -> M` prevents the ordinary front
+door criterion from holding. Conditional front door adjustment can use `M`
+together with the observed covariate `X`:
+
+```{r identification-conditional-frontdoor}
+dag_conditional_frontdoor <- add_edges(dag_frontdoor, edges = "X -> M")
+get_identification(dag_conditional_frontdoor, effect = "total")
+```
+
+The calculation applies the front door formula within values of `X`, then
+averages over `X`. The report therefore lists `M` as a mediator and `X` as a
+covariate in the same strategy. The separate ID verdict also establishes
+identification, without returning an identifying formula.
 
 ## Building a DAG from prior knowledge
 

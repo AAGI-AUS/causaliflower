@@ -343,7 +343,7 @@ test_that("selected status ignores brackets inside quoted node names", {
     original <- ordinary
     expect_identical(causaliflower:::selected_nodes(ordinary), character())
     expect_true(attr(get_identification(ordinary, "T", "Y", quiet = TRUE),
-                     "identifiable"))
+                     "analyses")$total$identifiable)
     expect_identical(ordinary, original)
   }
 })
@@ -414,7 +414,7 @@ test_that("selected status ignores the word selected inside quoted values", {
 
   expect_identical(causaliflower:::selected_nodes(dag), character())
   expect_true(attr(get_identification(dag, "T", "Y", quiet = TRUE),
-                   "identifiable"))
+                   "analyses")$total$identifiable)
 
   expect_warning(removed <- remove_edges(dag, "Z -> Y"),
                  "no remaining edges.*Z")
