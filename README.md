@@ -20,19 +20,15 @@ pak::pak("AAGI-AUS/causaliflower")
 
 ```
 
-Development version 0.0.2.9000 requires `dagitty` exactly 0.3.4.
-Installing from source also requires a C++17 compiler.
+Note: Development version 0.0.2.9000 requires `dagitty` exactly 0.3.4. Installing from source also requires a C++17 compiler.
 
-Examples are included below. If the introductory vignette is installed,
-open it with `vignette("causaliflower-introduction")`.
+See the introductory vignette `vignette("causaliflower-introduction")` or examples below.
 
+### Example code
 
-### DAG-by-query
+`get_dag()` constructs grain production system DAG by querying a structural causal model derived from APSIM. This version (v0.0.2.9000) covers 214 different queries across 3 crops, for single treatment and outcome pairs for either randomised or non-randomised scenarios. 
 
-`get_dag()` constructs a DAG by querying the bundled structural causal model
-derived from APSIM. The slice contains 576 quantities with readable names
-across barley, wheat and maize. Supply the crop, treatment and outcome, and state
-whether the treatment was randomised.
+Simply specify the crop, treatment, outcome and randomisation assumption to construct a DAG-by-query:
 
 ```R
 library(causaliflower)
@@ -49,20 +45,7 @@ crop_dag <- get_dag(
 plot_dagitty(crop_dag)
 ```
 
-Here `latents = NULL` assumes all quantities are observed for this example.
-The ranked search reports its step budget and completion
-limits, including when larger adjustment options may remain. `quiet = TRUE`
-suppresses routine progress, while these warnings remain visible.
-
-Inspect the saved query, ranked options and construction checks with
-`original_query(crop_dag)`, `dag_options(crop_dag)` and `dag_checks(crop_dag)`.
-`dag_history(crop_dag)` records the transformations. The selected adjustment
-sets and the catalogue of alternatives are checked separately.
-
-
-### Example code
-
-- Build a basic graph (dagitty object)
+Build a basic graph (dagitty object):
 
 ```R
 
@@ -78,17 +61,12 @@ dag <- build_graph(variables = variables,
 
 ```
 
-`full` uses bidirected edges following the ESC-DAGs Mapping Stage in
-Ferguson et al. (2020). `chain` connects adjacent temporal positions within
-each role except instrumental variables and adds no arrows between roles
-apart from explicit latent targets and instrument edges. `last` adds arrows
-between roles from the last position of the sending role to the first
-position of the receiving role, and `first` sends them from the first
-position instead. `ordered` connects every earlier position to every later
-position within each role except instrumental variables, and `saturated`
-also adds the directed arrows allowed by the package's order of causal
-roles. `first` and `last` are `build_graph()` types. `add_nodes()` and
-`connect_nodes()` use `full`, `chain`, `ordered`, and `saturated`.
+- `full` uses bidirected edges following the ESC-DAGs Mapping Stage in Ferguson et al. (2020).
+- `chain` connects adjacent temporal positions within each role except instrumental variables and adds no arrows between roles apart from explicit latent targets and instrument edges.
+- `last` adds arrows between roles from the last position of the sending role to the first position of the receiving role, and `first` sends them from the first position instead.
+- `ordered` connects every earlier position to every later position within each role except instrumental variables.
+- `saturated` also adds the directed arrows allowed by the package's order of causal roles.
+
 
 Use a list element to place nodes at the same temporal position:
 
@@ -104,7 +82,7 @@ dag <- build_graph(
 
 ```
 
-- Plot dagitty objects:
+Plot dagitty objects:
 
 ```R
 
@@ -115,7 +93,7 @@ dag <- add_coords(dag)
 
 ```
 
-- Generate new coordinates:
+Generate new coordinates:
 
 ```R
 
@@ -126,7 +104,7 @@ dag <- add_coords(dag,
 
 ```
 
-- Add edges to existing nodes:
+Add edges to existing nodes:
 
 ```R
 
@@ -137,8 +115,7 @@ saturated_graph <- connect_nodes(dag, type = "saturated", print_edges = TRUE)
 
 ```
 
-
-- Assess graph edges using causal criteria:
+Assess graph edges using causal criteria:
 
 ```R
 ## Assess edges to keep and build a new graph
@@ -162,7 +139,7 @@ edges_list$answers
 ```
 
 
-- Join two dagitty objects, keeping the coordinates of the first:
+Join two dagitty objects, keeping the coordinates of the first:
 
 ```R
 
@@ -182,22 +159,17 @@ plot_dagitty(dag)
 ```
 
 
-- Check if the effects are identifiable:
+Check if the effects are identifiable:
 
 ```R
 
 get_identification(dag)
 
 ```
+- Use `id_status = "all"` to include unsuccessful strategy checks.
+- Identification depends on the supplied graph and the assumptions stated with each result.
 
-The result is grouped by effect. Identification verdicts are shown separately
-from the strategies. Each strategy shows its method, assumptions, variables
-and identification status. Use `id_status = "all"` to include unsuccessful
-strategy checks. Identification depends on the supplied graph and the
-assumptions stated with each result.
-
-
-- Find single door sets for the direct path coefficient in a linear model (returns up to five sets, ordered by size):
+Find single door sets for the direct path coefficient in a linear model (returns up to five sets, ordered by size):
 
 ```R
 
@@ -205,8 +177,7 @@ minimal_sets(dag, effect = "direct")
 
 ```
 
-
-- Add nodes to an existing graph:
+Add nodes to an existing graph:
 
 ```R
 
@@ -218,7 +189,7 @@ plot_dagitty(dag)
 
 ```
 
-- Place new nodes by causal role and temporal position:
+Place new nodes by causal role and temporal position:
 
 ```R
 
@@ -233,9 +204,7 @@ plot_dagitty(dag)
 
 ```
 
-`position` takes four placement helpers, used alone or combined with `c()`.
-Their names also work as values, as in `position = "first"` or
-`position = c(after = "X2")`:
+`position` takes four placement helpers, used alone or combined with `c()`, and their names also work as values (e.g., `position = "first"` or `position = c(after = "X2")`):
 
 ```R
 
@@ -255,7 +224,7 @@ dag <- add_nodes(
 
 ```
 
-- Choose which nodes receive and send arrows generated between roles:
+Choose which nodes receive and send arrows generated between roles:
 
 ```R
 
@@ -269,7 +238,7 @@ dag <- build_graph(
 
 ```
 
-- Copy a node into successive positions:
+Copy a node into successive positions:
 
 ```R
 
@@ -277,7 +246,7 @@ dag <- copy_nodes(dag, "M2", copy_suffix = c("survey", "harvest"))
 
 ```
 
-- Get edges and node structure information from a dagitty object:
+Get edges and node structure information from a dagitty object:
 
 ```R
 get_edges(dag)
@@ -298,7 +267,7 @@ get_diff_edges(dag, new_dag)
 ```
 
 
-- Other utility functions:
+Other utility functions:
 
 ```R
 confounders(dag)
