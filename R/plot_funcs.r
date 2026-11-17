@@ -232,6 +232,20 @@ plot_sets <- function(dag, treatment = NULL, outcome = NULL, effect = "total",
 }
 
 
+#' Render graph roles or supplied node groups
+#'
+#' Uses the same layout, edge paths, labels and export controls for the public
+#' role and adjustment-set plots. Changes to coordinates and paths are local
+#' to the plot. The supplied graph is unchanged.
+#'
+#' @inheritParams plot_dagitty
+#' @param format_missing TRUE if the caller omitted `output_format`. This allows
+#'   a `.png` file extension to select PNG output.
+#' @param groups Optional named list of node vectors defining the displayed
+#'   groups. `NULL` computes causal roles from the graph.
+#' @return A ggplot object. If `file` is supplied, the plot is saved and the
+#'   object is returned invisibly.
+#' @noRd
 plot_dag_engine <- function(dag,
                             seed = NULL,
                             x_step = 3,
@@ -253,7 +267,7 @@ plot_dag_engine <- function(dag,
                             height = NULL,
                             dpi = 300,
                             format_missing = missing(output_format),
-                            groups = NULL){ # Render supplied groups or causal roles with the same layout and export controls
+                            groups = NULL){
 
   if( !is.logical(curve) || length(curve) != 1L ||
       is.na(curve) ){
@@ -345,7 +359,7 @@ plot_dag_engine <- function(dag,
            "undetermined"="grey60",
            "observed"="#111111")
   col[!names(col) %in% include_legend] <- "#111111"
-  # Latent nodes are hollow; other nodes are filled with their role colour.
+  # Draw latent nodes hollow and fill other nodes with their role colour
   fill_col <- col
   fill_col[["latent"]] <- "white"
   # variable for legend order
@@ -440,7 +454,7 @@ plot_dag_engine <- function(dag,
   }
 
   # Physical sizes in millimetres. A filled circle's radius is 0.375 of the
-  # point's font size; edges stop just outside it.
+  # point's font size. Edges stop just outside it.
   node_radius <- 0.375 * (node_size * ggplot2::.pt + ggplot2::.stroke / 2) /
     ggplot2::.pt
   label_offset <- node_radius + 2
@@ -557,7 +571,7 @@ plot_dag_engine <- function(dag,
 #' Parse the single legend position argument
 #'
 #' @param legend_position A side, optionally followed by an alignment, such
-#'   as `"top"`, `"top-left"` or `"right-bottom"`; or `"none"`.
+#'   as `"top"`, `"top-left"` or `"right-bottom"`. Use `"none"` to omit the legend.
 #' @return A list with the ggplot2 legend `side` and `justification`.
 #' @noRd
 plot_legend_position <- function(legend_position){
@@ -778,7 +792,7 @@ plot_label_room <- function(nodes, sides, node_radius, label_offset, label_size)
 #' One scale, in millimetres per coordinate unit, keeps the layout's
 #' proportions. Each pair of nodes needs enough horizontal room for their
 #' labels or enough vertical room to stack a node and label, whichever needs
-#' the smaller scale; the canvas uses the largest scale any pair needs.
+#' the smaller scale. The canvas uses the largest scale any pair needs.
 #'
 #' @param nodes One row per node with `x`, `y` and `display_label`.
 #' @param sides Label sides, or `NULL` when labels are inside the nodes.
@@ -820,7 +834,7 @@ plot_fit_size <- function(nodes, sides, node_radius, label_offset, label_size,
   if( is.na(scale) ) {
     scale <- 30
   }
-  # Legend text is 12 pt (4.2 mm); keys and spacing add about 16 mm.
+  # Legend text is 12 pt (4.2 mm). Keys and spacing add about 16 mm.
   legend_width <- if( legend_side %in% c("left", "right") && length(legend_roles) > 0L ){
     0.56 * 4.2 * max(nchar(legend_roles)) + 16
   }else{
@@ -852,7 +866,8 @@ plot_fit_size <- function(nodes, sides, node_radius, label_offset, label_size,
   }
   width <- x_span * scale + extra_width
   height <- y_span * scale + extra_height
-  # A top or bottom legend needs its widest row; a side legend its full height.
+  # A top or bottom legend needs the width of its widest row.
+  # A side legend needs its full height.
   if( length(legend_roles) > 0L ){
     item_width <- 0.56 * 4.2 * max(nchar(legend_roles)) + 13
     per_row <- if( length(legend_roles) > 5L ) { ceiling(length(legend_roles) / 2) } else { length(legend_roles) }

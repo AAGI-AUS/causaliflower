@@ -647,7 +647,7 @@ set_edge_controls <- function(dag, controls,
 #'
 #' @param v,w Node names at each end of the edges.
 #' @param e Edge operators.
-#' @return Character vector of edge keys; reversing a symmetric edge gives the
+#' @return A character vector of edge keys. Reversing a symmetric edge gives the
 #'   same key.
 #' @noRd
 edge_control_keys <- function(v, e, w){
@@ -751,7 +751,17 @@ parents_edge_order <- function(edges, nodes){
 ################################################################################
 # get_dag.R
 ################################################################################
-.query_order_key <- function(nodes, source_order = NULL, node_ids = NULL){ # Compare recorded occurrences without carrying model identifiers
+#' Build sort keys for recorded occurrences
+#'
+#' @param nodes Exact occurrence or quantity names to compare.
+#' @param source_order Optional list with `version = 1L` and a `ranks` data frame
+#'   recording source quantity and occasion ranks.
+#' @param node_ids Optional canonical quantity IDs parallel to nodes.
+#' @return Character sort keys built from recorded ranks when all identities are
+#'   covered. Returns `nodes` unchanged if `source_order` is NULL, `nodes` is empty
+#'   or an identity is missing from the ranks. Invalid rank metadata raises an error.
+#' @noRd
+.query_order_key <- function(nodes, source_order = NULL, node_ids = NULL){
   if( is.null(source_order) || !length(nodes) ){
     return(nodes)
   }
@@ -789,7 +799,12 @@ parents_edge_order <- function(edges, nodes){
 }
 
 
-.query_sort <- function(nodes, source_order = NULL, node_ids = NULL){ # Sort quantities by their recorded order when it applies
+#' Sort nodes by recorded occurrence order when applicable
+#'
+#' @inheritParams .query_order_key
+#' @return Nodes in recorded order, or radix name order when ranks do not apply.
+#' @noRd
+.query_sort <- function(nodes, source_order = NULL, node_ids = NULL){
   keys <- .query_order_key(nodes, source_order, node_ids)
   if( identical(unname(keys), unname(nodes)) ){
     return(sort(nodes, method = "radix"))
@@ -798,7 +813,14 @@ parents_edge_order <- function(edges, nodes){
 }
 
 
-.query_order_applies <- function(nodes, source_order = NULL, node_ids = NULL){ # Use recorded ranks only when they cover the entire compared scope
+#' Check whether recorded ranks provide different sort keys
+#'
+#' @inheritParams .query_order_key
+#' @return TRUE if the recorded ranks produce sort keys different from `nodes`.
+#'   FALSE if `source_order` is NULL, `nodes` is empty or the keys are unchanged.
+#'   Invalid rank metadata raises an error.
+#' @noRd
+.query_order_applies <- function(nodes, source_order = NULL, node_ids = NULL){
   if( is.null(source_order) || !length(nodes) ){
     return(FALSE)
   }
@@ -807,7 +829,14 @@ parents_edge_order <- function(edges, nodes){
 }
 
 
-.query_set_key <- function(nodes, source_order = NULL){ # Compare the complete ordered membership of one candidate set
+#' Build a comparison key for an ordered candidate set
+#'
+#' @param nodes Source member names in the candidate set.
+#' @param source_order Optional recorded quantity order.
+#' @return One string joining the occurrence sort keys with carriage returns.
+#'   Keys follow the supplied member order. An empty input returns `""`.
+#' @noRd
+.query_set_key <- function(nodes, source_order = NULL){
   return(paste(.query_order_key(nodes, source_order), collapse = "\r"))
 }
 
@@ -1035,7 +1064,9 @@ directed_reachable <- function(edges,
 #' Defaults to instrument detection in dagitty::instrumentalVariables() (see van der Zander, Textor & Liskiewicz (2015, IJCAI)).
 #' With usable_instruments = TRUE, candidates that are descendants of their own exposure are dropped.
 #' Classical instrumental conditions consider instruments as an exogenous, upstream
-#' source of variation in the exposure (see Greenland 2000, Int J Epidemiol 29:722-729; Hernan & Robins 2006, Epidemiology 17:360-372; Pearl 2009, Causality 2nd ed., section 7.4).
+#' source of variation in the exposure (see Greenland 2000, Int J Epidemiol
+#' 29:722-729, Hernan & Robins 2006, Epidemiology 17:360-372, and Pearl 2009,
+#' Causality 2nd ed., section 7.4).
 #' A post-treatment candidate is essentially redundant as an instrument, since it is certified by the graphical criterion only via a conditioning set that
 #' already identifies the effect by back-door adjustment.
 #'
@@ -1665,12 +1696,15 @@ native_layout_edits <- function(text, edits){
 #' @importFrom dagitty edges coordinates dagitty
 #' @param dag A dagitty object.
 #' @param edges An edge table with columns v, e and w.
-#' @param treatments Optional character vector of exposure names to declare; defaults to the declarations in dag.
-#' @param outcomes Optional character vector of outcome names to declare; defaults to the declarations in dag.
-#' @param latent_vec Optional character vector of latent names to declare; defaults to the declarations in dag.
+#' @param treatments Optional character vector of exposure names to declare.
+#'   NULL retains the declarations in `dag`.
+#' @param outcomes Optional character vector of outcome names to declare.
+#'   NULL retains the declarations in `dag`.
+#' @param latent_vec Optional character vector of latent names to declare.
+#'   NULL retains the declarations in `dag`.
 #' @param extra_nodes Optional character vector of additional node names to declare beyond names(dag) and the edge endpoints.
-#' @param adjusted_vec Optional adjusted node names; defaults to those in dag.
-#' @param selected_vec Optional selected node names; defaults to those in dag.
+#' @param adjusted_vec Optional adjusted node names. NULL retains those in `dag`.
+#' @param selected_vec Optional selected node names. NULL retains those in `dag`.
 #' @param .curve_caller Function name to include in curve-control messages.
 #' @returns A dagitty object
 #' @noRd
@@ -2284,9 +2318,16 @@ strip_dag_quotes <- function(x, caller){
 ################################################################################
 # query_graph.R
 ################################################################################
-## Convert aliases to lowercase and remove underscores, spaces and hyphens.
-## Keep dots so external dotted identifiers remain distinct.
-.normalise_alias <- function( x ){ # Normalise aliases while retaining dotted segments
+#' Normalise aliases for matching
+#'
+#' Lowercases aliases and removes underscores, spaces and hyphens. Dots are
+#' retained so dotted identifiers remain distinct.
+#'
+#' @param x Character vector of aliases or node identifiers.
+#' @return A character vector of normalised aliases, or `character(0)` for
+#'   an empty input.
+#' @noRd
+.normalise_alias <- function( x ){
   if( length(x) == 0L ){
     return(character(0L))
   }
@@ -2294,27 +2335,37 @@ strip_dag_quotes <- function(x, caller){
 }
 
 
-## Index each normalised alias by the node identifiers that use it.
-## An alias can belong to several nodes, so retain every matching identifier.
-## The resolver handles aliases that match more than one node.
-.build_alias_index <- function( node_aliases ){ # Index every alias by all node identifiers that claim it
+#' Index aliases by their matching nodes
+#'
+#' @param node_aliases Character alias vectors in a list named by node identifier.
+#' @return A list named by normalised alias. Each entry contains every unique
+#'   node identifier matching that alias, in input order.
+#' @noRd
+.build_alias_index <- function( node_aliases ){
   node_ids <- names(node_aliases)
   flat_alias <- .normalise_alias(unlist(node_aliases, use.names = FALSE))
   alias_nodes <- rep(node_ids, lengths(node_aliases))
   index <- split(alias_nodes, flat_alias)
-  index <- lapply(index, function( matching_nodes ){ # Retain each matching node once
+  index <- lapply(index, function( matching_nodes ){
     return(unique(matching_nodes))
   })
   return(index)
 }
 
 
-## Prefer a unique match to a normalised node identifier when an alias has
-## several candidates.
-## Otherwise, resolve the alias if exactly one candidate is visible.
-## A single hidden candidate still resolves. Return every candidate when the
-## ambiguity remains, or character(0L) when there is no match.
-.resolve_one <- function( col, alias_index, hidden_ids = character(0L) ){ # Resolve an alias by normalised identity or a unique visible node
+#' Resolve one alias against its matching nodes
+#'
+#' When several nodes match an alias, prefer a unique match to a normalised
+#' node identifier. Otherwise prefer a single visible candidate. A single
+#' candidate is accepted even if it is hidden.
+#'
+#' @param col One alias or node identifier to resolve.
+#' @param alias_index List returned by `.build_alias_index()`.
+#' @param hidden_ids Node identifiers marked hidden in the source table.
+#' @return A character vector containing one matching node identifier, all
+#'   candidates if the match is ambiguous, or no elements if nothing matches.
+#' @noRd
+.resolve_one <- function( col, alias_index, hidden_ids = character(0L) ){
   candidates <- alias_index[[ .normalise_alias(col) ]]
   if( is.null(candidates) ){
     return(character(0L))
@@ -2334,21 +2385,30 @@ strip_dag_quotes <- function(x, caller){
 }
 
 
-## Classify each column as resolved, ambiguous or unmatched.
-## The optional disambiguate vector assigns a column to a chosen node_id.
-## Name resolved entries by the input column so query_graph can use the
-## supplied column name as the node label.
-.resolve_columns <- function( columns, alias_index, disambiguate = NULL, hidden_ids = character(0L) ){ # Resolve supplied columns and retain ambiguous or unmatched inputs
+#' Resolve column requests and retain unresolved inputs
+#'
+#' Named requests use their names as display labels and their values as the
+#' tokens to resolve. Unnamed requests use the token for both. Explicit
+#' disambiguation takes precedence over alias matching.
+#'
+#' @param columns Character vector of requested aliases, optionally named by
+#'   display label.
+#' @param alias_index List returned by `.build_alias_index()`.
+#' @param disambiguate Optional character vector of chosen node identifiers,
+#'   named by input token. These choices are used as supplied without alias
+#'   matching.
+#' @param hidden_ids Node identifiers marked hidden in the source table.
+#' @return A list with `resolved` identifiers named by display label,
+#'   `ambiguous` candidate vectors named by input token, and `unmatched` tokens.
+#'   An empty input returns all three empty components.
+#' @noRd
+.resolve_columns <- function( columns, alias_index, disambiguate = NULL, hidden_ids = character(0L) ){
   resolved <- character(0L)
   ambiguous <- list()
   unmatched <- character(0L)
   if( length(columns) == 0L ){
     return(list(resolved = resolved, ambiguous = ambiguous, unmatched = unmatched))
   }
-  ## In c(display = token), resolve the token and retain display as its label.
-  ## An unnamed element uses the token as its label. Resolved values remain
-  ## node identifiers, named by their display labels. Ambiguous and unmatched
-  ## entries retain the input tokens so the caller can identify unresolved names.
   display_names <- names(columns)
   for( column_index in seq_along(columns) ){
     column <- unname(columns[ column_index ])
@@ -2374,11 +2434,15 @@ strip_dag_quotes <- function(x, caller){
 }
 
 
-## Remove a temporal suffix to recover the base node identifier.
-## Accepted suffixes are @t or _t followed by a nonnegative integer, and
-## _pre_treatment or _post_treatment.
-## A vertex has at most one of these suffixes.
-.strip_slice <- function( x ){ # Remove the temporal suffix to recover the base node identifier
+#' Remove one recognised temporal suffix
+#'
+#' @param x Character vector of vertex names from the query engine.
+#' @return A character vector with one recognised suffix removed from each name.
+#'   Recognised suffixes are `_tN`, `@tN`, `_pre_treatment` and `_post_treatment`,
+#'   where `N` is a nonnegative integer. Other names are unchanged. Matching a
+#'   suffix does not establish source identity.
+#' @noRd
+.strip_slice <- function( x ){
   return(sub("(_pre_treatment|_post_treatment|_t[0-9]+|@t[0-9]+)$", "", x))
 }
 
@@ -2476,8 +2540,8 @@ get_outcome_names <- function(dag){
 #' instruments and their conditioning sets (one row per treatment, outcome, instrument).
 #' Conditional instruments are included. With
 #' usable_instruments = TRUE, candidates that are descendants of their own exposure are
-#' dropped, per exposure (Greenland 2000, Int J Epidemiol 29:722-729; Hernan & Robins
-#' 2006, Epidemiology 17:360-372; Pearl 2009, section 7.4) - see
+#' dropped, per exposure (Greenland 2000, Int J Epidemiol 29:722-729, Hernan & Robins
+#' 2006, Epidemiology 17:360-372, and Pearl 2009, section 7.4). See
 #' extract_instrumental_variables() for the full rationale.
 #'
 #' @importFrom dagitty instrumentalVariables descendants
@@ -2486,7 +2550,10 @@ get_outcome_names <- function(dag){
 #' @param treatments A vector of treatment node names
 #' @param outcomes A vector of outcome node names
 #' @param usable_instruments When FALSE (default), returns every instrument dagitty identifies. When TRUE, drops candidates that are descendants of their own exposure.
-#' @returns A data.table with one row per identified instrument (columns: treatment, outcome, instrument, conditioning_set; conditioning_set lists the variables to condition on, comma-separated, empty if unconditional).
+#' @returns A data.table with one row per identified instrument and columns
+#'   `treatment`, `outcome`, `instrument` and `conditioning_set`. The last column
+#'   contains comma-separated names of variables to condition on, or `""` when
+#'   no conditioning is needed.
 #' @noRd
 instrumental_variables_helper <- function(dag,
                                           treatments,

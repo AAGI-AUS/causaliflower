@@ -7,12 +7,14 @@
 dag_call(dag)
 }
 \arguments{
-\item{dag}{The corresponding recovered graph or collection.}
+\item{dag}{A constructed DAG or a dry-run plan.}
 }
 \value{
-Return the resolved call, including interactive choices.
+A call that rebuilds the selected DAG from its saved source and
+construction settings. For a \code{get_dag()} result,
+\code{input_record$resolved_call} stores the original resolved query call and
+\code{input_record$responses} stores the interactive answers.
 }
 \description{
-These functions accept the corresponding recovered graph or collection and
-read saved records without changing the graph.
+Recover the call needed to rebuild the selected DAG.
 }

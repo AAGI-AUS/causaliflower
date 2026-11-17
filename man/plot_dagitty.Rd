@@ -125,7 +125,7 @@ at both ends. Undirected edges have no arrowheads. Latent nodes are drawn
 as hollow circles.
 
 SVG files are written with the svglite package and PNG files with the ragg
-package when they are installed. Otherwise \code{\link[grDevices:cairo]{grDevices::svg()}} or
+package when they are installed. Otherwise \code{\link[grDevices:svg]{grDevices::svg()}} or
 \code{\link[grDevices:png]{grDevices::png()}} is used.
 On macOS, install svglite with \code{install.packages("svglite")} or install
 \href{https://www.xquartz.org/}{XQuartz} if R's SVG device cannot start.

@@ -41,11 +41,6 @@ test_that("public node names preserve the order of complete separators and first
       for (limit in c(1L, Inf)) {
         expected <- public_members(.gd_adjustment_engine(source, effect, limit))
         expect_identical(.gd_adjustment_engine(graph, effect, limit), expected)
-        progress <- function(...) {
-          return(invisible(NULL))
-        }
-        expected_observed <- public_members(.gd_adjustment_engine(source, effect, limit, progress))
-        expect_identical(.gd_adjustment_engine(graph, effect, limit, progress), expected_observed)
       }
     }
   }

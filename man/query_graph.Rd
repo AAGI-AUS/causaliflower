@@ -108,8 +108,8 @@ The current interpretation policy was reviewed for barley. Recorded provenance
 outside APSIM applies across crops. Observation assumptions, conflicts, output
 mappings and removed graph structure are saved with the query.
 
-Quantities left without any arrows are dropped unless they are requested
-treatments or outcomes. Other occasions of an outcome in a growth stage query
+Quantities left without any arrows are dropped unless requested as
+treatments, outcomes or columns. Other occasions of an outcome in a growth stage query
 remain distinct causal states. They are not automatically outcomes,
 interventions or observed measurements.
 

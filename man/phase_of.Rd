@@ -5,15 +5,15 @@
 \alias{phase_of}
 \title{Developmental phase membership of bundled quantities}
 \format{
-A data frame with 150 rows and seven character columns.
+A data frame with 150 rows and seven character columns: \code{node_id},
+\code{concept_id}, \code{crop_type}, \code{active_from}, \code{active_to}, \code{archetype} and \code{basis}.
+These identify the quantity, applicable crops, recorded interval, temporal
+category and supporting description.
 }
 \usage{
 phase_of
 }
 \description{
-\code{phase_of} records active intervals for developmental stage queries. Its
-150 rows have seven character columns: \code{node_id}, \code{concept_id}, \code{crop_type},
-\code{active_from}, \code{active_to}, \code{archetype} and \code{basis}. These identify the quantity,
-applicable crops, recorded interval, temporal category and supporting description.
+\code{phase_of} records active intervals for developmental stage queries.
 }
 \keyword{datasets}

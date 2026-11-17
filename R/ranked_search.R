@@ -1,48 +1,57 @@
-################################################################################
+# ==============================================================================
 # ranked_search.R
 
 
 # Ranked adjustment search by quantity (method "quantity-ranked-v1")
-#
-# Options are sets minimal under set inclusion, using resolved source members
-# (time indices removed, recorded groups expanded), the unit the catalogue counts.
-# A member set is feasible when some valid adjustment set uses only its allowed
-# occurrences. Candidates lie in the ancestors of the endpoints, so the moral graph
-# of that set is fixed and feasibility is one separation test (van der Zander,
-# Liskiewicz and Textor 2019). Feasibility is monotone, so a smallest first
-# hitting set search over paths connecting the endpoints returns exactly the
-# options minimal under set inclusion, ranked by member count, with a certificate.
-# Each option is realised as one set of exact temporal occurrences that is minimal
-# under set inclusion and checked on the unchanged selection reference.
+# ==============================================================================
 
 
-# Step budget per effect family: an explicit steps argument, else the option
-.cd_ranked_steps <- function(steps = NULL) { # Validate the explicit or configured search budget
-  origin <- if (is.null(steps)) {
-    "Option causaliflower.ranked_steps"
-  } else {
-    "Argument steps"
+# Options are minimal under set inclusion of recorded source members, with
+# temporal occurrences counted together and recorded groups expanded. A member
+# set is feasible if some valid adjustment set uses only its allowed
+# occurrences. Candidates lie in the endpoints' ancestors, whose fixed moral
+# graph makes feasibility one separation test (van der Zander, Liskiewicz and
+# Textor 2019). The bounded hitting set search visits member sets in
+# increasing size and records how far the ranking is complete. Each option is
+# realised as one minimal set of exact temporal occurrences and checked on the
+# unchanged selection reference.
+
+
+#' Read the ranked-search budget
+#'
+#' @return The positive integer step budget for each effect. It is read from
+#'   `causaliflower.ranked_steps`, or is 20000 when that option is unset.
+#'   An invalid option raises an error.
+#' @noRd
+.cd_ranked_steps <- function(){
+  steps <- getOption("causaliflower.ranked_steps", 20000L)
+  if( !is.numeric(steps) || length(steps) != 1L || is.na(steps) || steps < 1 || steps > .Machine$integer.max ||
+    steps != floor(steps) ){
+    stop("Option causaliflower.ranked_steps must be one positive whole number no larger than ", .Machine$integer.max,
+      ".", call. = FALSE)
   }
-  if (is.null(steps)) {
-    steps <- getOption("causaliflower.ranked_steps", 20000L)
-  }
-  if (!is.numeric(steps) || length(steps) != 1L || is.na(steps) || steps < 1 || steps > .Machine$integer.max ||
-    steps != floor(steps)) {
-    stop(origin, " must be one positive whole number no larger than ", .Machine$integer.max, ".", call. = FALSE)
-  }
-  return(as.integer(steps))
+  budget <- as.integer(steps)
+
+  return(budget)
 }
 
 
-.cd_ranked_graph <- function(dag) { # Index graph vertices and edges for adjustment search
+#' Index a directed or bidirected graph for separator search
+#'
+#' @param dag Graph with treatment and outcome tags and no adjusted or selected nodes.
+#' @return A list of node names, indices, parent and child lists, directed edges
+#'   and status indices. Bidirected edges become explicit synthetic latent parents.
+#'   `synthetic` distinguishes them from real latent nodes without name guessing.
+#' @noRd
+.cd_ranked_graph <- function(dag){
   edges <- as.data.frame(dagitty::edges(dag))
-  edges <- if (all(c("v", "w", "e") %in% names(edges))) {
+  edges <- if( all(c("v", "w", "e") %in% names(edges)) ){
     edges[, c("v", "w", "e")]
-  } else {
+  }else{
     data.frame(v = character(), w = character(), e = character())
   }
   edges[] <- lapply(edges, as.character)
-  if (any(!edges$e %in% c("->", "<->"))) {
+  if( any(!edges$e %in% c("->", "<->")) ){
     stop("The ranked adjustment search needs directed or bidirected edges only.", call. = FALSE)
   }
   nodes <- names(dag)
@@ -56,50 +65,82 @@
     edges$w[reversed] <- first_end
     edges <- edges[order(node_keys[edges$v], node_keys[edges$w], edges$e, method = "radix"), , drop = FALSE]
   }
-  if (length(dagitty::adjustedNodes(dag)) || length(selected_nodes(dag))) {
-    stop("The ranked adjustment search needs a graph without adjusted or selected nodes. Use search = 'complete' for such graphs.", call. = FALSE)
+  if( length(dagitty::adjustedNodes(dag)) || length(selected_nodes(dag)) ){
+    stop("The ranked adjustment search needs a graph without adjusted or selected nodes.", call. = FALSE)
   }
   latent <- as.character(unlist(dagitty::latents(dag)))
   directed <- edges[edges$e == "->", c("v", "w")]
   bidirected <- edges[edges$e == "<->", c("v", "w")]
-  # A bidirected edge is an unobserved common parent of its two ends.
-  if (nrow(bidirected)) {
-    hidden <- paste0(".bidirected_", seq_len(nrow(bidirected)))
+  hidden <- character()
+  if( nrow(bidirected) ){
+    canonical <- dagitty::canonicalize(dag)
+    hidden <- as.character(unlist(canonical$L))
+    inserted <- as.data.frame(dagitty::edges(canonical$g))
+    inserted <- inserted[inserted$v %in% hidden, c("v", "w")]
+    pair_key <- function(ends){
+      return(paste(sort(match(ends, nodes)), collapse = ":"))
+    }
+    hidden_keys <- vapply(split(inserted$w, factor(inserted$v, levels = hidden)), pair_key, character(1))
+    edge_keys <- vapply(seq_len(nrow(bidirected)), function(i){
+      return(pair_key(c(bidirected$v[i], bidirected$w[i])))
+    }, character(1))
+    hidden <- hidden[match(edge_keys, hidden_keys)]
+    # Preserve source traversal order after Dagitty adds latent parents
+    inserted_keys <- paste(match(inserted$v, hidden), match(inserted$w, nodes), sep = ":")
+    wanted_keys <- paste(rep(seq_along(hidden), 2L), match(c(bidirected$v, bidirected$w), nodes), sep = ":")
+    inserted <- inserted[match(wanted_keys, inserted_keys), , drop = FALSE]
     nodes <- c(nodes, hidden)
     latent <- c(latent, hidden)
-    directed <- rbind(directed, data.frame(v = c(hidden, hidden), w = c(bidirected$v, bidirected$w)))
+    directed <- rbind(directed, inserted)
   }
   node_index <- stats::setNames(seq_along(nodes), nodes)
   parent_index <- unname(node_index[directed$v])
   child_index <- unname(node_index[directed$w])
   node_count <- length(nodes)
-  return(list(nodes = nodes, id = node_index, n = node_count, from = parent_index, to = child_index,
+  graph <- list(nodes = nodes, id = node_index, n = node_count, from = parent_index, to = child_index,
     parents = split(parent_index, factor(child_index, levels = seq_len(node_count))),
     children = split(child_index, factor(parent_index, levels = seq_len(node_count))),
-    latent = unname(node_index[latent]),
+    latent = unname(node_index[latent]), synthetic = unname(node_index[hidden]),
     exposures = unname(node_index[as.character(unlist(dagitty::exposures(dag)))]),
-    outcomes = unname(node_index[as.character(unlist(dagitty::outcomes(dag)))])))
+    outcomes = unname(node_index[as.character(unlist(dagitty::outcomes(dag)))]))
+
+  return(graph)
 }
 
 
-.cd_ranked_reach <- function(start, adjacency, blocked = integer()) { # Find vertices reachable without crossing blocked vertices
+#' Traverse indexed adjacency lists
+#'
+#' @param start Starting vertex indices.
+#' @param adjacency One neighbour-index vector per vertex.
+#' @param blocked Vertex indices that cannot be entered.
+#' @return Reached indices in vertex order, including the starting vertices.
+#' @noRd
+.cd_ranked_reach <- function(start, adjacency, blocked = integer()){
   node_count <- length(adjacency)
   seen <- logical(node_count)
   seen[start] <- TRUE
   stopped <- logical(node_count)
   stopped[blocked] <- TRUE
   frontier <- start
-  while (length(frontier)) {
+  while( length(frontier) ){
     next_nodes <- unlist(adjacency[frontier], use.names = FALSE)
     next_nodes <- unique(next_nodes[!seen[next_nodes] & !stopped[next_nodes]])
     seen[next_nodes] <- TRUE
     frontier <- next_nodes
   }
-  return(which(seen))
+  reached <- which(seen)
+
+  return(reached)
 }
 
 
-.cd_ranked_without <- function(graph, keep) { # Retain selected directed edges and rebuild adjacency lists
+#' Retain selected directed edges in an indexed graph
+#'
+#' @param graph Indexed graph from `.cd_ranked_graph()`.
+#' @param keep Logical mask or indices selecting rows of its directed edges.
+#' @return The graph with selected edges and rebuilt parent and child lists.
+#' @noRd
+.cd_ranked_without <- function(graph, keep){
   graph$from <- graph$from[keep]
   graph$to <- graph$to[keep]
   graph$parents <- split(graph$from, factor(graph$to, levels = seq_len(graph$n)))
@@ -108,16 +149,21 @@
 }
 
 
-# Adjustment criterion: candidates are endpoint ancestors in the proper
-# back door graph, excluding descendants of proper causal path nodes.
-.cd_ranked_total_region <- function(dag) { # Prepare the ancestral region for total effect adjustment
+#' Derive the total-effect adjustment region
+#'
+#' @param dag Graph accepted by `.cd_ranked_graph()`.
+#' @return A list containing the indexed proper back-door graph, ancestral vertices, endpoint
+#'   indices, required vertices and removable candidates. Descendants of proper
+#'   causal-path nodes, endpoints and latent vertices cannot be removed.
+#' @noRd
+.cd_ranked_total_region <- function(dag){
   graph <- .cd_ranked_graph(dag)
   treatments <- graph$exposures
   outcomes <- graph$outcomes
-  into_x_removed <- lapply(graph$children, function(children) { # Remove children that are treatment vertices
+  into_x_removed <- lapply(graph$children, function(children){
     return(children[!children %in% treatments])
   })
-  out_of_x_removed <- lapply(graph$parents, function(parents) { # Remove parents that are treatment vertices
+  out_of_x_removed <- lapply(graph$parents, function(parents){
     return(parents[!parents %in% treatments])
   })
   causal <- intersect(setdiff(.cd_ranked_reach(treatments, into_x_removed), treatments),
@@ -125,16 +171,24 @@
   forbidden <- .cd_ranked_reach(causal, graph$children)
   graph <- .cd_ranked_without(graph, !(graph$from %in% treatments & graph$to %in% causal))
   ancestral <- .cd_ranked_reach(c(treatments, outcomes), graph$parents)
-  return(list(graph = graph, ancestral = ancestral, x = treatments, y = outcomes, must = integer(),
-    removable = setdiff(ancestral, c(treatments, outcomes, forbidden, graph$latent))))
+  region <- list(graph = graph, ancestral = ancestral, x = treatments, y = outcomes, must = integer(),
+    removable = setdiff(ancestral, c(treatments, outcomes, forbidden, graph$latent)))
+
+  return(region)
 }
 
 
-# Linear single door direct effect, exactly as .gd_validate_sets defines it:
-# dagitty's own listMsasDirectEffect constraints and indirect graph.
-.cd_ranked_direct_region <- function(dag) { # Read direct effect constraints from the installed dagitty engine
+#' Derive the installed engine's direct-effect adjustment region
+#'
+#' @param dag Graph supplying endpoints, latent tags and source identities.
+#' @return A list containing the indexed indirect graph, ancestral vertices,
+#'   endpoints, required vertices and removable candidates from dagitty's linear
+#'   single-door routine. Returns `NULL` if the engine reports no constraints.
+#'   An unavailable engine script raises an error.
+#' @noRd
+.cd_ranked_direct_region <- function(dag){
   script <- system.file("js", "dagitty-alg.js", package = "dagitty")
-  if (!nzchar(script)) {
+  if( !nzchar(script) ){
     stop("The installed dagitty JavaScript engine is unavailable.", call. = FALSE)
   }
   context <- V8::v8()
@@ -160,7 +214,7 @@
     sep = "\n"
     ))
   region <- context$get("gd_region", simplifyVector = FALSE)
-  if (is.null(region$must)) {
+  if( is.null(region$must) ){
     return(NULL)
   }
   indirect <- dagitty::dagitty(region$indirect)
@@ -176,41 +230,58 @@
   outcomes <- graph$outcomes
   ancestral <- .cd_ranked_reach(c(treatments, outcomes), graph$parents)
   must_not <- unname(graph$id[as.character(unlist(region$mustNot))])
-  return(list(graph = graph, ancestral = ancestral, x = treatments, y = outcomes,
+  search_region <- list(graph = graph, ancestral = ancestral, x = treatments, y = outcomes,
     must = unname(graph$id[as.character(unlist(region$must))]),
-    removable = setdiff(ancestral, c(treatments, outcomes, must_not, graph$latent))))
+    removable = setdiff(ancestral, c(treatments, outcomes, must_not, graph$latent)))
+
+  return(search_region)
 }
 
 
-# Undirected moral graph of the ancestral subgraph
-.cd_ranked_moral <- function(graph, ancestral) { # Connect the ancestral graph's neighbours and parents of the same child
+#' Moralise an indexed ancestral subgraph
+#'
+#' @param graph Indexed directed graph.
+#' @param ancestral Indices retained in the ancestral subgraph.
+#' @return One undirected neighbour list per graph vertex, joining each child's
+#'   parents. Vertices outside the region have empty lists.
+#' @noRd
+.cd_ranked_moral <- function(graph, ancestral){
   inside <- logical(graph$n)
   inside[ancestral] <- TRUE
-  pairs <- lapply(ancestral, function(vertex) { # Connect this vertex to its parents and connect each parent pair
+  pairs <- lapply(ancestral, function(vertex){
     parents <- graph$parents[[vertex]]
     parents <- parents[inside[parents]]
-    if (!length(parents)) {
+    if( !length(parents) ){
       return(NULL)
     }
     links <- cbind(vertex, parents)
-    if (length(parents) > 1L) {
+    if( length(parents) > 1L ){
       links <- rbind(links, t(utils::combn(parents, 2L)))
     }
     return(links)
   })
   pairs <- do.call(rbind, pairs)
-  if (is.null(pairs) || !nrow(pairs)) {
+  if( is.null(pairs) || !nrow(pairs) ){
     return(vector("list", graph$n))
   }
   ends <- c(pairs[, 1L], pairs[, 2L])
   others <- c(pairs[, 2L], pairs[, 1L])
-  return(lapply(split(others, factor(ends, levels = seq_len(graph$n))), unique))
+  moral <- lapply(split(others, factor(ends, levels = seq_len(graph$n))), unique)
+
+  return(moral)
 }
 
 
-# Level by level 0-1 search: a path connecting the endpoints through unblocked nodes
-# with the fewest removable nodes. NULL when the endpoints are separated.
-.cd_ranked_path <- function(moral, x, y, blocked, weight) { # Find an endpoint path crossing the fewest removable vertices
+#' Find a connecting path with the fewest removable vertices
+#'
+#' @param moral Undirected neighbour lists for the search region.
+#' @param x,y Treatment and outcome vertex indices.
+#' @param blocked Vertex indices that cannot be entered.
+#' @param weight A cost of 0 or 1 per vertex, with 1 marking removable candidates.
+#' @return A path of vertex indices from a treatment to an outcome, or `NULL`
+#'   when the blocked vertices separate the endpoints.
+#' @noRd
+.cd_ranked_path <- function(moral, x, y, blocked, weight){
   node_count <- length(moral)
   parent <- integer(node_count)
   seen <- logical(node_count)
@@ -219,28 +290,30 @@
   stopped[blocked] <- TRUE
   target <- logical(node_count)
   target[y] <- TRUE
-  expand <- function(level, cost) { # Find the first unvisited neighbour reached at this cost
+  expand <- function(level, cost){
     to <- unlist(moral[level], use.names = FALSE)
     from <- rep.int(level, lengths(moral[level]))
     keep <- !seen[to] & !stopped[to] & weight[to] == cost
     to <- to[keep]
     from <- from[keep]
     first <- !duplicated(to)
-    return(list(to = to[first], from = from[first]))
+    step <- list(to = to[first], from = from[first])
+
+    return(step)
   }
-  trace <- function(node) { # Trace the recorded parents back to a treatment vertex
+  trace <- function(node){
     path <- node
-    while (parent[path[[1L]]] != 0L) {
+    while( parent[path[[1L]]] != 0L ){
       path <- c(parent[path[[1L]]], path)
     }
     return(path)
   }
   level <- x
-  repeat {
+  repeat{
     frontier <- level
-    while (length(frontier)) {
+    while( length(frontier) ){
       hit <- frontier[target[frontier]]
-      if (length(hit)) {
+      if( length(hit) ){
         return(trace(hit[[1L]]))
       }
       step <- expand(frontier, 0L)
@@ -250,7 +323,7 @@
       frontier <- step$to
     }
     step <- expand(level, 1L)
-    if (!length(step$to)) {
+    if( !length(step$to) ){
       return(NULL)
     }
     seen[step$to] <- TRUE
@@ -261,23 +334,39 @@
 }
 
 
-# Inclusion minimal separator inside `allowed` (closest to the treatment, then
-# to the outcome).
-.cd_ranked_separator <- function(moral, x, y, allowed) { # Find a minimal separator among the allowed vertices
+#' Reduce an allowed separator to inclusion minimality
+#'
+#' @param moral Undirected neighbour lists for the search region.
+#' @param x,y Treatment and outcome vertex indices.
+#' @param allowed Vertex indices known to separate the endpoints when blocked.
+#' @return An inclusion-minimal separator within `allowed`, taking the treatment
+#'   boundary first and then the outcome boundary.
+#' @noRd
+.cd_ranked_separator <- function(moral, x, y, allowed){
   near <- .cd_ranked_reach(x, moral, blocked = allowed)
-  first <- allowed[vapply(allowed, function(vertex) { # Keep allowed vertices adjacent to the treatment region
+  first <- allowed[vapply(allowed, function(vertex){
     return(any(moral[[vertex]] %in% near))
   }, logical(1))]
   near <- .cd_ranked_reach(y, moral, blocked = first)
-  return(first[vapply(first, function(vertex) { # Keep the first separator's vertices adjacent to the outcome region
+  separator <- first[vapply(first, function(vertex){
     return(any(moral[[vertex]] %in% near))
-  }, logical(1))])
+  }, logical(1))]
+
+  return(separator)
 }
 
 
-# Enumerate feasible member sets minimal under set inclusion, starting with the
-# smallest and increasing the member count. `labels` lists member ids per node.
-.cd_ranked_enumerate <- function(region, labels, step_budget) { # Enumerate minimal member sets within the explicit step budget
+#' Enumerate minimal member sets in increasing member count
+#'
+#' @param region Effect region with graph, endpoints, removable and required indices.
+#' @param labels List of member-vocabulary indices represented by each graph node.
+#' @param step_budget Maximum search expansions across all size bounds.
+#' @return A list containing member options, separators of exact nodes, the
+#'   certificate, `complete_up_to` and steps used. `complete_up_to` is the largest
+#'   member-count bound completed, or `-1` if none was completed. Budget exhaustion
+#'   retains partial results without claiming completeness beyond that bound.
+#' @noRd
+.cd_ranked_enumerate <- function(region, labels, step_budget){
   graph <- region$graph
   moral <- .cd_ranked_moral(graph, region$ancestral)
   node_count <- graph$n
@@ -286,68 +375,103 @@
   need <- lengths(node_labels)
   weight <- as.integer(need > 0L)
   label_nodes <- split(rep(seq_len(node_count), need), unlist(node_labels))
-  base <- if (length(region$must)) {
+  base <- if( length(region$must) ){
     sort(unique(unlist(node_labels[region$must])))
-  } else {
+  }else{
     integer()
   }
-  blocked_by <- function(set) { # Find vertices whose source members are all covered by this set
+  plain_members <- is.integer(base) && is.null(attributes(base)) &&
+    all(vapply(node_labels[region$removable], function(members){
+      return(is.integer(members) && is.null(attributes(members)) &&
+        !anyNA(members) && !anyDuplicated(members) && all(members > 0L))
+    }, logical(1)))
+  blocked_by <- function(set){
     covered <- integer(node_count)
-    for (label in as.character(set)) {
+    for( label in as.character(set) ){
       member_vertices <- label_nodes[[label]]
-      if (length(member_vertices)) {
+      if( length(member_vertices) ){
         covered[member_vertices] <- covered[member_vertices] + 1L
       }
     }
-    return(which(need > 0L & covered == need))
+    blocked <- which(need > 0L & covered == need)
+
+    return(blocked)
   }
   found <- list()
+  expansions <- new.env(hash = TRUE, parent = emptyenv())
+  cached_entries <- 0L
+  cached_bytes <- 0
+  cache_limit <- 8 * 1024^2
   steps <- 0L
   certificate <- "budget"
   reached <- -1L
   root <- .cd_ranked_path(moral, region$x, region$y, blocked_by(base), weight)
-  if (is.null(root)) {
+  if( is.null(root) ){
     found <- list(base)
     certificate <- "complete"
     reached <- length(base)
-  } else if (!any(need[root] > 0L)) {
+  }else if( !any(need[root] > 0L) ){
     certificate <- "complete"
     reached <- length(unique(unlist(node_labels)))
-  } else {
-    for (bound in seq.int(length(base), max(length(base), length(label_nodes)))) {
+  }else{
+    for( bound in seq.int(length(base), max(length(base), length(label_nodes))) ){
       truncated <- FALSE
       exhausted <- FALSE
       visited <- new.env(hash = TRUE, parent = emptyenv())
-      expand <- function(set) { # Search this member set and its bounded extensions
-        if (exhausted) {
+      expand <- function(set){
+        if( exhausted ){
           return(invisible())
         }
         key <- paste0("k", paste(set, collapse = ","))
-        if (exists(key, envir = visited, inherits = FALSE)) {
+        if( exists(key, envir = visited, inherits = FALSE) ){
           return(invisible())
         }
         assign(key, TRUE, envir = visited)
-        if (any(vapply(found, function(existing_option) { # Check whether a recorded option is contained in this set
+        if( any(vapply(found, function(existing_option){
           return(all(existing_option %in% set))
-        }, logical(1)))) {
+        }, logical(1))) ){
           return(invisible())
         }
         steps <<- steps + 1L
-        if (steps > step_budget) {
+        if( steps > step_budget ){
           exhausted <<- TRUE
           return(invisible())
         }
-        path <- .cd_ranked_path(moral, region$x, region$y, blocked_by(set), weight)
-        if (is.null(path)) {
+        expansion <- if( exists(key, envir = expansions, inherits = FALSE) ){
+          get(key, envir = expansions, inherits = FALSE)
+        }else{
+          path <- .cd_ranked_path(moral, region$x, region$y, blocked_by(set), weight)
+          moves <- if( !is.null(path) ) unique(lapply(path[need[path] > 0L], function(vertex){
+            members <- node_labels[[vertex]]
+            return(if( plain_members ) members[!members %in% set] else setdiff(members, set))
+          })) else list()
+          value <- list(separated = is.null(path), candidates = lapply(moves, function(move){
+            return(if( !plain_members ){
+              sort(c(set, move))
+            }else if( !length(move) ){
+              set
+            }else if( length(move) == 1L ){
+              c(set[set < move], move, set[set > move])
+            }else{
+              sort.int(c(set, move), method = "quick")
+            })
+          }))
+          if( cached_entries < 4096L && cached_bytes < cache_limit ){
+            bytes <- as.numeric(utils::object.size(list(key, value)))
+            if( bytes <= cache_limit - cached_bytes ){
+              assign(key, value, envir = expansions)
+              cached_entries <<- cached_entries + 1L
+              cached_bytes <<- cached_bytes + bytes
+            }
+          }
+          value
+        }
+        if( expansion$separated ){
           found[[length(found) + 1L]] <<- set
           return(invisible())
         }
-        moves <- unique(lapply(path[need[path] > 0L], function(vertex) { # Collect the additional members needed to block this vertex
-          return(setdiff(node_labels[[vertex]], set))
-        }))
-        for (move in moves) {
-          candidate <- sort(c(set, move))
-          if (length(candidate) > bound) {
+        for( candidate in expansion$candidates ){
+          if( length(candidate) > bound ){
             truncated <<- TRUE
             next
           }
@@ -356,76 +480,97 @@
         return(invisible(NULL))
       }
       expand(base)
-      if (exhausted) {
+      if( exhausted ){
         break
       }
       reached <- bound
-      if (!truncated) {
+      if( !truncated ){
         certificate <- "complete"
         break
       }
     }
   }
-  realised <- lapply(found, function(set) { # Realise this member option as an adjustment set of exact temporal occurrences
-    allowed <- region$removable[vapply(labels[region$removable], function(vertex_members) { # Check whether this vertex's members are allowed by the option
+  realised <- lapply(found, function(set){
+    allowed <- region$removable[vapply(labels[region$removable], function(vertex_members){
       return(all(vertex_members %in% set))
     }, logical(1))]
     separator <- union(.cd_ranked_separator(moral, region$x, region$y, allowed), region$must)
-    return(graph$nodes[sort(separator)])
+    separator_nodes <- graph$nodes[sort(separator)]
+
+    return(separator_nodes)
   })
-  return(list(options = found, realised = realised, certificate = certificate,
-    complete_up_to = reached, steps = min(steps, step_budget)))
+  ranked <- list(options = found, realised = realised, certificate = certificate,
+    complete_up_to = reached, steps = min(steps, step_budget))
+
+  return(ranked)
 }
 
 
-.cd_ranked_labels <- function(prepared, nodes) { # Resolve each graph vertex to its distinct source members
-  inputs <- attr(prepared$selection, "input_labels")
-  base <- .strip_slice(nodes)
-  mapped <- base %in% names(inputs)
-  base[mapped] <- unname(inputs[base[mapped]])
-  return(lapply(base, function(concept) { # Use recorded members when this quantity has a mapping
-    members <- unique(prepared$map$member_id[prepared$map$quantity %in% concept])
-    return(if (length(members)) {
+#' Resolve search vertices to recorded source members
+#'
+#' @param prepared Construction preparation with a map of occurrences to members.
+#' @param nodes Exact vertex names in search order.
+#' @return One character member vector per vertex. An unmapped name stands for
+#'   itself. Callers separately clear the explicitly indexed synthetic vertices.
+#' @noRd
+.cd_ranked_labels <- function(prepared, nodes){
+  labels <- lapply(nodes, function(node){
+    members <- unique(prepared$map$member_id[prepared$map$node %in% node])
+    concept_members <- if( length(members) ){
       members
-    } else {
-      concept
-    })
-  }))
+    }else{
+      node
+    }
+
+    return(concept_members)
+  })
+
+  return(labels)
 }
 
 
-.cd_ranked_search <- function(prepared, effect, progress = NULL, steps = NULL) { # Rank and validate adjustment options by distinct source members
-  .gd_notify(progress, paste0("Ranking ", effect, " adjustment options by distinct source members"))
-  region <- if (effect == "total") {
+#' Search and validate ranked adjustment options for one effect
+#'
+#' @param prepared Construction preparation supplying selection graph and identities.
+#' @param effect `"total"` or `"direct"`.
+#' @param steps Ranked-search step budget.
+#' @param validate Exact-source validator accepting sets and effect.
+#' @return A list containing exact sets, a candidate table, completeness and the
+#'   ranking certificate. `omitted_equal_smallest` reports whether additional
+#'   options of the smallest size may exist. Options that fail source validation
+#'   are dropped with a warning, and the remaining ranking is not certified.
+#' @noRd
+.cd_ranked_search <- function(prepared, effect, steps = .cd_ranked_steps(), validate = .gd_validator(prepared$selection)){
+  region <- if( effect == "total" ){
     .cd_ranked_total_region(prepared$selection)
-  } else {
+  }else{
     .cd_ranked_direct_region(prepared$selection)
   }
-  if (is.null(region)) {
+  if( is.null(region) ){
     stop("The installed dagitty engine did not report direct effect constraints.", call. = FALSE)
   }
   members <- .cd_ranked_labels(prepared, region$graph$nodes)
-  members[startsWith(region$graph$nodes, ".bidirected_")] <- list(character())
+  members[region$graph$synthetic] <- list(character())
   source_order <- prepared$record$source_order
   if( !.query_order_applies(names(prepared$selection), source_order,
                           unname(.gd_node_ids(prepared$selection))) ){
     source_order <- NULL
   }
   vocabulary <- .query_sort(unique(as.character(unlist(members[region$removable]))), source_order)
-  labels <- lapply(members, function(vertex_members) { # Index each vertex's members in the common vocabulary
+  labels <- lapply(members, function(vertex_members){
     return(match(vertex_members, vocabulary))
   })
-  budget <- .cd_ranked_steps(steps)
+  budget <- steps
   ranked <- .cd_ranked_enumerate(region, labels, budget)
   sets <- ranked$realised
-  valid <- if (length(sets)) {
-    .gd_validate_sets(prepared$selection, sets, effect)
-  } else {
+  valid <- if( length(sets) ){
+    validate(sets, effect)
+  }else{
     logical()
   }
   complete <- identical(ranked$certificate, "complete")
   dropped <- 0L
-  if (!all(valid)) {
+  if( !all(valid) ){
     # A realised option that fails the source check is removed, and nothing is
     # certified: the dropped option may have been the smallest.
     dropped <- sum(!valid)
@@ -438,108 +583,23 @@
     ranked$complete_up_to <- -1L
   }
   sizes <- lengths(ranked$options)
-  order <- order(sizes, vapply(sets, function(adjustment_set) { # Build the deterministic key for breaking ties for this realised set
+  order <- order(sizes, vapply(sets, function(adjustment_set){
     ids <- unname(.gd_node_ids(prepared$selection)[adjustment_set])
-    return(paste(.query_order_key(adjustment_set, source_order, ids), collapse = "\r"))
+    key <- paste(.query_order_key(adjustment_set, source_order, ids), collapse = "\r")
+
+    return(key)
   }, character(1)), method = "radix")
   sets <- unname(sets[order])
-  .gd_notify(progress, paste0(effect, " ranking ", if (complete) {
-    "complete"
-  } else {
-    paste0("certified up to ", ranked$complete_up_to, " members")
-  }, " (", length(sets), " options). Grouping source quantities"))
-  table <- .cd_candidates(sets, prepared, progress)
-  return(list(sets = sets, source_sets = sets, complete = complete, exhaustive_requested = FALSE,
-    probe = NULL, limit = budget, condition_free = TRUE, table = table,
-    probe_quantity_count = NA_integer_,
+  table <- .cd_candidates(sets, prepared)
+  search <- list(sets = sets, complete = complete, table = table,
     omitted_equal_smallest = !complete && length(sizes) > 0L && ranked$complete_up_to < min(sizes),
-    ranked = list(method = "quantity-ranked-v1", certificate = if (complete) {
+    ranked = list(method = "quantity-ranked-v1", certificate = if( complete ){
       "complete"
-    } else {
+    }else{
       ranked$certificate
     },
     complete_up_to = ranked$complete_up_to, steps = ranked$steps, step_budget = budget,
-    dropped = dropped),
-    scope = if (complete) {
-      "Every option minimal under set inclusion by distinct source members."
-    } else if (identical(ranked$certificate, "validation")) {
-      "Options that failed validation on the selection reference were dropped. The ranking is not certified."
-    } else if (!isTRUE(ranked$complete_up_to >= 0)) {
-      "The step budget stopped the search before any member count was completed. Listed options are valid but the ranking is not certified."
-    } else {
-      paste0("Every option minimal under set inclusion with at most ", ranked$complete_up_to,
-        " distinct source members. Larger options may exist.")
-    },
-    optimality = if (!length(sets)) {
-      (if (complete) {
-        "no eligible set"
-      } else if (identical(ranked$certificate, "validation")) {
-        "every option failed validation on the selection reference"
-      } else {
-        "none found within the step budget"
-      })
-    } else if (!length(sets[[1L]])) {
-      "valid empty set is the unique set minimal under set inclusion"
-    } else if (identical(ranked$certificate, "validation")) {
-      "smallest member count not certified"
-    } else if (!isTRUE(ranked$complete_up_to >= min(sizes))) {
-      "smallest member count certified. Alternatives of that size may be missing"
-    } else {
-      "smallest member count certified"
-    }))
-}
+    dropped = dropped))
 
-
-.cd_reuse_ranked <- function(previous, prepared, identity, progress = NULL) { # Reuse ranked options only when query identity and validation agree
-  if (is.null(previous) || is.null(identity) || !isTRUE(getOption("causaliflower.accelerate", TRUE))) {
-    return(NULL)
-  }
-  result <- tryCatch({
-    state <- .gd_set_source(previous)
-    if (!identical(state$construction$search_method, "quantity-ranked-v1") ||
-      !identical(state$construction$search_identity, identity)) {
-      return(NULL)
-    }
-    arguments <- state$construction$arguments
-    # The ranked search runs as fully observed: compare the observed preparation
-    # of the saved query with the saved analysis without its declared marks.
-    original <- .cd_prepare(state$original_query, NULL, arguments$keep_nodes)
-    original_identity <- .cd_search_identity(original)
-    if (is.null(original_identity)) {
-      return(NULL)
-    }
-    original_identity$method <- identity$method
-    original_identity$ranked_adapter <- identity$ranked_adapter
-    original_identity$ranked_steps <- identity$ranked_steps
-    unmarked <- .cd_unmarked(state$analysis)
-    if (!identical(original_identity, identity) ||
-      !identical(.gd_signature(original$analysis), .gd_signature(unmarked)) ||
-      !identical(attr(original$analysis, "cf_node_map"), attr(state$analysis, "cf_node_map")) ||
-      !identical(.gd_signature(prepared$analysis), .gd_signature(unmarked)) ||
-      !identical(attr(prepared$analysis, "cf_node_map"), attr(state$analysis, "cf_node_map"))) {
-      return(NULL)
-    }
-    search <- state$build$search
-    for (effect in c("direct", "total")) {
-      item <- search[[effect]]
-      if (!is.list(item$sets) || !identical(item$source_sets, item$sets) ||
-        !identical(item$ranked$method, "quantity-ranked-v1") ||
-        (length(item$sets) && !all(.gd_validate_sets(prepared$selection, item$sets, effect)))) {
-        return(NULL)
-      }
-      item$table <- .cd_candidates(item$sets, prepared)
-      search[[effect]] <- item
-    }
-    search
-  }, error = function(e) { # Decline reuse when checking the previous result raises a condition
-    return(NULL)
-  }, warning = function(w) { # Decline reuse when checking the previous result raises a condition
-    return(NULL)
-  }, message = function(m) { # Decline reuse when checking the previous result raises a condition
-    return(NULL)
-  })
-  if (!is.null(result)) {
-    .gd_notify(progress, "Reusing exact ranked source options. Rebuilding construction and checks")
-  }
-  return(result)
+  return(search)
 }

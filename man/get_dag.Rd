@@ -22,29 +22,30 @@ get_dag(
 
 \item{randomised_treatment}{Required experimental design assumption, \code{TRUE} or \code{FALSE}.}
 
-\item{latents}{Quantities or exact occasions declared unmeasured. Their treatment
-depends on the search mode described in \code{construct_dag()}. \code{NULL} treats all
-quantities as observed. The original query's tags remain saved.}
+\item{latents}{Variables or exact occasions to mark as unmeasured, as in
+\code{\link[=construct_dag]{construct_dag()}}. \code{NULL} treats all variables as observed. The original
+query's tags remain saved.}
 
 \item{label}{Naming option passed to \code{query_graph()}. \code{NULL} retains quantity keys.}
 
 \item{query_graph}{Further query inputs: \code{columns}, \code{time_unroll} and \code{params}.}
 
-\item{construct_dag}{Construction inputs: \code{direct_select}, \code{total_select},
-\code{search} and \code{steps}. Selectors default to \code{"auto"}. \code{NULL} defers a choice.
-\code{keep_nodes} is available when supplied explicitly.}
+\item{construct_dag}{Construction inputs supplied as a list: \code{size} requests
+a number of nodes and \code{unroll} controls the time representation. The default
+uses the smallest adjustment sets found and a checked static view. See
+\code{\link[=construct_dag]{construct_dag()}} for counting and construction rules.}
 
 \item{dry_run}{Return a proposed construction for inspection.}
 
 \item{quiet}{Suppress routine progress when \code{TRUE}. Saved checks remain available.}
 }
 \value{
-The graph, deferred choices or a construction preview, with its saved
-query and construction records.
+A constructed \code{cf_dag}, or a \code{cf_dag_plan} when \code{dry_run = TRUE}.
+Both retain the query, collected answers and construction records.
 }
 \description{
-Calls \code{query_graph()} and then \code{construct_dag()}. Collects missing query inputs,
-resolves deferred choices interactively and saves the resolved call and answers.
-Use the underlying functions to work with an existing or deliberately
-restricted query.
+Builds a DAG for a crop query by calling \code{\link[=query_graph]{query_graph()}} and then
+\code{\link[=construct_dag]{construct_dag()}}. Missing query inputs are collected interactively. The
+resolved call and answers are saved. Call the underlying functions separately
+to use an existing query or restrict its scope.
 }

@@ -2,65 +2,77 @@
 % Please edit documentation in R/get_dag.R
 \name{construct_dag}
 \alias{construct_dag}
-\title{Construct a compact DAG from a supplied query}
+\title{Construct a DAG from a query}
 \usage{
 construct_dag(
   graph,
+  size = Inf,
   latents = NULL,
-  direct_select = "auto",
-  total_select = "auto",
   keep_nodes = NULL,
   dry_run = FALSE,
   quiet = NULL,
-  search = c("auto", "complete", "witness"),
-  steps = NULL
+  unroll = FALSE
 )
 }
 \arguments{
-\item{graph}{The supplied query result.}
+\item{graph}{A \code{query_graph()} result, a dagitty DAG or a constructed DAG.
+A constructed DAG is rebuilt from its saved query, with its saved
+\code{latents} and \code{keep_nodes} unless they are supplied.}
 
-\item{latents}{Quantities or exact occasions declared unmeasured. With
-\code{search = "auto"}, they do not change the ranked search or automatic
-selection. Construction treats the graph as fully observed, then marks
-the declared quantities on the finished graph. With \code{"complete"} or
-\code{"witness"}, declarations are applied before searching. \code{NULL} treats
-all quantities as observed.}
+\item{size}{The requested number of nodes, counted as described below. The
+closest available size is returned, with the larger size chosen on a tie.
+\code{0} requests the smallest DAG and \code{Inf} the largest.}
 
-\item{direct_select, total_select}{\code{"auto"}, \code{NULL} to list choices, or a
-group and option index.}
+\item{latents}{Variables or exact occasions to mark as unmeasured. These
+markings do not change which nodes are kept. \code{NULL} treats all variables as
+observed. When omitted for a plain DAG, its latent tags are used.}
 
 \item{keep_nodes}{Additional quantities or exact occasions to retain.}
 
 \item{dry_run}{Return the proposed graph, construction plan and checks.}
 
-\item{quiet}{\code{NULL} prints concise progress. \code{TRUE} suppresses it. \code{FALSE}
-also prints detailed construction records.}
+\item{quiet}{\code{NULL} prints progress and how to change the size. \code{TRUE}
+suppresses them. \code{FALSE} also prints the construction record.}
 
-\item{search}{\code{"auto"} ranks adjustment sets that are minimal under set
-inclusion by their number of distinct source quantities. Repeated time
-occasions count once. \code{"complete"} enumerates all source adjustment sets
-minimal under set inclusion, retaining exact occasions, and can be slow.
-\code{"witness"} retains one qualifying set minimal
-under set inclusion per effect and requires automatic selectors.}
-
-\item{steps}{Step budget for the ranked search (\code{search = "auto"}) for each
-effect. It is not accepted for the other search modes. \code{NULL} uses
-\code{getOption("causaliflower.ranked_steps", 20000)}. The saved call retains this budget.}
+\item{unroll}{\code{FALSE} requests a checked static view. \code{TRUE} keeps separate
+time occasions. If omitted for a constructed DAG, its current view is kept.}
 }
 \value{
-A \code{cf_dag}, \code{cf_dag_options} or \code{cf_dag_plan}, with the source and checks saved.
+A constructed \code{cf_dag}, or a \code{cf_dag_plan} when \code{dry_run = TRUE}.
+Both retain the query and checks.
 }
 \description{
-Uses the supplied \code{query_graph()} result as its reference graph.
+Builds a DAG of the requested size from the supplied graph. It retains nodes
+used by selected adjustment sets and construction rules, then collapses the
+others.
 }
 \details{
-The options table's \code{unmeasured} field describes declared occasions used by
-each option. \code{dag_checks()} describes the marked nodes used in the displayed
-graph. A displayed node is marked if any occasion it represents is declared
-unmeasured, so these records have different scopes.
+Size counts each source variable as one node, even when it appears at several
+occasions or in several display segments. Variables combined in one displayed
+node still count separately. For a plain DAG without recorded identities,
+each exact node name counts separately.
 
-When no total adjustment option exists on a fully observed directed reference,
-exact treatment parents are also retained to preserve joint identification
-through the g-formula. This retains temporal occurrences and does not certify
-a graph combined across time. Declared unmeasured treatment parents are reported.
+Smaller candidates keep variables used by ranked minimal adjustment sets for
+the direct and total effects. Ranking certificates bound the sizes offered.
+The largest candidates also retain variables left undecided by the step budget.
+
+Larger candidates add paths from treatment to outcome, other treatment
+descendants and other parents of treatment, outcome and nodes on those paths.
+The largest also includes relevant upstream variables with at least one
+occasion that has no parent from a different variable. A parent at another
+occasion does not disqualify the variable. The query and retention rules still
+limit which occasions are kept.
+
+Every DAG keeps the endpoints and requested nodes. When no total adjustment
+set is found, exact treatment parents are also kept where the identification
+safeguard applies. When no direct set is found, the first node of each indirect
+path is kept. Reaching the step budget does not establish that no set exists.
+
+A static view must pass the source checks. If it fails, construction explains
+why. Use \code{unroll = TRUE} to request the DAG with separate time occasions.
+\code{prune_dag()} and \code{grow_dag()} change the size. \code{select_dag()} chooses an
+alternative at the current or requested size, listed by \code{dag_options()}.
+
+\code{options(causaliflower.ranked_steps = n)} sets the ranked search budget for
+smaller sizes. The default is 20000 steps.
 }

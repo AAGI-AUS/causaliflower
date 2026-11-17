@@ -34,7 +34,7 @@ space_ordered <- function( values, gap ){
 #' Orders nodes within each rank using their parents' and children's positions
 #' to reduce crossings. Vertical bands narrow towards the final rank, allowing
 #' enough space for that rank's nodes. Placement blends inherited parent lanes
-#' with evenly spaced positions; `y_step` is then enforced. Horizontal
+#' with evenly spaced positions. It then enforces `y_step`. Horizontal
 #' coordinates are kept.
 #'
 #' @param coordinates List with named numeric x and y vectors. The input y

@@ -20,10 +20,10 @@ knitr::opts_chunk$set(
 library(causaliflower)
 ```
 
-This introductory vignette covers building and analysing causal graphs in the
-`causaliflower` package. Fitting a model is not covered, and although data can
-help to establish what the observed variables are, it is not a requirement to
-use `causaliflower`.
+Use `causaliflower` to build causal graphs and assess whether their assumptions
+allow an effect to be identified. Data can help establish which variables are
+observed, but are not required to use the package. This vignette does not cover
+fitting a statistical model.
 
 ## Answering causal questions
 
@@ -32,11 +32,11 @@ We can use prior knowledge to build a causal graph depicting the assumed relatio
 ## Identification
 
 For treatment `T` and outcome `Y`, the path `T -> Y` is a **causal path**.
-This represents the **direct effect** of `T` on `Y`, which to estimate requires
+This represents the **direct effect** of `T` on `Y`. Estimating it requires
 accounting for any **noncausal paths** between them.
 
-The **total effect** includes all **indirect effects**, in addition to the **direct effect**,
-such as where the effect of `T` on `Y` is mediated by another variable, `M` (`T -> M -> Y`).
+The **total effect** includes the **direct effect** and **indirect effects**
+mediated by other variables, such as `M` along `T -> M -> Y`.
 In some cases the direct and total effects are the same, for example, where there
 are no mediated causal paths from `T` to `Y`. If a valid adjustment set is available,
 we can identify this effect through adjustment and estimate it using **outcome regression**.
@@ -114,7 +114,7 @@ report. See `?get_identification`.
 Results are grouped by effect, with identification verdicts separate from
 the numbered strategies. The default report shows successful strategies and
 the identification verdicts, including effects or coefficients that are zero
-by graph. Use `id_status = "all"` to include unsuccessful strategy checks.
+under the graph's assumptions. Use `id_status = "all"` to include unsuccessful strategy checks.
 Failure of one method does not rule out every identification strategy.
 
 Use `mediator = "M"` to select a mediator explicitly. If several mediators are
@@ -164,7 +164,7 @@ dag_conditional_frontdoor <- add_edges(dag_frontdoor, edges = "X -> M")
 get_identification(dag_conditional_frontdoor, effect = "total")
 ```
 
-The calculation applies the front door formula within values of `X`, then
+The calculation applies the front door formula for each value of `X`, then
 averages over `X`. The report therefore lists `M` as a mediator and `X` as a
 covariate in the same strategy. The separate ID verdict also establishes
 identification, without returning an identifying formula.

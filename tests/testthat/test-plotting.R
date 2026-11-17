@@ -500,6 +500,46 @@ test_that("unnamed labels are refused", {
 })
 
 
+svg_dimension_points <- function(header, name){
+  name <- match.arg(name, c("width", "height"))
+  root <- regmatches(header, regexpr("<svg\\b[^>]*>", header, perl = TRUE))
+  if( length(root) != 1L ){
+    stop("The SVG root is missing.")
+  }
+  pattern <- paste0("[[:space:]]", name, "[[:space:]]*=[[:space:]]*(['\"])([^'\"]*)\\1")
+  attribute <- regmatches(root, regexec(pattern, root, perl = TRUE))[[1L]]
+  if( length(attribute) != 3L ){
+    stop("The SVG ", name, " is missing or malformed.")
+  }
+  if( !grepl("^([0-9]+([.][0-9]*)?|[.][0-9]+)pt$", attribute[[3L]]) ){
+    stop("The SVG ", name, " must be a numeric dimension in points.")
+  }
+  value <- as.numeric(sub("pt$", "", attribute[[3L]]))
+  if( length(value) != 1L || !is.finite(value) || value <= 0 ){
+    stop("The SVG ", name, " must be a positive finite scalar.")
+  }
+  return(value)
+}
+
+
+test_that("the SVG dimension reader accepts both quote styles and rejects invalid dimensions", {
+  for( quote in c("'", '"') ){
+    root <- paste0("<svg width=", quote, "890pt", quote,
+      " height=", quote, "831.5pt", quote, " viewBox=", quote, "0 0 890 831.5", quote, ">")
+    expect_identical(svg_dimension_points(root, "width"), 890)
+    expect_identical(svg_dimension_points(root, "height"), 831.5)
+  }
+  expect_error(svg_dimension_points("<svg height='831pt'>", "width"), "missing")
+  expect_error(svg_dimension_points("<svg width='890pt\">", "width"), "malformed")
+  expect_error(svg_dimension_points("<svg width='widept'>", "width"), "numeric dimension")
+  expect_error(svg_dimension_points("<svg width='890px'>", "width"), "in points")
+  expect_error(svg_dimension_points("<svg width='0pt'>", "width"), "positive finite scalar")
+  overflow <- paste0("<svg width='", paste(rep("9", 400L), collapse = ""), "pt'>")
+  expect_error(svg_dimension_points(overflow, "width"), "positive finite scalar")
+  expect_error(svg_dimension_points("<g width='890pt'>", "width"), "root is missing")
+})
+
+
 test_that("free-form coordinates save on a bounded canvas", {
   expect_identical(plot_columns(c(0, 0.01, 1, 1.02, 2)), c(1L, 1L, 2L, 2L, 3L))
   # Many evenly spaced columns stay separate rather than chaining together.
@@ -509,12 +549,8 @@ test_that("free-form coordinates save on a bounded canvas", {
   expect_no_error(plot_dagitty(dag, file = svg_file))
   expect_true(file.exists(svg_file))
   header <- paste(readLines(svg_file, n = 5L, warn = FALSE), collapse = " ")
-  dimension <- function(name){
-    pattern <- paste0("(?<= ", name, "=')[0-9.]+")
-    as.numeric(regmatches(header, regexpr(pattern, header, perl = TRUE)))
-  }
-  expect_lte(dimension("width"), 40 * 72)
-  expect_lte(dimension("height"), 40 * 72)
+  expect_lte(svg_dimension_points(header, "width"), 40 * 72)
+  expect_lte(svg_dimension_points(header, "height"), 40 * 72)
 
   # User-supplied sizes beyond ggsave's 50-inch limit are allowed.
   wide <- tempfile(fileext = ".svg")

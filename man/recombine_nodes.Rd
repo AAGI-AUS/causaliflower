@@ -19,7 +19,8 @@ Defaults to FALSE. The same validation is performed in either mode.}
 \value{
 A dagitty object with each matching group combined into one node.
 With \code{preview = TRUE}, a named list of character vectors containing the
-original members of each group. List names give the proposed node names. The first member supplies the node's metadata. If no group matches,
+original members of each group. List names give the proposed node names.
+The first member supplies the node's metadata. If no group matches,
 returns the original graph, or an empty list when previewing.
 }
 \description{

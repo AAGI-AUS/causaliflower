@@ -2,10 +2,9 @@
 
 > causality + cauliflower = 'causaliflower'!
 
-Graph-based causal analysis in R. The `causaliflower` package extends `dagitty` and `ggdag` with functions for building and assessing directed acyclic graphs (DAGs).
-
-The goal of `causaliflower` is to support reproducible causal analytical workflows,
-with a focus on applied causal inference techniques in agriculture.
+Build, edit and assess causal graphs in R with `causaliflower`. The package
+extends `dagitty` and `ggdag` to support reproducible causal analysis, with a
+focus on agriculture.
 
 ### Installation
 
@@ -26,9 +25,11 @@ See the introductory vignette `vignette("causaliflower-introduction")` or exampl
 
 ### Example code
 
-`get_dag()` constructs grain production system DAG by querying a structural causal model derived from APSIM. This version (v0.0.2.9000) covers 214 different queries across 3 crops, for single treatment and outcome pairs for either randomised or non-randomised scenarios. 
+`get_dag()` constructs a DAG for a grain production system by querying the
+bundled structural causal model derived from APSIM. It combines querying and
+construction for barley, wheat and maize.
 
-Simply specify the crop, treatment, outcome and randomisation assumption to construct a DAG-by-query:
+Specify the crop, treatment, outcome and whether the treatment was randomised:
 
 ```R
 library(causaliflower)
@@ -204,7 +205,9 @@ plot_dagitty(dag)
 
 ```
 
-`position` takes four placement helpers, used alone or combined with `c()`, and their names also work as values (e.g., `position = "first"` or `position = c(after = "X2")`):
+For `position`, use the four placement helpers below, alone or combined with
+`c()`. You can also supply strings, such as `position = "first"` or
+`position = c(after = "X2")`.
 
 ```R
 

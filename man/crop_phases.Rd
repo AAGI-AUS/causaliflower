@@ -5,16 +5,15 @@
 \alias{crop_phases}
 \title{Developmental phase partitions for the bundled crops}
 \format{
-A data frame with 32 rows and nine columns.
+A data frame with 32 rows and nine columns: \code{crop}, \code{phase_index}
+starting at zero, \code{apsim_child_index}, \code{phase_name}, \code{start_stage},
+\code{end_stage}, \code{phase_type}, \code{terminal} and \code{canonical_stage}.
 }
 \usage{
 crop_phases
 }
 \description{
 \code{crop_phases} describes developmental stages for barley, wheat and maize.
-Its 32 rows contain \code{crop}, \code{phase_index} starting at zero,
-\code{apsim_child_index}, \code{phase_name}, \code{start_stage}, \code{end_stage}, \code{phase_type},
-\code{terminal} and \code{canonical_stage}. The source type field is empty and model
-class names are omitted.
+The source type field is empty and model class names are omitted.
 }
 \keyword{datasets}

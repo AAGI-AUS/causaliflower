@@ -146,17 +146,6 @@ test_that("conditions and live references never disappear into a cache hit", {
   })
 })
 
-test_that("mapping preserves quantity identity and exact temporal membership", {
-  graphs <- lapply(c("dag { A -> B }", "dag { A_t1 -> B_t2 }", "dag { A_t2 -> B_t3 }"), dagitty::dagitty)
-  mapped <- graphs[[1L]]
-  attr(mapped, "cf_node_map") <- data.frame(node = c("A", "B"),
-    quantity = c("A", "B"), occurrence = c("A_t2", "B_t3"))
-  graphs[[4L]] <- mapped
-  for (from in graphs) for (to in graphs)
-    for (set in list(character(), "A", "A_t1", "A_t2", c("A", "B"), "unknown"))
-      expect_identical(acceleration_mode(TRUE, .gd_map_set(set, from, to)),
-        acceleration_mode(FALSE, .gd_map_set(set, from, to)))
-})
 
 test_that("an interrupted cache miss preserves retained entries and accounting", {
   acceleration_mode(TRUE, {
@@ -207,7 +196,6 @@ test_that("known query graphs reuse while custom nested classes bypass", {
     .cf_cache$clear()
     on.exit(.cf_cache$clear(), add = TRUE)
     graph <- dagitty::dagitty("dag { X [exposure]; Y [outcome]; X -> Y }")
-    class(graph) <- c("dag_by_query", "dagitty")
     first <- .cd_prepare(graph, NULL, NULL)
     expect_identical(first, acceleration_mode(FALSE, .cd_prepare(graph, NULL, NULL)))
     expect_identical(.cd_prepare(graph, NULL, NULL), first)

@@ -4,7 +4,6 @@
 \alias{original_query}
 \alias{dag_options}
 \alias{temporal_dag}
-\alias{dag_history}
 \title{Inspect queries and constructed graphs}
 \usage{
 original_query(dag)
@@ -12,29 +11,26 @@ original_query(dag)
 dag_options(dag)
 
 temporal_dag(dag)
-
-dag_history(dag, details = FALSE)
 }
 \arguments{
-\item{dag}{The corresponding recovered graph or collection.}
-
-\item{details}{With \code{TRUE}, include before and after graphs, typed edge changes
-and detailed records.}
+\item{dag}{A constructed DAG or a dry-run plan.}
 }
 \value{
 \itemize{
-\item \code{original_query()}: Return the supplied query graph and its attributes.
-\item \code{temporal_dag()}: Return the temporal graph represented by the current display,
-or a named list for multiple views.
-\item \code{dag_options()}: Return the saved construction options, including separate
-direct and total candidate tables. Their validity refers to the original
-selection before subsequent editing commands.
-\item \code{dag_history()}: Return the transformation history as a data frame.
-\code{details = TRUE} includes before and after graphs, typed edge changes and
-detailed records. Multiple views have separate histories.
+\item \code{original_query()}: The supplied query graph and its attributes.
+\item \code{temporal_dag()}: The temporal graph represented by the current display.
+\item \code{dag_options()}: The construction arguments, variables kept for each effect,
+size (\code{level$variables}) and number of drawn nodes (\code{level$nodes}). Size uses
+the counting rule in \code{\link[=construct_dag]{construct_dag()}}. The record also contains the time
+summary, identification results and unmeasured declarations.
 }
+
+For \code{dag_options()}, \code{sizes} lists known sizes and \code{alternatives} lists DAGs
+at the current size. \code{sizes_complete} and \code{alternatives_complete} say whether
+these lists are complete within the construction family. \code{sizes_steps}
+records the configured ranked search budget. \code{alternatives_limit} explains
+why any candidates from the construction rules are unavailable.
 }
 \description{
-These functions accept the corresponding recovered graph or collection and
-read saved records without changing the graph.
+Read the saved records of a constructed DAG without changing it.
 }

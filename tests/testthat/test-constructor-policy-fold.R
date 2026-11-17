@@ -23,7 +23,7 @@ test_that("constructor fallback bypasses metadata exclusions without latent proj
   expect_length(dagitty::latents(prepared$selection), 0L)
   expect_setequal(names(prepared$reference), names(graph))
   expect_identical(serialize(graph, NULL), before)
-  total <- .cd_search(prepared, "total", 100L)
+  total <- .cd_ranked_search(prepared, "total")
   expect_identical(total$sets, list(character()))
   expect_warning(constructed <- construct_dag(graph, quiet = TRUE), "Recovery policy exclusions")
   expect_identical(serialize(original_query(constructed), NULL), before)

@@ -3,11 +3,11 @@ Title: Build and Assess Causal Graphs
 Version: 0.0.2.9000
 Authors@R:
     person("Aidan", "Moller", , "aidan.moller@adelaide.edu.au", role = c("aut", "cre", "cph"))
-Description: Extends 'dagitty' and 'ggdag' with functions to build, edit and plot
-    causal graphs in R. Also provides guided assessment of causal arrows,
-    checks whether causal effects are identifiable, and constructs directed
+Description: Builds, edits and plots causal graphs in R to support causal
+    analysis. Provides guided assessment of causal arrows and checks whether
+    effects are identifiable under stated assumptions. Constructs directed
     acyclic graphs by querying a structural causal model derived from APSIM for
-    barley, wheat and maize.
+    barley, wheat and maize. Extends 'dagitty' and 'ggdag'.
 License: MIT + file LICENSE
 URL: https://github.com/AAGI-AUS/causaliflower
 BugReports: https://github.com/AAGI-AUS/causaliflower/issues
@@ -38,4 +38,4 @@ Config/testthat/edition: 3
 LazyData: true
 NeedsCompilation: yes
 SystemRequirements: C++17
-RoxygenNote: 7.3.3
+Config/roxygen2/version: 8.1.0

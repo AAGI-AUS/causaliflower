@@ -10,7 +10,6 @@ test_that("readable_dag reads recovered query attributes without altering its in
   attr(graph, "latent") <- "SoilN_t0"
   attr(graph, "treatments") <- "Treatment"
   attr(graph, "outcomes") <- "CropN"
-  class(graph) <- c("dag_by_query", class(graph))
   original <- serialize(graph, NULL)
   nodes <- data.frame(node_id = c("Treatment", "SoilN", "CropN"),
     node_name_readable = c("fertiliser", "soil_N", "crop_N"))

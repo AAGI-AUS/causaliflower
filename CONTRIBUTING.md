@@ -1,59 +1,34 @@
 # Contributing to causaliflower
 
-Open `causaliflower.Rproj` and use `devtools::load_all()` while editing.
-This loads the package's functions together.
+Bug reports, clearer documentation, examples and code changes are welcome.
 
+To report a problem, [open an issue](https://github.com/AAGI-AUS/causaliflower/issues)
+with a small reproducible example, what you expected, what happened, and your R
+and package versions. For a larger change to the public interface, scientific
+assumptions or dependencies, discuss the approach in an issue before starting.
 
-## Source style
+## Working on code
 
-- Keep the existing `.r` and `.R` filenames.
-- Use the filename banner at the top of each source file. Describe the
-  file's role in one or two short lines, without a final full stop.
-- Leave two blank lines between sections and between the banner's filename
-  and description. Put code or documentation directly below subsection headings.
-- Keep constants near their main use, with comments on the assignment line.
-  Do not wrap a short definition just to fit its comment. Keep related
-  constants together when one depends on another.
-- Put a comment about a whole function on its declaration line. Put comments
-  about individual steps beside those steps.
-- Leave the final full stop off single-sentence comments. Use normal
-  punctuation for multiple sentences and roxygen documentation.
-- Use braces for `if` and `else` branches, including single statements.
-  Keep explicit returns and name local results for what they contain.
-
-
-## Helper placement
-
-Check callers, callback references and exports before moving a function.
-Keep domain algorithms with their implementation and nested functions with
-the code whose local state they use.
-
-Shared helpers appear once in `helper_funcs.r`, under their main caller's
-filename. Keep these sections in alphabetical filename order, with 80-hash
-banners. Within a section, follow the callers' source order and put a helper's
-own helpers directly below it. `string_to_dag()` remains the public function
-in the `helper_funcs.r` section, followed by its parser helpers.
-
-
-## Checking a change
-
-Run the relevant tests while editing, then the full suite before release.
+See the [installation notes](README.md#installation) for package requirements.
+From the package directory, load the code and run the tests relevant to your change:
 
 ```r
 devtools::load_all()
-devtools::test(filter = "identification") # Use the relevant test file pattern
-devtools::test()
+devtools::test(filter = "identification")
 ```
 
-Edit function help in the roxygen source. Use `@noRd` for internal functions
-that do not need a help page. Regenerate with roxygen2 7.3.3.
-The RStudio project also runs roxygen when building, so check its version.
+Replace `identification` with the relevant test file pattern. RStudio users can
+open `causaliflower.Rproj` to work in the package directory.
 
-```r
-stopifnot(as.character(packageVersion("roxygen2")) == "7.3.3")
-roxygen2::roxygenise()
-devtools::check(document = FALSE, args = "--as-cran")
-```
+Keep changes focused and follow the surrounding style. Add regression coverage
+for bug fixes and update documentation when behaviour changes. Edit function
+help in its Roxygen source under `R/`. The [style guide](dev/STYLE.md) explains
+documentation tools and the conventions used by maintainers and coding assistants.
+Formatting details can be resolved during review.
 
-Read the generated help and built vignette, including output and plots.
-The HTML vignette needs Pandoc. Review the diff before submitting a change.
+## Sending a change
+
+Review your diff, then open a pull request explaining the problem, the change
+and how you checked it. Link any related issue. Mention checks you could not run
+and any limitations you know about. Maintainers handle the broader package and
+release checks described in the style guide.

@@ -1,36 +1,19 @@
-test_that("concept resolution counts definitions, not equation inputs", {
-  definitions <- list(
-    Bundle = list(members = c("A", "B"), reason = "Two explicitly grouped quantities", source = "test definition"),
-    Unknown = list(members = character(), reason = "Meaning unresolved", source = "test definition"),
-    Loop = list(members = c("Loop", "A"), reason = "Repeated unresolved grouping", source = "test definition")
-  )
-  registry <- .gd_components(definitions)
-  plain <- .gd_resolve_components(c("A", "B"), registry)
-  expanded <- .gd_resolve_components(c("Bundle", "A"), registry)
-  expect_identical(plain$members, expanded$members)
-  expect_length(plain$unresolved, 0L)
-  loop <- .gd_resolve_components("Loop", registry)
-  expect_identical(loop$members, "A")
-  expect_identical(loop$unresolved, "unresolved:Loop")
-  expect_true("cycle" %in% loop$trace$status)
-  expect_error(.gd_components(list(X = list(members = "A"))), "reason and a source")
-})
-
 test_that("condensed alternatives retain every temporal membership", {
   g <- dagitty::dagitty("dag { T [exposure]; Y [outcome]; A_t0; A_t1; B_t0; U_t0; T -> Y }")
+  nodes <- names(g)
+  ids <- c(A_t0 = "A", A_t1 = "A", B_t0 = "B", U_t0 = "U", T = "T", Y = "Y")
+  attr(g, "cf_node_map") <- data.frame(node = nodes, quantity = unname(ids[nodes]),
+    member_id = unname(ids[nodes]), occurrence = nodes)
   original <- serialize(g, NULL)
   raw <- list(c("A_t0", "A_t1"), "A_t0", c("B_t0", "U_t0"))
-  definition <- list(U = list(members = character(), reason = "Unknown process", source = "test"))
-  result <- .gd_candidates(raw, g, definition)
+  result <- .gd_candidates(raw, g)
   expect_equal(nrow(result), 2L)
   expect_equal(result$n_concepts, c(1L, 2L))
   expect_length(result$raw_sets[[1]], 2L)
   expect_setequal(result$raw_sets[[1]][[1]], c("A_t0", "A_t1"))
-  expect_equal(result$status[2], "needs definition")
-  expect_true(is.na(result$n_resolved[2]))
   expect_identical(serialize(g, NULL), original)
-  empty <- .gd_candidates(list(character()), g, list())
-  absent <- .gd_candidates(list(), g, list())
+  empty <- .gd_candidates(list(character()), g)
+  absent <- .gd_candidates(list(), g)
   expect_equal(nrow(empty), 1L)
   expect_equal(empty$n_concepts, 0L)
   expect_equal(nrow(absent), 0L)
