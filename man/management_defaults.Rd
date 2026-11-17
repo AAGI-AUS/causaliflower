@@ -5,14 +5,13 @@
 \alias{management_defaults}
 \title{Default management quantities for the bundled slice}
 \format{
-Three core quantity keys and an empty \code{per_crop} list
-reserved for crop specific defaults.
+A list containing \code{core}, a character vector of three quantity keys,
+and \code{per_crop}, an empty list reserved for defaults by crop.
 }
 \usage{
 management_defaults
 }
 \description{
-\code{management_defaults} contains three core quantity keys and an empty
-\code{per_crop} list reserved for crop specific defaults.
+Selects the management quantities included by default in a query.
 }
 \keyword{datasets}

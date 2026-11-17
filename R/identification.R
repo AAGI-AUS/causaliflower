@@ -233,7 +233,7 @@ get_identification <- function(dag, treatment = NULL, outcome = NULL,
                                method = NULL,
                                id_status = c("identifiable", "all", "not_identifiable",
                                  "not_established", "not_assessed", "candidate",
-                                 "zero_by_graph")){ # Assess identification and return the selected strategies
+                                 "zero_by_graph")){
   if( missing(effect) ){
     effect <- NULL
   }
@@ -748,10 +748,24 @@ as.data.table.causaliflower_identification <- function(x, ...){ # Return a strat
 
 ## Identification for one query ##
 
+#' Calculate identification evidence for one resolved effect query
+#'
+#' @param dag A dagitty DAG containing only directed and bidirected edges.
+#' @param treatment,outcome Observed endpoint names, or `NULL` to use graph tags.
+#' @param effect `total` or the internal controlled `direct` intervention query.
+#' @param experiments Optional observed quantities with experimental data.
+#' @param conditioning Optional observed conditioning set for a total effect.
+#' @param quiet Suppress informational messages when `TRUE`.
+#' @param mediator Optional mediator specification for direct-effect analysis.
+#' @return A data.table of method results with structured query, identification,
+#'   adjustment, role and availability attributes. Joint endpoints support only
+#'   unconditional total effect ID and adjustment. Unsupported scopes raise
+#'   an error.
+#' @noRd
 id_identification_query <- function(dag, treatment = NULL, outcome = NULL,
                                     effect = c("total", "direct"),
                                     experiments = NULL, conditioning = NULL,
-                                    quiet = FALSE, mediator = NULL){ # Retain the ID, IDC and mediation calculations for one target
+                                    quiet = FALSE, mediator = NULL){
   graph <- id_validate_graph(dag)
 
   if( missing(effect) ){
@@ -1192,7 +1206,15 @@ id_mediation_adjustment <- function(dag, G, treatment, outcome, mediators){
 
 ## Query validation ##
 
-id_validate_joint_scope <- function(effect, conditioning, experiments, mediator){ # Refuse unsupported joint methods instead of running pairwise checks
+#' Reject methods unsupported for joint endpoint sets
+#'
+#' @param effect Requested effect scope. This guard rejects `direct`.
+#' @param conditioning,experiments,mediator Optional method-specific inputs,
+#'   all required to be `NULL` for a joint endpoint query.
+#' @return `NULL`, invisibly, if the scope passes these checks. Otherwise,
+#'   raises an error.
+#' @noRd
+id_validate_joint_scope <- function(effect, conditioning, experiments, mediator){
   if( identical(effect, "direct") || !is.null(conditioning) ||
       !is.null(experiments) || !is.null(mediator) ){
     stop("Joint endpoint queries support only unconditional total effect ID and covariate adjustment. Use effect = 'total' (or NULL), with conditioning, experiments and mediator all NULL. Joint direct, mediation, conditional and experimental methods are not assessed.",
@@ -1259,18 +1281,18 @@ id_validate_graph <- function(dag){
 #'
 #' @param graph Validated graph list containing `dag` and `observed` node
 #'   names.
-#' @param treatment Optional treatment name. `NULL` uses the graph's exposure
-#'   tag.
-#' @param outcome Optional outcome name. `NULL` uses the graph's outcome tag.
-#' @return A list containing one observed `treatment` and one observed
-#'   `outcome`.
+#' @param treatment Optional treatment names. `NULL` uses the graph's exposure
+#'   tags.
+#' @param outcome Optional outcome names. `NULL` uses the graph's outcome tags.
+#' @return A list containing sorted unique observed `treatment` and `outcome`
+#'   names.
 #' @noRd
-id_resolve_query <- function(graph, treatment, outcome){ # Resolve and validate the observed query endpoints
+id_resolve_query <- function(graph, treatment, outcome){
   if( is.null(treatment) ){
     treatment <- as.character(dagitty::exposures(graph$dag))
   }
   if( is.character(treatment) && length(treatment) == 0L ){
-    stop("No treatment detected: 'get_identification()' requires exactly one named treatment, either tagged in the DAG or supplied through 'treatment'. Please ensure a single treatment is supplied and try again.",
+    stop("No treatment detected: tag treatment nodes in the DAG or supply their names through 'treatment'.",
          call. = FALSE)
   }
   if( is.character(treatment) && length(treatment) > 1L &&
@@ -1282,7 +1304,7 @@ id_resolve_query <- function(graph, treatment, outcome){ # Resolve and validate 
   if( !is.character(treatment) || length(treatment) == 0L ||
       anyNA(treatment) || any(!nzchar(treatment)) ||
       any(!treatment %in% graph$observed) ){
-    stop("Invalid treatment detected: 'get_identification()' requires exactly one named treatment, either tagged in the DAG or supplied through 'treatment'. Please ensure a single treatment is supplied and try again.",
+    stop("Invalid treatment detected: supply a nonempty character vector of observed node names in the DAG.",
          call. = FALSE)
   }
 
@@ -1292,7 +1314,7 @@ id_resolve_query <- function(graph, treatment, outcome){ # Resolve and validate 
     outcome <- as.character(dagitty::outcomes(graph$dag))
   }
   if( is.character(outcome) && length(outcome) == 0L ){
-    stop("No outcome detected: 'get_identification()' requires exactly one named outcome, either tagged in the DAG or supplied through 'outcome'. Please ensure a single outcome is supplied and try again.",
+    stop("No outcome detected: tag outcome nodes in the DAG or supply their names through 'outcome'.",
          call. = FALSE)
   }
   if( is.character(outcome) && length(outcome) > 1L &&
@@ -1303,7 +1325,7 @@ id_resolve_query <- function(graph, treatment, outcome){ # Resolve and validate 
   }
   if( !is.character(outcome) || length(outcome) == 0L ||
       anyNA(outcome) || any(!nzchar(outcome)) || any(!outcome %in% graph$observed) ){
-    stop("Invalid outcome detected: 'get_identification()' requires exactly one named outcome, either tagged in the DAG or supplied through 'outcome'. Please ensure a single outcome is supplied and try again.",
+    stop("Invalid outcome detected: supply a nonempty character vector of observed node names in the DAG.",
          call. = FALSE)
   }
   outcome <- sort(unique(as.character(outcome)))
@@ -1665,10 +1687,11 @@ id_ccomponents <- function(G){
 #' @param x Intervention node names.
 #' @param G Mixed graph of observed nodes as a list of vertices `V`, directed edges
 #'   `D`, and bidirected edges `B`.
-#' @return A list containing the identification flag `id` and a `hedge` when
-#'   identification fails.
+#' @return A list with `id = TRUE` and `hedge = NULL` when ID establishes
+#'   identification. Otherwise, `id = FALSE` and a `hedge` demonstrating
+#'   nonidentification.
 #' @noRd
-id_solve <- function(y, x, G){ # Return the ID verdict and recover a hedge on failure
+id_solve <- function(y, x, G){
   y <- sort(intersect(y, G$V))
   x <- sort(intersect(x, setdiff(G$V, y)))
   vertices <- G$V
@@ -2033,8 +2056,10 @@ idc_mutilate <- function(G, intervention, remove_outgoing){
 #' @param z Conditioning node names.
 #' @param G Mixed graph of observed nodes as a list of vertices `V`, directed edges
 #'   `D`, and bidirected edges `B`.
-#' @return A list containing `id`, `hedge`, and the conditioning sets
-#'   `intervened` and `remaining`.
+#' @return A list with `id = TRUE` and `hedge = NULL` when IDC establishes
+#'   identification. Otherwise, `id = FALSE` and a `hedge` demonstrating
+#'   nonidentification. `intervened` and `remaining` give the conditioning
+#'   nodes moved into the intervention set and those still conditioned on.
 #' @noRd
 idc_solve <- function(y, x, z, G){
   intervention <- x
@@ -2079,7 +2104,17 @@ idc_solve <- function(y, x, z, G){
 
 ## Individual identification strategies ##
 
-id_direct_adjustment <- function(dag, treatment, outcome){ # Check single door adjustment for the supplied graph's direct arrow
+#' Assess adjustment for an original treatment-to-outcome arrow
+#'
+#' @param dag A dagitty DAG accepted by `id_validate_graph()`.
+#' @param treatment,outcome Single treatment and outcome node names.
+#' @return A list of endpoints, `direct_arrow`, `feasible`, `status` and minimal
+#'   `adjustment_sets`. A missing arrow gives `structural_zero`, `NA` feasibility
+#'   and no sets. An existing arrow with no qualifying set gives `not_found`
+#'   and `feasible = FALSE`. A qualifying set gives `available` and
+#'   `feasible = TRUE`.
+#' @noRd
+id_direct_adjustment <- function(dag, treatment, outcome){
   graph <- id_validate_graph(dag)
   edges <- dagitty::edges(graph$dag)
   direct_arrow <- any(edges$v == treatment & edges$w == outcome & edges$e == "->")
@@ -2609,7 +2644,13 @@ id_zidentifiable <- function(G, treatment, outcome, experiments,
 
 ## Result formatting ##
 
-id_analysis_record <- function(result){ # Keep the structured calculation records for a reported target
+#' Extract structured calculation attributes for reporting
+#'
+#' @param result Method-result table returned by `id_identification_query()`.
+#' @return A named list of query, verdict, role, strategy and availability
+#'   attributes, plus method support when present. Missing fields remain `NULL`.
+#' @noRd
+id_analysis_record <- function(result){
   fields <- c("query", "identifiable", "observationally_identifiable", "z_identifiable",
     "data_availability", "hedge", "roles", "adjustment_sets", "canonical_adjustment",
     "frontdoor_sets", "instruments", "experiments", "experiment_set", "caveat") # Stored calculation attributes
@@ -2625,7 +2666,14 @@ id_analysis_record <- function(result){ # Keep the structured calculation record
 }
 
 
-id_query_label <- function(query){ # Describe the intervention and conditioning sets in a distribution query
+#' Format an interventional distribution query
+#'
+#' @param query Structured record with treatment, outcome and optional
+#'   intervention and conditioning node sets.
+#' @return One distribution label, ordering treatments first within the
+#'   intervention set and quoting node names when necessary.
+#' @noRd
+id_query_label <- function(query){
   intervention <- query$intervention
   if( is.null(intervention) ){
     intervention <- query$treatment
@@ -2648,7 +2696,13 @@ id_query_label <- function(query){ # Describe the intervention and conditioning 
 }
 
 
-id_display_nodes <- function(nodes){ # Quote node names only when they need delimiters
+#' Format a vector of node names for identification output
+#'
+#' @param nodes Node names in display order.
+#' @return One string of node names separated by commas, quoting names that
+#'   need delimiters. An empty vector produces an empty string.
+#' @noRd
+id_display_nodes <- function(nodes){
   rendered <- vapply(as.character(nodes), function(node){
     if( grepl("^[A-Za-z][A-Za-z0-9_.]*$", node) ){
       return(node)
@@ -2660,7 +2714,14 @@ id_display_nodes <- function(nodes){ # Quote node names only when they need deli
 }
 
 
-id_report_statuses <- function(id_status){ # Validate status filters and retain structural zeros with identified results
+#' Resolve the report's identification-status filter
+#'
+#' @param id_status `NULL`, `all`, or supported identification status names.
+#' @return Unique status names, adding `zero_by_graph` when `identifiable`
+#'   is requested. Returns `NULL` for `NULL` or `all`, meaning no filter.
+#'   Invalid or empty selections raise an error.
+#' @noRd
+id_report_statuses <- function(id_status){
   choices <- c("identifiable", "not_identifiable", "not_established",
                "not_assessed", "candidate", "zero_by_graph") # Stored identification statuses
   if( is.null(id_status) ){
@@ -2682,7 +2743,16 @@ id_report_statuses <- function(id_status){ # Validate status filters and retain 
 }
 
 
-id_report_selection <- function(scope, method, mediator){ # Resolve compatible effect and strategy selections
+#' Select compatible effects and identification strategies
+#'
+#' @param scope Validated effect names: total, direct or indirect.
+#' @param method Supported strategy names, or `NULL` for all strategies.
+#' @param mediator Optional mediator specification requiring natural effects.
+#' @return A list with compatible `effect` and unique `method` selections.
+#'   Raises an error if no method applies to the requested effects or the
+#'   mediator request is incompatible with the selection.
+#' @noRd
+id_report_selection <- function(scope, method, mediator){
   method_choices <- c("adjustment", "front_door", "conditional_front_door",
     "instrumental_variable", "single_door", "mediation_formula") # Supported strategies
   if( !is.null(method) && (!is.character(method) || !length(method) ||
@@ -2715,7 +2785,18 @@ id_report_selection <- function(scope, method, mediator){ # Resolve compatible e
 }
 
 
-id_identification_result <- function(analyses, treatment, outcome, selection, dag){ # Attach the calculations and separate verdicts to the strategy report
+#' Assemble a strategy report with independently stored verdicts
+#'
+#' @param analyses Structured calculations indexed by effect or strategy.
+#' @param treatment,outcome Resolved endpoint node sets.
+#' @param selection Resolved effect, method and optional status filters.
+#' @param dag Supplied graph retained as analysis provenance.
+#' @return A `causaliflower_identification` list of strategies grouped by effect.
+#'   Attributes retain copies of the analyses, selection and graph, separate
+#'   verdicts, and a snapshot of the strategies. Stored analyses are reused
+#'   only while the current strategies match that snapshot.
+#' @noRd
+id_identification_result <- function(analyses, treatment, outcome, selection, dag){
   result <- id_identification_report(analyses, selection)
   attr(result, "analyses") <- data.table::copy(analyses)
   attr(result, "verdicts") <- id_identification_verdicts(analyses, selection)
@@ -2737,7 +2818,14 @@ id_identification_result <- function(analyses, treatment, outcome, selection, da
 }
 
 
-id_identification_verdicts <- function(analyses, selection){ # Keep algorithm verdicts and structural implications outside the strategies
+#' Build algorithm and graph-structure verdicts separately from strategies
+#'
+#' @param analyses Structured calculations indexed by effect or strategy.
+#' @param selection Resolved report selection with an `effect` vector.
+#' @return Verdict entries indexed by effect and method, including query,
+#'   status, assumptions, variables and notes. These are not adjustment methods.
+#' @noRd
+id_identification_verdicts <- function(analyses, selection){
   result <- stats::setNames(vector("list", length(selection$effect)), selection$effect)
   distribution_assumptions <- c("Nonparametric causal model", "Consistency", "Positivity") # Requirements beyond the supplied graph
   add <- function(effect, method, query, id_status, assumptions, variables, notes){
@@ -2791,7 +2879,16 @@ id_identification_verdicts <- function(analyses, selection){ # Keep algorithm ve
 }
 
 
-id_identification_report <- function(analyses, selection){ # Keep complete strategy records under their effect
+#' Build selected identification strategies without combining alternatives
+#'
+#' @param analyses Structured calculations indexed by effect or strategy.
+#' @param selection Resolved effect, method and optional status filters.
+#' @return Strategy lists indexed by effect, each entry containing method,
+#'   assumptions, variables, status and notes. Empty sets remain valid strategy
+#'   values. Methods that were not selected, did not establish identification,
+#'   or were not assessed remain distinct.
+#' @noRd
+id_identification_report <- function(analyses, selection){
   result <- stats::setNames(rep(list(list()), length(selection$effect)), selection$effect)
   add <- function(effect, method, id_status, variables, assumptions,
                   notes = character()){ # Append one matching strategy without combining alternatives
@@ -2907,7 +3004,13 @@ id_identification_report <- function(analyses, selection){ # Keep complete strat
 }
 
 
-id_display_is_current <- function(x){ # Reuse stored analyses only while the selected strategies remain unchanged
+#' Check whether report rows still match their stored analysis snapshot
+#'
+#' @param x An identification report, possibly edited by its caller.
+#' @return `TRUE` only for the expected class with stored analyses, selection
+#'   and a row snapshot identical to the current contents. Otherwise, `FALSE`.
+#' @noRd
+id_display_is_current <- function(x){
   snapshot <- attr(x, "display_rows", exact = TRUE)
   contents <- lapply(x, function(value){ return(value) })
   current <- inherits(x, "causaliflower_identification") &&
@@ -2918,7 +3021,12 @@ id_display_is_current <- function(x){ # Reuse stored analyses only while the sel
 }
 
 
-id_report_label <- function(value){ # Render stable identifiers as readable labels
+#' Render one stable report identifier as a display label
+#'
+#' @param value One effect, method, status or variable-role identifier.
+#' @return Its display label, or the original value when no label is defined.
+#' @noRd
+id_report_label <- function(value){
   label <- switch(value,
     total = "Total effect",
     direct = "Direct effect",
@@ -2954,7 +3062,14 @@ id_report_label <- function(value){ # Render stable identifiers as readable labe
 }
 
 
-id_report_fields <- function(entry){ # Format one strategy without changing its stored values
+#' Format the fields of one identification strategy
+#'
+#' @param entry Strategy record with method, assumptions, variables, status
+#'   and notes.
+#' @return A named list of display strings. An absent variable list is reported
+#'   separately from a present variable role containing a valid empty set.
+#' @noRd
+id_report_fields <- function(entry){
   variables <- character()
   for(role in names(entry$variables)){
     variables <- c(variables, paste0(id_report_label(role), ": ",
@@ -2979,7 +3094,14 @@ id_report_fields <- function(entry){ # Format one strategy without changing its 
 }
 
 
-id_verdict_fields <- function(entry){ # Describe one query verdict without presenting it as a strategy
+#' Format one algorithm or graph-structure verdict
+#'
+#' @param entry Verdict record with method, status, optional query, assumptions,
+#'   variables and notes.
+#' @return A named list of display strings identifying the check and query.
+#'   For z-ID, it also includes the declared or required experimental variables.
+#' @noRd
+id_verdict_fields <- function(entry){
   label <- if( identical(entry$method, "graph_structure") ){
     "Graph structure"
   }else{
@@ -3001,7 +3123,12 @@ id_verdict_fields <- function(entry){ # Describe one query verdict without prese
 }
 
 
-id_display_validate_details <- function(details){ # Validate the option to print the full summary
+#' Validate the detailed-report display switch
+#'
+#' @param details One nonmissing logical value.
+#' @return `NULL`, invisibly, for `TRUE` or `FALSE`. Otherwise, raises an error.
+#' @noRd
+id_display_validate_details <- function(details){
   if( !is.logical(details) || length(details) != 1L || is.na(details) ){
     stop("'details' must be TRUE or FALSE.", call. = FALSE)
   }
@@ -3009,14 +3136,25 @@ id_display_validate_details <- function(details){ # Validate the option to print
 }
 
 
-id_display_heading <- function(x){ # Name the treatment and outcome sets
+#' Format the endpoint heading of an identification report
+#'
+#' @param x Report with treatment and outcome attributes.
+#' @return One heading string with appropriately quoted endpoint names.
+#' @noRd
+id_display_heading <- function(x){
   heading <- paste0("Identification: ", id_display_nodes(attr(x, "treatment", exact = TRUE)),
     " -> ", id_display_nodes(attr(x, "outcome", exact = TRUE)))
   return(heading)
 }
 
 
-id_display_variables <- function(nodes){ # Distinguish a valid empty set from named variables
+#' Format a reported variable set without losing the empty-set distinction
+#'
+#' @param nodes Node names for one reported variable role.
+#' @return The string `"none needed"` for an empty set, otherwise formatted
+#'   node names.
+#' @noRd
+id_display_variables <- function(nodes){
   if( !length(nodes) ){
     return("none needed")
   }
@@ -3024,7 +3162,13 @@ id_display_variables <- function(nodes){ # Distinguish a valid empty set from na
 }
 
 
-id_display_escape <- function(text){ # Escape each label and value once for HTML output
+#' Escape plain report text before inserting it into HTML
+#'
+#' @param text Character vector of unescaped labels or field values.
+#' @return Text with ampersands, angle brackets and both quote characters
+#'   escaped. Call once per plain-text value to avoid double escaping.
+#' @noRd
+id_display_escape <- function(text){
   text <- gsub("&", "&amp;", text, fixed = TRUE)
   text <- gsub("<", "&lt;", text, fixed = TRUE)
   text <- gsub(">", "&gt;", text, fixed = TRUE)
@@ -3190,12 +3334,14 @@ id_idc_detail <- function(intervened, remaining){
 #' @param adjustment Covariate adjustment result containing `sets`.
 #' @param frontdoor Front door result containing mediator `sets`.
 #' @param instruments Instrument result containing `entries`.
+#' @param conditioning Observed nodes conditioned on in the requested query.
+#' @param intervened Conditioning nodes IDC moved into the intervention set.
 #' @return A data.table with `variable`, `role`, and `conditioning_guidance`
 #'   columns.
 #' @noRd
 id_roles <- function(G, treatment, outcome, effect, adjustment,
                       frontdoor, instruments, conditioning = character(),
-                      intervened = character()){ # Describe each observed variable's role in the requested analysis
+                      intervened = character()){
   variables <- sort(setdiff(G$V, c(treatment, outcome)))
   role_variable <- character()
   role_name <- character()
@@ -3302,9 +3448,9 @@ id_roles <- function(G, treatment, outcome, effect, adjustment,
 #' Print the causal identification verdict
 #'
 #' @param result The identification result with its resolved query.
-#' @return Invisible `NULL`.
+#' @return `NULL`, invisibly.
 #' @noRd
-id_summary_message <- function(result){ # Describe the supported distribution query and its verdict
+id_summary_message <- function(result){
   query <- attr(result, "query")
   verdict <- if( isTRUE(attr(result, "observationally_identifiable")) ){
     "identified from observational data under this graph."

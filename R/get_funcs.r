@@ -657,7 +657,8 @@ extract_unique_node_roles <- function(dag, .cache = NULL){
   # latent variables
   latent_vars <- unobserved(dag)
 
-  # directed reachability sets (BFS over the edge table; "<->" edges do not transmit ancestry)
+  # Directed reachability uses breadth-first search over the edge table.
+  # Bidirected edges do not transmit ancestry.
   ancestors_of_treatment   <- directed_reachable(edges, treatments, direction = "to")
   ancestors_of_outcome     <- directed_reachable(edges, outcomes, direction = "to")
   descendants_of_treatment <- directed_reachable(edges, treatments, direction = "from")

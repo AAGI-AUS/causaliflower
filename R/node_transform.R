@@ -161,7 +161,13 @@ collapse_project_edges <- function(vertices, edges, nodes) { # Use the registere
 }
 
 
-collapse_project_edges_R <- function(vertices, edges, nodes) { # Keep the released R projection as the complete fallback
+#' Project omitted vertices with the reference R implementation
+#'
+#' @inheritParams collapse_project_edges
+#' @return A deterministically ordered `v`, `e`, `w` edge table on retained
+#'   vertices, including directed and bidirected arrows implied by projection.
+#' @noRd
+collapse_project_edges_R <- function(vertices, edges, nodes) {
   vertices <- sort(as.character(vertices))
   directed <- matrix(FALSE, length(vertices), length(vertices),
                      dimnames = list(vertices, vertices))
@@ -339,7 +345,8 @@ merge_nodes <- function(dag, nodes, name, print_edges = FALSE){
 #'   Defaults to FALSE. The same validation is performed in either mode.
 #' @returns A dagitty object with each matching group combined into one node.
 #'   With `preview = TRUE`, a named list of character vectors containing the
-#'   original members of each group. List names give the proposed node names. The first member supplies the node's metadata. If no group matches,
+#'   original members of each group. List names give the proposed node names.
+#'   The first member supplies the node's metadata. If no group matches,
 #'   returns the original graph, or an empty list when previewing.
 #' @seealso [merge_nodes()]
 #'

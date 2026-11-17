@@ -144,13 +144,13 @@ test_that("explicit untagged endpoints are accepted", {
   expect_true(attr(selected, "identifiable"))
 
   no_treatment <-
-    "No treatment detected: 'get_identification()' requires exactly one named treatment, either tagged in the DAG or supplied through 'treatment'. Please ensure a single treatment is supplied and try again."
+    "No treatment detected: tag treatment nodes in the DAG or supply their names through 'treatment'."
   invalid_treatment <-
-    "Invalid treatment detected: 'get_identification()' requires exactly one named treatment, either tagged in the DAG or supplied through 'treatment'. Please ensure a single treatment is supplied and try again."
+    "Invalid treatment detected: supply a nonempty character vector of observed node names in the DAG."
   no_outcome <-
-    "No outcome detected: 'get_identification()' requires exactly one named outcome, either tagged in the DAG or supplied through 'outcome'. Please ensure a single outcome is supplied and try again."
+    "No outcome detected: tag outcome nodes in the DAG or supply their names through 'outcome'."
   invalid_outcome <-
-    "Invalid outcome detected: 'get_identification()' requires exactly one named outcome, either tagged in the DAG or supplied through 'outcome'. Please ensure a single outcome is supplied and try again."
+    "Invalid outcome detected: supply a nonempty character vector of observed node names in the DAG."
   distinct_endpoints <-
     "Identical treatment and outcome detected: 'get_identification()' requires the named treatment and outcome to refer to different nodes in the DAG. Please ensure different treatment and outcome nodes are supplied and try again."
   overlapping_endpoints <-

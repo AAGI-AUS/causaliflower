@@ -7,7 +7,6 @@ ranked_query <- function(edges, columns = NULL) {
     requests = list(columns = list(resolved = if (is.null(columns)) list() else stats::setNames(columns, columns))),
     node_map = data.frame(node = nodes, quantity = ids, member_id = ids, occurrence = nodes),
     policy = data.frame(node_id = unique(ids), recovered_node = "yes"))
-  class(graph) <- c("dag_by_query", class(graph))
   graph
 }
 
@@ -69,39 +68,27 @@ test_that("ranked options equal exhaustive minimal sets collapsed to quantities"
   }
 })
 
-test_that("the default route ranks options and select_dag uses the saved ranking", {
-  dag <- construct_dag(ranked_query("A -> T; A -> B; B -> Y; T -> M -> Y; T -> Y"), quiet = TRUE)
-  options <- dag_options(dag)
-  expect_identical(options$search_method, "quantity-ranked-v1")
-  expect_identical(options$search$total$ranked$certificate, "complete")
-  expect_setequal(dag_set_catalogue(dag)$total$label, c("A", "B"))
-  switched <- select_dag(dag, total_select = c(1L, 2L))
-  expect_identical(dag_options(switched)$search_method, "quantity-ranked-v1")
-  expect_identical(dag_options(switched)$selected$total, c(1L, 2L))
+test_that("the ranked search ranks options with a complete certificate", {
+  prepared <- .cd_prepare(ranked_query("A -> T; A -> B; B -> Y; T -> M -> Y; T -> Y"), NULL, NULL)
+  total <- .cd_ranked_search(prepared, "total")
+  expect_identical(total$ranked$method, "quantity-ranked-v1")
+  expect_identical(total$ranked$certificate, "complete")
+  expect_setequal(total$table$label, c("A", "B"))
 })
 
 test_that("a step budget is reported as a partial ranking, never as no set", {
-  old <- options(causaliflower.ranked_steps = 1L)
-  on.exit(options(old), add = TRUE)
   graph <- ranked_query("A -> T; A -> B; B -> Y; C -> T; C -> D; D -> Y; T -> Y")
+  search <- .cd_ranked_search(.cd_prepare(graph, NULL, NULL), "total", steps = 1L)
+  expect_false(search$complete)
+  expect_identical(search$ranked$certificate, "budget")
   seen <- character()
-  dag <- withCallingHandlers(construct_dag(graph, quiet = TRUE), warning = function(w) {
+  withr::local_options(causaliflower.ranked_steps = 1L)
+  dag <- withCallingHandlers(construct_dag(graph, 0, quiet = TRUE), warning = function(w) {
     seen <<- c(seen, conditionMessage(w))
     invokeRestart("muffleWarning")
   })
-  expect_true(any(grepl("certified complete up to", seen)))
   expect_false(any(grepl("No eligible", seen)))
-  search <- dag_options(dag)$search$total
-  expect_false(search$complete)
-  expect_identical(search$ranked$certificate, "budget")
-})
-
-test_that("the witness route is explicit and needs automatic selectors", {
-  graph <- ranked_query("A -> T; A -> Y; T -> Y")
-  dag <- construct_dag(graph, quiet = TRUE, search = "witness")
-  expect_identical(dag_options(dag)$search_method, "source-witness-v1")
-  expect_error(construct_dag(graph, direct_select = NULL, search = "witness", quiet = TRUE),
-               "requires automatic")
+  expect_false(dag_options(dag)$level$certified)
 })
 
 test_that("an option that fails the source check is dropped and uncertifies the ranking", {
@@ -109,23 +96,14 @@ test_that("an option that fails the source check is dropped and uncertifies the 
   enumerate <- .cd_ranked_enumerate
   testthat::local_mocked_bindings(.cd_ranked_enumerate = function(region, labels, step_budget) {
     result <- enumerate(region, labels, step_budget)
-    # Add an invalid option realised as the outcome itself. It must fail the source check.
     result$options <- c(result$options, list(integer()))
     result$realised <- c(result$realised, list(region$graph$nodes[region$y]))
     result
-  })
-  seen <- character()
-  dag <- withCallingHandlers(construct_dag(graph, quiet = TRUE), warning = function(w) {
-    seen <<- c(seen, conditionMessage(w))
-    invokeRestart("muffleWarning")
-  })
-  expect_true(any(grepl("failed validation", seen)))
-  expect_true(any(grepl("not certified", seen)))
-  expect_false(any(grepl("No eligible", seen)))
-  expect_false(any(grepl("certified complete up to", seen)))
+  }, query_graph = function(...) graph, .package = "causaliflower")
   reference <- .cd_prepare(graph, NULL, NULL)$selection
   for (effect in c("direct", "total")) {
-    search <- dag_options(dag)$search[[effect]]
+    expect_warning(search <- .cd_ranked_search(.cd_prepare(graph, NULL, NULL), effect),
+      "failed validation on the selection reference. The ranking is not certified.", fixed = TRUE)
     expect_false(search$complete)
     expect_identical(search$ranked$certificate, "validation")
     expect_identical(search$ranked$dropped, 1L)
@@ -134,7 +112,13 @@ test_that("an option that fails the source check is dropped and uncertifies the 
     expect_true(length(search$sets) > 0L)
     expect_true(all(.gd_validate_sets(reference, search$sets, effect)))
   }
-  expect_true(any(grepl("not certified", capture.output(print(dag_options(dag))), fixed = TRUE)))
+  seen <- character()
+  dag <- withCallingHandlers(get_dag("barley", "T", "Y", TRUE, quiet = TRUE), warning = function(w) {
+    seen <<- c(seen, conditionMessage(w))
+    invokeRestart("muffleWarning")
+  })
+  expect_false(any(grepl("No eligible", seen)))
+  expect_false(dag_options(dag)$level$certified)
 })
 
 test_that("a partial certificate is exact: every option within k is listed and nothing listed is spurious", {
@@ -162,89 +146,61 @@ test_that("a partial certificate is exact: every option within k is listed and n
 })
 
 test_that("merging occasions is refused when the display hides or invents a route from treatment to outcome", {
-  # Z_t1 mediates T -> Y through Q_t2. Merging drops the edge across repeated stages Z_t1 -> Q_t2
-  # and would show Z on no route although it is a mediator on the source.
   graph <- ranked_query("T -> Q_t1; Q_t1 -> Y; Q_t1 -> Z_t1; T -> Z_t1; Z_t1 -> Q_t2; Q_t2 -> Y; Q_t2 -> Z_t2; T -> Y",
                         columns = "Z")
-  dag <- suppressWarnings(construct_dag(graph, quiet = TRUE))
-  state <- .gd_state(dag)
-  expect_false(state$summary$applied)
-  expect_match(state$summary$reason, "route from treatment to outcome|represented occurrences")
+  expect_error(suppressWarnings(construct_dag(graph, quiet = TRUE)), "unroll = TRUE", fixed = TRUE)
+  dag <- suppressWarnings(construct_dag(graph, quiet = TRUE, unroll = TRUE))
+  record <- dag_options(dag)$summary
+  expect_false(record$applied)
+  expect_match(dag_options(dag)$level$static_reason, "route from treatment to outcome|represented occurrences")
   expect_true(all(c("Z_t1", "Q_t2") %in% names(dag)))
-  # A view of the direct family of the earlier graph must not lose the route T -> Z_t1 -> Q_t2 -> Y either.
-  graph2 <- ranked_query("Q_t1 -> T; Q_t1 -> Z_t1; T -> Z_t1; Z_t1 -> Q_t2; Q_t2 -> Y; Q_t2 -> Z_t2; T -> Y",
-                         columns = c("Z", "Q"))
-  dag2 <- suppressWarnings(construct_dag(graph2, quiet = TRUE))
-  view <- dag_sets_view(dag2, list(direct = 1L))
-  expect_false(.gd_state(view)$set_view$summary$applied)
-  expect_match(.gd_state(view)$set_view$summary$reason, "route from treatment to outcome|represented occurrences")
 })
 
 test_that("merging occasions is refused when a merged node's adjustment set is invalid on the source", {
-  # Q_t2 mediates T -> Y through Z_t1. Merging Q_t1 and Q_t2 into Q would make the
-  # displayed total set {Q} stand for {Q_t1, Q_t2}, which is not valid on the source.
   graph <- ranked_query("Q_t1 -> T; Q_t1 -> Z_t1; T -> Z_t1; Z_t1 -> Q_t2; Q_t2 -> Y; Q_t2 -> Z_t2; T -> Y",
                         columns = "Z")
   reference <- .cd_prepare(graph, NULL, NULL)$selection
-  dag <- suppressWarnings(construct_dag(graph, quiet = TRUE))
-  state <- .gd_state(dag)
-  expect_false(state$summary$applied)
-  # Either display guard may refuse first: the route guard or the check of merged sets.
-  expect_match(state$summary$reason, "represented occurrences|route from treatment to outcome")
+  expect_error(suppressWarnings(construct_dag(graph, quiet = TRUE)), "unroll = TRUE", fixed = TRUE)
+  dag <- suppressWarnings(construct_dag(graph, quiet = TRUE, unroll = TRUE))
+  record <- dag_options(dag)$summary
+  expect_false(record$applied)
+  expect_match(dag_options(dag)$level$static_reason, "represented occurrences|route from treatment to outcome")
   expect_true(all(c("Q_t1", "Q_t2") %in% names(dag)))
   for (effect in c("direct", "total")) {
-    final <- dag_checks(dag)[[effect]]$final_sets
-    if (length(final)) expect_true(all(.gd_validate_sets(reference, final, effect)), info = effect)
+    listed <- .gd_adjustment_sets(dag, effect, Inf)$sets
+    expect_gt(length(listed), 0L)
+    expect_true(all(.gd_validate_sets(reference, listed, effect)), info = effect)
   }
-  view <- dag_sets_view(dag, list(total = 1L))
-  expect_false(.gd_state(view)$set_view$summary$applied)
-  expect_match(.gd_state(view)$set_view$summary$reason, "represented occurrences|route from treatment to outcome")
-  # The merged reading itself is invalid, which is what the refusal protects against.
   expect_false(.gd_validate_sets(reference, list(c("Q_t1", "Q_t2")), "total"))
 })
 
 test_that("a budget stop with no option is recorded as unresolved, not as absence", {
-  old <- options(causaliflower.ranked_steps = 1L)
-  on.exit(options(old), add = TRUE)
+  graph <- ranked_query("A -> T; A -> Y; T -> Y")
+  search <- .cd_ranked_search(.cd_prepare(graph, NULL, NULL), "total", steps = 1L)
+  expect_length(search$sets, 0L)
+  expect_false(search$complete)
+  withr::local_options(causaliflower.ranked_steps = 1L)
+  testthat::local_mocked_bindings(query_graph = function(...) graph, .package = "causaliflower")
   seen <- character()
-  dag <- withCallingHandlers(construct_dag(ranked_query("A -> T; A -> Y; T -> Y"), quiet = TRUE),
-    warning = function(w) {
-      seen <<- c(seen, conditionMessage(w))
-      invokeRestart("muffleWarning")
-    })
-  options <- dag_options(dag)
-  expect_identical(options$status[["total"]], "no_sets")
-  expect_false(options$search$total$complete)
-  expect_match(options$choices$total$reason, "step budget")
-  expect_match(options$identification$reason, "step budget")
+  dag <- withCallingHandlers(get_dag("barley", "T", "Y", TRUE, quiet = TRUE), warning = function(w) {
+    seen <<- c(seen, conditionMessage(w))
+    invokeRestart("muffleWarning")
+  })
+  expect_identical(dag_options(dag)$quantities$total$state, "not_found")
   expect_true(any(grepl("not evidence that no set exists", seen)))
   expect_false(any(grepl("No eligible", seen)))
 })
 
-test_that("select_dag indexes the saved ranked catalogue even under a different step budget", {
-  dag <- construct_dag(ranked_query("A -> T; A -> B; B -> Y; T -> M -> Y; T -> Y"), quiet = TRUE)
-  saved <- dag_options(dag)$search$total$sets
-  old <- options(causaliflower.ranked_steps = 1L)
-  on.exit(options(old), add = TRUE)
-  switched <- select_dag(dag, total_select = c(1L, 2L))
-  expect_identical(dag_options(switched)$search$total$sets, saved)
-  expect_identical(dag_options(switched)$search_identity$ranked_steps, dag_options(dag)$search_identity$ranked_steps)
-  expect_identical(dag_options(switched)$selected$total, c(1L, 2L))
-})
 
 test_that("the ranked search refuses adjusted or selected nodes and unbounded budgets", {
   graph <- ranked_query("A -> T; A -> Y; T -> Y; S -> T; S -> Y")
   dagitty::adjustedNodes(graph) <- "S"
-  expect_error(construct_dag(graph, quiet = TRUE), "adjusted or selected")
-  old <- options(causaliflower.ranked_steps = 1e12)
-  on.exit(options(old), add = TRUE)
-  expect_error(construct_dag(ranked_query("A -> T; A -> Y; T -> Y"), quiet = TRUE), "no larger than")
+  expect_error(construct_dag(graph, 0, quiet = TRUE), "adjusted or selected")
+  withr::local_options(causaliflower.ranked_steps = 1e12)
+  expect_error(construct_dag(ranked_query("A -> T; A -> Y; T -> Y"), 0, quiet = TRUE), "no larger than")
 })
 
-test_that("checking merged sets alone refuses a display whose merged node set is invalid on the source", {
-  # Random probe seed 20 (stage-c/review3-random.R): the route guard accepts this
-  # collapse. Only reading the merged direct set as all represented occurrences
-  # refuses it. Nodes keep the probe's names. Exposure Q2_t0, outcome Q3_t1.
+test_that("a display that keeps time lists only sets valid on the observed source", {
   nodes <- c("S1", "S2", paste0("Q", 1:4, "_t0"), paste0("Q", 1:4, "_t1"))
   edges <- paste("Q4_t0 -> Q2_t0; Q1_t0 -> Q3_t0; Q4_t1 -> Q1_t1; Q2_t1 -> Q3_t1; Q1_t1 -> Q3_t1;",
     "Q1_t0 -> Q3_t1; Q2_t0 -> Q1_t1; Q2_t0 -> Q2_t1; Q2_t0 -> Q3_t1; Q3_t0 -> Q2_t1; Q3_t0 -> Q3_t1;",
@@ -258,58 +214,88 @@ test_that("checking merged sets alone refuses a display whose merged node set is
     requests = list(columns = list(resolved = list())),
     node_map = data.frame(node = names(graph), quantity = ids, member_id = ids, occurrence = names(graph)),
     policy = data.frame(node_id = unique(ids), recovered_node = "yes"))
-  class(graph) <- c("dag_by_query", class(graph))
   latents <- c("S1", "Q3_t0", "Q4_t1")
-  # Declared unmeasured variables now change only the explicit complete and
-  # witness searches, so the probe's declared refusal is reproduced on the
-  # complete route, which applies the declarations before its search.
-  warned <- character()
-  dag <- withCallingHandlers(construct_dag(graph, latents = latents, quiet = TRUE, search = "complete"),
-    warning = function(w) {
-      warned <<- c(warned, conditionMessage(w))
-      invokeRestart("muffleWarning")
-    })
-  state <- .gd_state(dag)
-  expect_false(state$summary$applied)
-  expect_match(state$summary$reason, "represented occurrences")
-  # The direct family has no eligible set on this source (a diagnostic graph is
-  # returned). Any set the retained temporal display reports that the source
-  # rejects must be flagged "changed" and warned about, never shown silently.
-  expect_identical(dag_options(dag)$status[["direct"]], "no_sets")
-  reference <- .cd_prepare(graph, latents, NULL)$selection
-  for (effect in c("direct", "total")) {
-    check <- dag_checks(dag)[[effect]]
-    if (!length(check$final_sets)) next
-    valid <- .gd_validate_sets(reference, check$final_sets, effect)
-    if (all(valid)) next
-    expect_identical(check$status, "changed", info = effect)
-    expect_true(any(vapply(check$introduced, function(x) identical(x$status, "not valid on reference"), logical(1))), info = effect)
-  }
-  expect_true(any(grepl("changed or were not fully verified", warned)))
-  # The ranked default constructs as for a fully observed graph: the direct
-  # family now has an option, the display keeps time for another reason, the
-  # same invariant holds on the observed reference, and the declared nodes
-  # retained by the selected sets are marked afterwards.
-  warned <- character()
-  ranked <- withCallingHandlers(construct_dag(graph, latents = latents, quiet = TRUE),
-    warning = function(w) {
-      warned <<- c(warned, conditionMessage(w))
-      invokeRestart("muffleWarning")
-    })
-  expect_identical(dag_options(ranked)$status[["direct"]], "selected")
-  expect_false(.gd_state(ranked)$summary$applied)
+  expect_error(suppressWarnings(construct_dag(graph, latents = latents, quiet = TRUE)), "unroll = TRUE", fixed = TRUE)
+  ranked <- suppressWarnings(construct_dag(graph, latents = latents, quiet = TRUE, unroll = TRUE))
+  expect_identical(dag_options(ranked)$quantities$direct$state, "sets")
+  expect_false(dag_options(ranked)$summary$applied)
   observed <- .cd_prepare(graph, NULL, NULL)$selection
-  rejected <- FALSE
+  as_observed <- .gd_plain(ranked)
+  dagitty::latents(as_observed) <- character()
   for (effect in c("direct", "total")) {
-    check <- dag_checks(ranked)[[effect]]
-    if (!length(check$final_sets)) next
-    valid <- .gd_validate_sets(observed, check$final_sets, effect)
-    if (all(valid)) next
-    rejected <- TRUE
-    expect_identical(check$status, "changed", info = effect)
-    expect_true(any(vapply(check$introduced, function(x) identical(x$status, "not valid on reference"), logical(1))), info = effect)
+    listed <- .gd_adjustment_sets(as_observed, effect, Inf)$sets
+    expect_gt(length(listed), 0L)
+    expect_true(all(.gd_validate_sets(observed, listed, effect)), info = effect)
   }
-  if (rejected) expect_true(any(grepl("changed or were not fully verified", warned)))
   expect_identical(vapply(dag_checks(ranked), `[[`, character(1), "status"), c(direct = "preserved", total = "preserved"))
-  expect_setequal(dagitty::latents(ranked), c("Q3_t0", "Q4_t1"))
+  expect_setequal(dagitty::latents(ranked), c("Q3_t0", "Q4_t1", "S1"))
+})
+
+test_that("checking merged sets alone refuses a display whose merged node set is invalid on the source", {
+  # Random graph seed 214 of ranked_random_graph(), without its declared latent: the structural guards
+  # accept the merge, and only reading a merged direct set as all its occurrences refuses it.
+  graph <- ranked_query(paste("Q1_t0 -> Q1_t1; Q1_t1 -> Q2_t1; Q1_t1 -> Q2_t2; Q1_t1 -> Q5_t2; Q1_t2 -> Q2_t2;",
+    "Q2_t0 -> Q1_t1; Q2_t0 -> Q2_t1; Q3_t0 -> Q3_t1; Q3_t0 -> Q4_t0; Q3_t0 -> Q4_t1; Q3_t1 -> Q1_t1;",
+    "Q3_t1 -> Q2_t1; Q3_t1 -> Q3_t2; Q3_t1 -> Q4_t1; Q3_t2 -> Q1_t2; Q4_t0 -> Q1_t0; Q4_t0 -> Q1_t2;",
+    "Q4_t0 -> Q2_t0; Q4_t0 -> Q5_t1; Q4_t1 -> Q2_t2; Q4_t1 -> Q4_t2; Q5_t0 -> Q2_t0; Q5_t0 -> Q4_t0;",
+    "Q5_t1 -> Q1_t1; Q5_t1 -> Q3_t1; Q5_t1 -> Q3_t2; Q5_t1 -> Q5_t2; Q5_t2 -> Q2_t2; Q5_t2 -> Q3_t2;",
+    "Q2_t1; Q2_t2; Q4_t2"))
+  record <- attr(graph, "query_record")
+  graph <- dagitty::dagitty(sub("T \\[exposure\\]; Y \\[outcome\\];", "", as.character(graph)))
+  dagitty::exposures(graph) <- "Q4_t0"
+  dagitty::outcomes(graph) <- "Q1_t2"
+  attr(graph, "query_record") <- record
+  expect_error(construct_dag(graph, 0, quiet = TRUE), "merged nodes are read as all represented occurrences", fixed = TRUE)
+  dag <- suppressWarnings(construct_dag(graph, 0, quiet = TRUE, unroll = TRUE))
+  record <- dag_options(dag)$summary
+  expect_false(record$applied)
+  expect_identical(dag_options(dag)$level$static_reason, paste("A temporally merged direct adjustment set is not valid on the source when its",
+    "merged nodes are read as all represented occurrences. The temporal display was retained."))
+  expect_identical(.gd_signature(dag), .gd_signature(temporal_dag(dag)))
+  temporal <- temporal_dag(dag)
+  open <- .gd_summary(temporal, keep = names(temporal))
+  expect_true(open$applied)
+  sets <- .gd_adjustment_sets(open$graph, "direct", Inf)$sets
+  expect_gt(length(sets), 0L)
+  read <- lapply(sets, function(set) as.character(unique(unlist(lapply(set, function(node) {
+    occurrences <- open$node_map$node[open$node_map$display == node]
+    if (length(occurrences)) occurrences else node
+  })))))
+  expect_false(all(.gd_validate_sets(graph, read, "direct")))
+  listed <- .gd_adjustment_sets(dag, "direct", Inf)$sets
+  expect_gt(length(listed), 0L)
+  expect_true(all(.gd_validate_sets(graph, listed, "direct")))
+  expect_identical(dag_checks(dag)$direct$status, "preserved")
+})
+
+test_that("ranked candidate tables preserve literal names and harmless renaming", {
+  for (labels in list(c("P_t0", "P_t1"), c("A", "B"), c("first occasion", "second occasion"))) {
+    graph <- dagitty::dagitty(paste0("dag { T [exposure]; Y [outcome]; \"", labels[[1L]],
+      "\" -> \"", labels[[2L]], "\"; \"", labels[[2L]], "\" -> T; \"", labels[[2L]], "\" -> Y; T -> Y }"))
+    prepared <- .cd_prepare(graph, NULL, NULL)
+    for (effect in c("direct", "total")) {
+      search <- .cd_ranked_search(prepared, effect)
+      expect_identical(search$sets, list(labels[[2L]]))
+      expect_identical(search$table$resolved, list(labels[[2L]]))
+      expect_identical(search$table$n_resolved, 1L)
+    }
+    dag <- suppressWarnings(construct_dag(graph, 0, quiet = TRUE))
+    expect_setequal(names(dag), c(labels[[2L]], "T", "Y"))
+    expect_identical(dag_options(dag)$level$variables, 3L)
+    for (effect in c("direct", "total")) {
+      sets <- .gd_adjustment_sets(dag, effect, Inf)$sets
+      expect_identical(sets, list(labels[[2L]]))
+      expect_true(all(.gd_validate_sets(graph, sets, effect)))
+      expect_identical(dag_checks(dag)[[effect]]$status, "preserved")
+      expect_true(dag_checks(dag)[[effect]]$sets_minimal)
+      expect_true(dag_checks(dag)[[effect]]$listed_valid_on_source)
+    }
+  }
+})
+
+test_that("ranked options are ordered by member count", {
+  graph <- ranked_query("T -> M; M -> Y; T -> Y; C -> T; C -> Y; A -> T; A -> D; B -> T; B -> D; D -> Y")
+  table <- .cd_ranked_search(.cd_prepare(graph, NULL, NULL), "total")$table
+  expect_identical(table$label, c("C + D", "A + B + C"))
+  expect_identical(table$n_resolved, c(2L, 3L))
 })

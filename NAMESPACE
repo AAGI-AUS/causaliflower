@@ -12,14 +12,9 @@ S3method(print,causaliflower_identification)
 S3method(print,causaliflower_paths)
 S3method(print,causaliflower_structure)
 S3method(print,cf_dag)
-S3method(print,cf_dag_change)
-S3method(print,cf_dag_options)
 S3method(print,cf_dag_plan)
-S3method(print,cf_dag_views)
-S3method(print,cf_dags)
 S3method(summary,causaliflower_identification)
 export("outcomes<-")
-export(add_confounders)
 export(add_coords)
 export(add_curves)
 export(add_edges)
@@ -38,11 +33,7 @@ export(construct_dag)
 export(copy_nodes)
 export(dag_call)
 export(dag_checks)
-export(dag_history)
 export(dag_options)
-export(dag_set_catalogue)
-export(dag_set_view)
-export(dag_sets_view)
 export(first)
 export(get_ancestor_edges)
 export(get_dag)
@@ -57,6 +48,7 @@ export(get_nodes)
 export(get_paths)
 export(get_roles)
 export(get_structure)
+export(grow_dag)
 export(incoming)
 export(instruments)
 export(join_graphs)
@@ -73,13 +65,13 @@ export(outgoing)
 export(plot_dagitty)
 export(plot_sets)
 export(proxies)
+export(prune_dag)
 export(query_graph)
 export(query_params)
 export(readable_dag)
 export(recombine_nodes)
 export(remove_edges)
 export(remove_nodes)
-export(restore_nodes)
 export(scm_to_dag)
 export(select_dag)
 export(set_latent)
@@ -88,41 +80,54 @@ export(set_treatment)
 export(string_to_dag)
 export(temporal_dag)
 export(treatments)
-export(undo_dag)
 export(unobserved)
-importFrom(dagitty,adjustmentSets)
-importFrom(dagitty,children)
-importFrom(dagitty,coordinates)
-importFrom(dagitty,dagitty)
-importFrom(dagitty,descendants)
-importFrom(dagitty,edges)
-importFrom(dagitty,instrumentalVariables)
-importFrom(dagitty,is.dagitty)
-importFrom(dagitty,parents)
-importFrom(dagitty,topologicalOrdering)
-importFrom(data.table,":=")
-importFrom(data.table,as.data.table)
-importFrom(data.table,data.table)
-importFrom(data.table,is.data.table)
-importFrom(data.table,setDT)
-importFrom(data.table,setorder)
-importFrom(ggdag,dag_paths)
-importFrom(ggdag,tidy_dagitty)
-importFrom(ggplot2,ggplot)
-importFrom(ggplot2,guide_legend)
-importFrom(ggplot2,guides)
-importFrom(ggplot2,labs)
-importFrom(ggplot2,scale_colour_manual)
-importFrom(ggplot2,theme)
+importFrom(dagitty,
+  adjustmentSets,
+  children,
+  coordinates,
+  dagitty,
+  descendants,
+  edges,
+  instrumentalVariables,
+  is.dagitty,
+  parents,
+  topologicalOrdering
+)
+importFrom(data.table,
+  ":=",
+  as.data.table,
+  data.table,
+  is.data.table,
+  setDT,
+  setorder
+)
+importFrom(ggdag,
+  dag_paths,
+  tidy_dagitty
+)
+importFrom(ggplot2,
+  ggplot,
+  guide_legend,
+  guides,
+  labs,
+  scale_colour_manual,
+  theme
+)
 importFrom(ggraph,circle)
-importFrom(grid,arrow)
-importFrom(grid,unit)
-importFrom(stats,ave)
-importFrom(stats,complete.cases)
-importFrom(stats,na.omit)
-importFrom(stats,reshape)
-importFrom(utils,flush.console)
-importFrom(utils,globalVariables)
-importFrom(utils,head)
-importFrom(utils,tail)
+importFrom(grid,
+  arrow,
+  unit
+)
+importFrom(stats,
+  ave,
+  complete.cases,
+  na.omit,
+  reshape
+)
+importFrom(utils,
+  flush.console,
+  globalVariables,
+  head,
+  tail
+)
 useDynLib(causaliflower, .registration = TRUE, .fixes = "C_")

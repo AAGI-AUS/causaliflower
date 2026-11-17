@@ -8,8 +8,8 @@
 
 #' Connect every ancestor to every descendant
 #'
-#' @param ancestors Source node names; missing values are ignored.
-#' @param descendants Target node names; missing values are ignored.
+#' @param ancestors Source node names. Missing values are ignored.
+#' @param descendants Target node names. Missing values are ignored.
 #' @param e Edge symbol to use for each pair.
 #' @return A data.table with `ancestor`, `edge`, and `descendant` columns.
 #' @noRd
@@ -32,7 +32,7 @@ cross_edges <- function(ancestors, descendants, e) {
 #'
 #' @param order Resolved sequence of existing and new nodes in the graph.
 #' @param new_nodes Names of the new nodes.
-#' @param type `"chain"` joins adjacent positions; other types join every
+#' @param type `"chain"` joins adjacent positions. Other types join every
 #'   earlier and later pair.
 #' @param e Edge symbol supplied by the caller.
 #' @return A data.table of edges touching at least one new node, with
@@ -290,7 +290,7 @@ connect_new_nodes <- function(dag,
   }
 
   ## without a role, position sets direction in the whole graph's order ##
-  ## explicit parents or children take precedence; full edges stay bidirected ##
+  ## explicit parents or children take precedence and full edges stay bidirected ##
   if( !is.null(position) && is.null(ancestors) && is.null(descendants) ){
     spine <- names( sort( unlist( dagitty::topologicalOrdering(dag) ) ) )
     ord   <- resolve_position(position, new_nodes, spine)

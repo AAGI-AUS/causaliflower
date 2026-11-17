@@ -9,21 +9,22 @@ readable_dag(dag, nodes = apsim_dag_nodes)
 \arguments{
 \item{dag}{A \code{query_graph()} result with its saved vertices and edges.}
 
-\item{nodes}{Defaults to \code{apsim_dag_nodes} and must contain the display label column.}
+\item{nodes}{Table with \code{node_id} and \code{node_name_readable} columns.
+Defaults to \code{apsim_dag_nodes}.}
 }
 \value{
-A dagitty object.
+A relabelled dagitty object retaining the query's edges, roles,
+records and endpoint identities.
 }
 \description{
 Returns a separate graph using \code{node_name_readable} labels while retaining edges,
 roles, query records and endpoint identities. The input is unchanged. Supply
 a \code{query_graph()} result with its saved vertices and edges. A bare dagitty
-object or graph string is insufficient. \code{nodes} defaults to \code{apsim_dag_nodes}
-and must contain the display label column.
+object or graph string is insufficient.
 }
 \details{
 Labels are matched to quantity keys with time suffixes removed, then the
-\verb{_t\{s\}} suffix is restored. Empty or conflicting labels fall back to the
+original suffix is restored. Empty or conflicting labels fall back to the
 quantity key so distinct nodes remain distinct. A display label identical
 to the key leaves the name unchanged.
 }

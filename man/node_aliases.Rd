@@ -12,8 +12,7 @@ labels and plain language aliases.
 node_aliases
 }
 \description{
-\code{node_aliases} is a named list for the 576 quantities, containing 1,529 keys,
-labels and plain language aliases. Conflicting aliases and model path aliases
-are excluded.
+Maps supplied quantity names to the bundled query quantities. Conflicting
+aliases and model path aliases are excluded.
 }
 \keyword{datasets}

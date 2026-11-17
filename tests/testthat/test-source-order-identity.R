@@ -21,7 +21,6 @@ ordered_identity_graph <- function(){ # Make a small query with a complete recor
     requests = list(columns = list(resolved = character())),
     node_map = data.frame(node = nodes, quantity = nodes, member_id = nodes, occurrence = nodes),
     policy = data.frame(node_id = nodes, recovered_node = "yes"), source_order = source_order)
-  class(graph) <- c("dag_by_query", class(graph))
   return(graph)
 }
 
@@ -40,42 +39,32 @@ test_that("ordering implementation belongs only to a scoped search identity", {
 })
 
 
-test_that("unchanged ordering helpers reuse completed searches", {
+test_that("changed ordering helper code changes the search identity even when its outputs agree", {
   graph <- ordered_identity_graph()
-  previous <- construct_dag(graph, quiet = TRUE, search = "complete")
-  search_calls <- 0L
-  source_search <- .cd_search
-  result <- testthat::with_mocked_bindings(
-    .cd_reconstruct(graph, previous = previous, quiet = TRUE, search = "complete"),
-    .cd_search = function(...){ # Count source enumeration without changing the fingerprinted engine
-      search_calls <<- search_calls + 1L
-      return(source_search(...))
-    })
-  expect_identical(search_calls, 0L)
-  expect_identical(result, previous)
-})
-
-
-test_that("changed ordering helper code invalidates reuse even when its outputs agree", {
-  graph <- ordered_identity_graph()
-  previous <- construct_dag(graph, quiet = TRUE, search = "complete")
-  previous_identity <- .gd_state(previous)$construction$search_identity
+  previous_identity <- .cd_search_identity_value(.cd_prepare(graph, NULL, NULL))
   source_sort <- .query_sort
-  source_search <- .cd_search
-  search_calls <- 0L
   testthat::local_mocked_bindings(
-    .query_sort = function(nodes, source_order = NULL, node_ids = NULL){ # Stand in for a revised ordering implementation
+    .query_sort = function(nodes, source_order = NULL, node_ids = NULL){
       result <- source_sort(nodes, source_order, node_ids)
       return(result)
-    },
-    .cd_search = function(...){ # Count both source searches after identity invalidation
-      search_calls <<- search_calls + 1L
-      return(source_search(...))
-    })
+    }, .package = "causaliflower")
   current_identity <- .cd_search_identity_value(.cd_prepare(graph, NULL, NULL))
   expect_false(identical(current_identity, previous_identity))
   expect_identical(current_identity$ordering_adapter$sort, deparse(body(.query_sort)))
-  result <- .cd_reconstruct(graph, previous = previous, quiet = TRUE, search = "complete")
-  expect_identical(search_calls, 2L)
-  expect_identical(result, construct_dag(graph, quiet = TRUE, search = "complete"))
+})
+
+test_that("the recorded source order sorts quantities and the members construct_dag keeps", {
+  source_order <- list(version = 1L, ranks = data.frame(node_id = c("B", "T", "A", "Y"), base_order = 1:4,
+    at_order = 1:4, post_order = 1:4, pre_order = 1:4, time_order = 1:4))
+  expect_identical(.query_sort(c("A", "B", "T", "Y"), source_order), c("B", "T", "A", "Y"))
+  expect_identical(.query_sort(c("A", "B", "T", "Y")), c("A", "B", "T", "Y"))
+  graph <- dagitty::dagitty("dag { T [exposure]; Y [outcome]; A -> T; A -> Y; B -> T; B -> Y; T -> Y }")
+  nodes <- names(graph)
+  attr(graph, "cf_source_order") <- source_order
+  attr(graph, "query_record") <- list(version = 1L,
+    arguments = list(crop = "fixture", params = list(query_depth = Inf)),
+    requests = list(columns = list(resolved = character())),
+    node_map = data.frame(node = nodes, quantity = nodes, member_id = nodes, occurrence = nodes),
+    policy = data.frame(node_id = nodes, recovered_node = "yes"), source_order = source_order)
+  expect_identical(dag_options(construct_dag(graph, quiet = TRUE))$quantities$total$members, c("B", "A"))
 })

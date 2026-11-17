@@ -521,7 +521,7 @@ add_nodes <- function(dag,
     new_status <- "latent"
   }
 
-  ## append to the native text; rebuild only when the append cannot be verified ##
+  ## append to the native text and rebuild only if verification fails ##
   appended <- native_append_graph(
     dag,
     new_nodes = new_node_names,
@@ -680,7 +680,7 @@ connect_nodes <- function(dag,
   updated_outcomes <- get_outcome_names(dag)
   updated_latents <- unobserved(dag)
 
-  ## append to the native text; rebuild only when the append cannot be verified ##
+  ## append to the native text and rebuild only if verification fails ##
   appended <- native_append_graph(
     dag,
     new_nodes = character(),
@@ -1631,7 +1631,7 @@ causal_criteria_sequence <- function(edges,
                                      save_answers
                                      ){
   .datatable.aware <- TRUE
-  edges_list <- edges   # ensure the final return() is always bound; degenerate skip path returns edges unchanged
+  edges_list <- edges   # Retain the input edges if the assessment is skipped
 
   if( length(save_answers) >= 3 ){
 
@@ -1937,7 +1937,7 @@ add_nodes_helper <- function(dag,
 #' @importFrom data.table as.data.table
 #' @param dag An existing dagitty object.
 #' @param nodes Existing node names selected for new connections.
-#' @param dag_node_names Existing graph node names; retained but unused.
+#' @param dag_node_names Existing graph node names. This argument is not used.
 #' @param type Construction type. `"first"` and `"last"` use `"ordered"`.
 #' @return An edge table with columns v, e and w.
 #' @noRd

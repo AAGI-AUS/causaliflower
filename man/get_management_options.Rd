@@ -21,15 +21,15 @@ get_management_options(
 \item{defaults}{Defaults to \code{management_defaults}.}
 }
 \value{
-a data.table with \code{node_id}, \code{label}, \code{aliases}, \code{status} and
+A data.table with \code{node_id}, \code{label}, \code{aliases}, \code{status} and
 \code{crop_type}. Rows marked \code{optional} are the available explicit choices.
+If no management quantity qualifies, returns these columns with no rows.
 }
 \description{
 Returns each management quantity's label, aliases and status: \code{core} for
 default inclusion or \code{optional} for explicit selection. \code{crop} restricts the
-result to applicable quantities. The \code{nodes}, \code{aliases} and \code{defaults}
-arguments use \code{apsim_dag_nodes}, \code{node_aliases} and \code{management_defaults}
-unless supplied. Defaults establish management presence only.
+result to applicable quantities. These defaults select quantities for
+inclusion in a query. They do not specify management values.
 }
 \examples{
 \dontrun{

@@ -11,7 +11,6 @@ as_segment_query <- function(graph, columns = NULL) {
     requests = list(columns = list(resolved = if (is.null(columns)) list() else stats::setNames(columns, columns))),
     node_map = data.frame(node = nodes, quantity = ids, member_id = ids, occurrence = nodes),
     policy = data.frame(node_id = unique(ids), recovered_node = "yes"))
-  class(graph) <- c("dag_by_query", class(graph))
   graph
 }
 
@@ -21,16 +20,37 @@ segment_query <- function(edges, columns = NULL)
 segment_graph <- function(edges) dagitty::dagitty(paste("dag { T [exposure]; Y [outcome];", edges, "}"))
 
 # Every adjustment set a display reports, read as the occurrences its nodes
-# stand for, validated on a reference graph.
+# stand for, validated on a reference graph. FALSE when it reports none.
 display_sets_valid <- function(result, reference) {
-  state <- .gd_state(result)
-  map <- state$summary$node_map
+  map <- attr(result, "cf_node_map", exact = TRUE)
+  listed <- 0L
   for (effect in c("direct", "total")) for (set in .gd_adjustment_sets(.gd_plain(result), effect, Inf)$sets) {
-    reading <- if (isTRUE(state$summary$applied) && "display" %in% names(map))
-      as.character(unlist(lapply(set, function(node) map$node[map$display == node]))) else as.character(set)
+    listed <- listed + 1L
+    reading <- if (!is.null(map)) as.character(unlist(lapply(set, function(node) {
+      occurrences <- map$occurrence[map$node == node]
+      if (length(occurrences)) occurrences else node
+    }))) else as.character(set)
     if (!isTRUE(.gd_validate_sets(reference, list(reading), effect))) return(FALSE)
   }
-  TRUE
+  listed > 0L
+}
+
+# Validate every set a merged display lists on the source, read as the
+# occurrences its nodes stand for.
+summary_source_check <- function(reference, effects = c("direct", "total")) {
+  function(display, mapping) {
+    for (effect in effects) {
+      sets <- .gd_adjustment_sets(display, effect, Inf)$sets
+      expanded <- lapply(sets, function(set) as.character(unique(unlist(lapply(set, function(node) {
+        occurrences <- mapping$node[mapping$display == node]
+        if (length(occurrences)) occurrences else node
+      }), use.names = FALSE))))
+      if (length(expanded) && !all(.gd_validate_sets(reference, expanded, effect))) {
+        return(paste0("A temporally merged ", effect, " adjustment set is not valid on the source when its merged nodes are read as all represented occurrences."))
+      }
+    }
+    NULL
+  }
 }
 
 # Lagged feedback: A -> B at lags 1 (t0 -> t1, t1 -> t2) and B -> A at lag 2.
@@ -83,7 +103,7 @@ test_that("a cyclic fold is split into the fewest segments, with one cut shared 
   # Analysis stays on the graph unrolled over time.
   expect_identical(.gd_signature(summary$temporal), .gd_signature(.gd_canonical(graph)))
   # Earliest cut on the tie: {t0} | {t1, t2} and {t0, t1} | {t2} both need 9 edges.
-  cuts <- .gd_segment_cuts(summary$edge_ledger, map[c("node", "quantity", "node_id")], list(c("A", "B")))
+  cuts <- .gd_segment_choice(summary$edge_ledger, map[c("node", "quantity", "node_id")], list(c("A", "B")))$cuts
   expect_identical(cuts, list(A = 0, B = 0))
 })
 
@@ -91,7 +111,7 @@ test_that("every displayed set remains valid on the source and segments map by o
   graph <- segment_query(lagged_feedback, columns = c("A", "B"))
   reference <- .cd_prepare(graph, NULL, NULL)$selection
   summary <- .gd_summary(.cd_prepare(graph, NULL, NULL)$analysis, keep = "B_t0",
-                         source_check = .cd_summary_source_check(reference))
+                         source_check = summary_source_check(reference))
   expect_true(summary$applied)
   display <- summary$graph
   for (effect in c("direct", "total")) {
@@ -100,48 +120,26 @@ test_that("every displayed set remains valid on the source and segments map by o
       summary$node_map$node[summary$node_map$display == node]))))
     expect_true(all(.gd_validate_sets(reference, expanded, effect)), info = effect)
   }
-  expect_identical(.gd_map_set("A_t1", reference, display), "A_t1to2")
-  expect_identical(.gd_map_set("A_t2", reference, display), "A_t1to2")
-  expect_identical(.gd_map_set("A_t0", reference, display), "A_t0")
-  expect_identical(.gd_map_set(c("A_t1", "B_t2"), reference, display), c("A_t1to2", "B_t1to2"))
-  # An occurrence that no segment represents is not mapped.
-  expect_null(.gd_map_set("A_t3", dagitty::dagitty("dag { A_t3 }"), display))
-  # A segment spanning several occasions has no single source reading (requires review).
-  expect_null(.gd_map_set("A_t1to2", display, reference))
-  expect_identical(.gd_map_set("A_t0", display, reference), "A_t0")
 })
 
-test_that("construction and views keep the segments and their checks", {
+test_that("construction keeps the segments and their checks", {
   graph <- segment_query(confounding_feedback, columns = c("A", "B"))
   before <- serialize(graph, NULL)
   result <- construct_dag(graph, quiet = TRUE)
-  state <- .gd_state(result)
-  expect_true(state$summary$applied)
+  record <- dag_options(result)
+  expect_true(record$summary$applied)
   expect_setequal(names(result), c("T", "Y", "A_t0", "A_t1to2", "B_t0", "B_t1to2"))
-  expect_identical(state$summary$segments$segment, c("A_t0", "A_t1to2", "B_t0", "B_t1to2"))
   expect_setequal(names(temporal_dag(result)), c("T", "Y", paste0(rep(c("A", "B"), each = 3), "_t", 0:2)))
   checks <- dag_checks(result)
   expect_identical(checks$total$status, "preserved")
   expect_identical(checks$direct$status, "preserved")
-  expect_identical(checks$total$required, list("A_t2"))
-  expect_identical(checks$total$final_sets, list("A_t1to2"))
   reference <- .cd_prepare(graph, NULL, NULL)$selection
   expect_true(.gd_validate_sets(reference, list(c("A_t1", "A_t2")), "total"))
-  view <- dag_sets_view(result, list(total = 1L, direct = 1L))
-  view_state <- .gd_state(view)
-  expect_true(view_state$summary$applied)
-  expect_identical(view_state$summary$segments, state$summary$segments)
-  expect_setequal(names(view), names(result))
-  expect_identical(vapply(dag_checks(view), `[[`, character(1), "status"),
-                   c(total = "preserved", direct = "preserved"))
-  expect_identical(.gd_signature(temporal_dag(view)), .gd_signature(temporal_dag(result)))
+  expect_true(display_sets_valid(result, reference))
   expect_identical(serialize(original_query(result), NULL), before)
 })
 
-test_that("a segmented alternative without a single source reading is flagged, never certified", {
-  # The mediating feedback adds the display set {A_t1to2, B_t1to2}: it is
-  # valid on the source when read as its occurrences, but it is not a source
-  # option and has no single reading at a specific time, so review is required.
+test_that("a segmented display of mediating feedback is accepted only when every listed set is valid on the source", {
   graph <- segment_query(lagged_feedback, columns = c("A", "B"))
   warned <- character()
   result <- withCallingHandlers(construct_dag(graph, quiet = TRUE),
@@ -149,16 +147,32 @@ test_that("a segmented alternative without a single source reading is flagged, n
       warned <<- c(warned, conditionMessage(w))
       invokeRestart("muffleWarning")
     })
-  state <- .gd_state(result)
-  expect_true(state$summary$applied)
-  expect_identical(state$summary$segments$segment, c("A_t0", "A_t1to2", "B_t0", "B_t1to2"))
-  direct <- dag_checks(result)$direct
-  expect_identical(direct$status, "changed")
-  introduced <- Filter(function(x) setequal(x$set, c("A_t1to2", "B_t1to2")), direct$introduced)
-  expect_length(introduced, 1L)
-  expect_identical(introduced[[1L]]$status, "temporal interpretation requires review")
-  expect_identical(dag_checks(result)$total$status, "preserved")
-  expect_true(any(grepl("changed or were not fully verified", warned)))
+  expect_true(dag_options(result)$summary$applied)
+  expect_setequal(names(result), c("T", "Y", "A_t0", "A_t1to2", "B_t0", "B_t1to2"))
+  expect_true(any(vapply(.gd_adjustment_sets(result, "direct", Inf)$sets, setequal, logical(1), c("A_t1to2", "B_t1to2"))))
+  expect_true(display_sets_valid(result, .cd_prepare(graph, NULL, NULL)$selection))
+  expect_identical(vapply(dag_checks(result), `[[`, character(1), "status"), c(direct = "preserved", total = "preserved"))
+  expect_length(warned, 0L)
+  # The fixture of "manual edits and the view ..." read as observed: its segmented display lists the empty set,
+  # which the source rejects, so static construction refuses it.
+  base <- dagitty::dagitty(paste("dag { Q1_t2 -> Q3_t2; Q1_t3 -> Q3_t3; Q2_t0 -> Q1_t2; Q3_t2 -> Q1_t3;",
+                                 "Q3_t0 -> Q3_t1; Q3_t1 -> Q3_t2; Q3_t0 -> T_t1; T_t1 -> Q2_t3; Q1_t3 -> Y }"))
+  dagitty::exposures(base) <- "T_t1"
+  dagitty::outcomes(base) <- "Y"
+  query <- as_segment_query(base)
+  expect_error(suppressWarnings(construct_dag(query, keep_nodes = "Q2", quiet = TRUE)),
+    "not a minimal valid set of the time summary|represented occurrences", class = "cd_static_unavailable")
+  refused <- suppressWarnings(construct_dag(query, keep_nodes = "Q2", quiet = TRUE, unroll = TRUE))
+  temporal <- temporal_dag(refused)
+  open <- .gd_summary(temporal, keep = names(temporal))
+  expect_true(open$applied)
+  expect_false(is.null(open$segments))
+  reference <- .cd_prepare(query, NULL, NULL)$selection
+  expect_identical(.gd_adjustment_sets(open$graph, "direct", Inf)$sets, list(character()))
+  expect_false(.gd_validate_sets(reference, list(character()), "direct"))
+  expect_false(dag_options(refused)$summary$applied)
+  expect_match(dag_options(refused)$level$static_reason, "not a minimal valid set of the time summary|represented occurrences")
+  expect_identical(.gd_signature(refused), .gd_signature(temporal))
 })
 
 test_that("three segments are used when no single cut restores acyclicity", {
@@ -174,7 +188,7 @@ test_that("three segments are used when no single cut restores acyclicity", {
     display <- stats::setNames(.gd_segment_display(mapping, list(A = cut, B = cut)), mapping$node)
     expect_false(.gd_edges_acyclic(.gd_display_edges(links, display)), info = cut)
   }
-  expect_identical(.gd_segment_cuts(links, mapping, list(c("A", "B"))), list(A = c(1, 3), B = c(1, 3)))
+  expect_identical(.gd_segment_choice(links, mapping, list(c("A", "B")))$cuts, list(A = c(1, 3), B = c(1, 3)))
   expect_identical(summary$segments$segment, c("A_t0to1", "A_t2to3", "A_t4", "B_t1", "B_t2to3", "B_t4to5"))
   expect_true(dag_is_acyclic(summary$graph))
 })
@@ -203,7 +217,7 @@ test_that("several feedback groups are cut together, not one after another by na
   # Settling A,B first with C,D still folded would cut both groups at t0 (18
   # display edges). The joint choice cuts A,B at t1 and C,D at t0 (17 edges),
   # the fewest over all four combinations.
-  expect_identical(.gd_segment_cuts(summary$edge_ledger, mapping, list(c("A", "B"), c("C", "D"))),
+  expect_identical(.gd_segment_choice(summary$edge_ledger, mapping, list(c("A", "B"), c("C", "D")))$cuts,
                    list(A = 1, B = 1, C = 0, D = 0))
   expect_identical(nrow(dag_edges(summary$graph)), 17L)
   expect_identical(summary$segment_alternatives, 1L)
@@ -236,14 +250,14 @@ test_that("a residual tie between feedback groups is decided by name, recorded a
   expect_true(summary$applied)
   expect_identical(summary$segment_alternatives, 2L)
   mapping <- summary$node_map[c("node", "quantity", "node_id")]
-  expect_identical(.gd_segment_cuts(summary$edge_ledger, mapping, list(c("A", "B"), c("C", "D"))),
+  expect_identical(.gd_segment_choice(summary$edge_ledger, mapping, list(c("A", "B"), c("C", "D")))$cuts,
                    list(A = 0, B = 0, C = 1, D = 1))
   expect_identical(nrow(dag_edges(summary$graph)), 18L)
   renamed <- tied("M", "N", "C", "D")
   other <- .gd_summary(renamed, keep = names(renamed))
   expect_identical(other$segment_alternatives, 2L)
-  expect_identical(.gd_segment_cuts(other$edge_ledger, other$node_map[c("node", "quantity", "node_id")],
-                                    list(c("C", "D"), c("M", "N"))),
+  expect_identical(.gd_segment_choice(other$edge_ledger, other$node_map[c("node", "quantity", "node_id")],
+                                    list(c("C", "D"), c("M", "N")))$cuts,
                    list(C = 0, D = 0, M = 1, N = 1))
   expect_identical(nrow(dag_edges(other$graph)), 18L)
   # The tie is reported by the caller that finally shows the segments, and
@@ -264,13 +278,8 @@ test_that("a residual tie between feedback groups is decided by name, recorded a
   query <- segment_query(paste0(pair("A", "B"), "; ", pair("C", "D"), "; B_t1 -> C_t1; A_t0 -> C_t1; B_t0 -> C_t2;",
     " B_t1 -> D_t2; A_t0 -> C_t0; T -> A_t0; B_t2 -> Y; D_t2 -> Y; T -> Y"), columns = c("A", "B", "C", "D"))
   built <- collect(construct_dag(query, quiet = TRUE))
-  state <- .gd_state(built$value)
-  expect_identical(built$tie, isTRUE(state$summary$applied) && isTRUE(state$summary$segment_alternatives > 1L))
-  for (selection in list(list(total = 1L), list(direct = 1L), list(total = 1L, direct = 1L))) {
-    viewed <- collect(dag_sets_view(built$value, selection))
-    view_state <- .gd_state(viewed$value)
-    expect_identical(viewed$tie, isTRUE(view_state$summary$applied) && isTRUE(view_state$summary$segment_alternatives > 1L))
-  }
+  summary <- dag_options(built$value)$summary
+  expect_identical(built$tie, isTRUE(summary$applied) && isTRUE(summary$segment_alternatives > 1L))
 })
 
 test_that("merged sets are checked on segmented displays and the shown edges across repeated stages keep their sets valid", {
@@ -303,7 +312,7 @@ test_that("merged sets are checked on segmented displays and the shown edges acr
     if (!isTRUE(.gd_validate_sets(reference, list(reading), effect))) invalid <- TRUE
   }
   expect_false(invalid)
-  checked <- .gd_summary(reference, source_check = .cd_summary_source_check(reference))
+  checked <- .gd_summary(reference, source_check = summary_source_check(reference))
   expect_true(checked$applied)
   expect_identical(checked$segments, open$segments)
   refused <- .gd_summary(reference, source_check = function(display, mapping) "refused by the test")
@@ -356,7 +365,7 @@ test_that("a tie decided by name between two eligible edges across repeated stag
   expect_identical(roles, c("between_segments", "between_repetitions"))
   expect_identical(summary$segment_edge_ties, 1L)
   expect_identical(summary$segment_alternatives, 1L)
-  expect_warning(.gd_segment_tie_notice(summary), "same lag and occasion came first by name")
+  expect_warning(.gd_segment_tie_notice(summary), "same lag and occasion came first in quantity order")
   # Renaming so that C sorts first flips the shown edge: the recorded tie is the
   # only trace of that name dependence.
   renamed <- tied("X", "Z", "C", "D", "M", "N", "P", "R", "U", "V")
@@ -403,17 +412,13 @@ test_that("manual edits and the view without selected sets validate their displa
   open <- .gd_summary(reference, keep = names(reference))
   expect_true(open$applied)
   expect_false(is.null(open$segments))
-  checked <- .gd_summary(reference, keep = names(reference), source_check = .cd_summary_source_check(reference))
+  checked <- .gd_summary(reference, keep = names(reference), source_check = summary_source_check(reference))
   expect_false(checked$applied)
   expect_match(checked$reason, "represented occurrences")
-  result <- suppressWarnings(construct_dag(query, latents = latents, quiet = TRUE))
+  expect_error(suppressWarnings(construct_dag(query, latents = latents, quiet = TRUE)),
+    "static view is unavailable", class = "cd_static_unavailable")
+  result <- suppressWarnings(construct_dag(query, latents = latents, quiet = TRUE, unroll = TRUE))
   expect_true(display_sets_valid(result, reference))
-  absent <- setdiff(names(reference), names(temporal_dag(result)))
-  restored <- suppressWarnings(restore_nodes(result, absent))
-  expect_true(display_sets_valid(restored, reference))
-  state <- .gd_state(restored)
-  if (isTRUE(state$summary$applied)) expect_false(is.null(state$summary$segments)) else
-    expect_match(state$summary$reason, "represented occurrences|from treatment to outcome")
 })
 
 test_that("segmentation does not depend on node order or quantity names", {
@@ -446,7 +451,9 @@ test_that("graphs without feedback collapse each quantity to one node as before"
   expect_false(any(summary$edge_ledger$display_role == "between_segments"))
   result <- construct_dag(segment_query("T -> A_t1 -> Y; T -> A_t2 -> Y; T -> Y"), quiet = TRUE)
   expect_setequal(names(result), c("T", "A", "Y"))
-  expect_null(.gd_state(result)$summary$segments)
+  expect_true(dag_options(result)$summary$applied)
+  map <- attr(result, "cf_node_map")
+  expect_identical(map$node, .strip_slice(map$occurrence))
 })
 
 test_that("a lagged chain with a gap is split at its exact occasions", {
@@ -499,10 +506,8 @@ test_that("an endpoint with one occasion on a feedback cycle stays uncut while i
   # the fold's feedback cycle with A. A is split at its exact occasions and the
   # display is kept.
   result <- construct_dag(segment_query("A_t0 -> T; T -> A_t1 -> Y; T -> Y"), keep_nodes = "A", quiet = TRUE)
-  state <- .gd_state(result)
-  expect_true(state$summary$applied)
+  expect_true(dag_options(result)$summary$applied)
   expect_setequal(names(result), c("T", "Y", "A_t0", "A_t1"))
-  expect_identical(state$summary$segments$segment, c("A_t0", "A_t1"))
   expect_identical(vapply(dag_checks(result), `[[`, character(1), "status")[c("direct", "total")],
                    c(direct = "preserved", total = "preserved"))
 })

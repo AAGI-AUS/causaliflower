@@ -7,13 +7,27 @@
 dag_checks(dag)
 }
 \arguments{
-\item{dag}{The corresponding recovered graph or collection.}
+\item{dag}{A constructed DAG.}
 }
 \value{
-Return the reference and displayed adjustment sets and the
-checks of their preservation.
+A list of saved checks for each effect in a DAG built by
+\code{construct_dag()}, recording:
+\itemize{
+\item Whether the retained sets are minimal valid sets of \code{temporal_dag(dag)}.
+\item Whether the sets listed on that temporal DAG are valid on the source.
+This listing contains at most 50 sets per effect.
+\item Which declared unmeasured occasions belong to adjustment members or
+undecided variables retained for that effect.
+\item The recorded availability under those declarations for the displayed DAG
+(\code{availability}) and \code{temporal_dag(dag)} (\code{temporal_availability}).
+}
+
+The first two checks treat declared unmeasured variables as observed.
+Read availability alongside the search \code{state} and check \code{status}.
+\code{"available now"} alone does not establish that an adjustment set was found.
+The list's \code{current} attribute is \code{TRUE} if the graph still matches the saved
+structural signature, and \code{FALSE} otherwise. A mismatch produces a warning.
 }
 \description{
-These functions accept the corresponding recovered graph or collection and
-read saved records without changing the graph.
+Read the saved checks and whether they still describe the supplied graph.
 }

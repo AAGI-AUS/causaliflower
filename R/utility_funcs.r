@@ -774,7 +774,8 @@ minimal_sets <- function(dag,
 #' @param outcomes A vector of outcome node names.
 #' @param output_list Whether to keep results grouped by treatment and outcome.
 #'   Defaults to FALSE.
-#' @param directed When TRUE (default), restricts to directed paths from treatment to outcome; when FALSE, considers all paths.
+#' @param directed TRUE (default) restricts the search to directed paths from
+#'   treatment to outcome. FALSE considers all paths.
 #' @returns Unique node names, or a nested list when output_list is TRUE.
 #'   Returns an empty list if treatments or outcomes is empty.
 #' @noRd

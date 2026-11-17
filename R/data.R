@@ -2,7 +2,7 @@
 # data.R
 
 
-# Roxygen documentation for the ESCDAGs lookup data
+# Roxygen documentation for the lookup and bundled query data
 # ==============================================================================
 
 
@@ -64,9 +64,8 @@
 
 #' Aliases for the bundled query quantities
 #'
-#' `node_aliases` is a named list for the 576 quantities, containing 1,529 keys,
-#' labels and plain language aliases. Conflicting aliases and model path aliases
-#' are excluded.
+#' Maps supplied quantity names to the bundled query quantities. Conflicting
+#' aliases and model path aliases are excluded.
 #' @format A named list for the 576 quantities, containing 1,529 keys,
 #'   labels and plain language aliases.
 #' @docType data
@@ -75,10 +74,9 @@
 
 #' Default management quantities for the bundled slice
 #'
-#' `management_defaults` contains three core quantity keys and an empty
-#' `per_crop` list reserved for crop specific defaults.
-#' @format Three core quantity keys and an empty `per_crop` list
-#'   reserved for crop specific defaults.
+#' Selects the management quantities included by default in a query.
+#' @format A list containing `core`, a character vector of three quantity keys,
+#'   and `per_crop`, an empty list reserved for defaults by crop.
 #' @docType data
 "management_defaults"
 
@@ -86,21 +84,20 @@
 #' Developmental phase partitions for the bundled crops
 #'
 #' `crop_phases` describes developmental stages for barley, wheat and maize.
-#' Its 32 rows contain `crop`, `phase_index` starting at zero,
-#' `apsim_child_index`, `phase_name`, `start_stage`, `end_stage`, `phase_type`,
-#' `terminal` and `canonical_stage`. The source type field is empty and model
-#' class names are omitted.
-#' @format A data frame with 32 rows and nine columns.
+#' The source type field is empty and model class names are omitted.
+#' @format A data frame with 32 rows and nine columns: `crop`, `phase_index`
+#'   starting at zero, `apsim_child_index`, `phase_name`, `start_stage`,
+#'   `end_stage`, `phase_type`, `terminal` and `canonical_stage`.
 #' @docType data
 "crop_phases"
 
 
 #' Developmental phase membership of bundled quantities
 #'
-#' `phase_of` records active intervals for developmental stage queries. Its
-#' 150 rows have seven character columns: `node_id`, `concept_id`, `crop_type`,
-#' `active_from`, `active_to`, `archetype` and `basis`. These identify the quantity,
-#' applicable crops, recorded interval, temporal category and supporting description.
-#' @format A data frame with 150 rows and seven character columns.
+#' `phase_of` records active intervals for developmental stage queries.
+#' @format A data frame with 150 rows and seven character columns: `node_id`,
+#'   `concept_id`, `crop_type`, `active_from`, `active_to`, `archetype` and `basis`.
+#'   These identify the quantity, applicable crops, recorded interval, temporal
+#'   category and supporting description.
 #' @docType data
 "phase_of"

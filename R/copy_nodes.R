@@ -622,7 +622,7 @@ copy_generate_edges <- function(original_edges, nodes, renamed, copy_names,
     }
   }
 
-  ## symmetric edges are inherited as they stand; an anchor never reroutes them ##
+  ## inherit symmetric edges without rerouting them through an anchor ##
   symmetric <- if( is.null(type) ){
     original_edges[original_edges$e %in% c("<->", "--"), , drop = FALSE]
   }else{
