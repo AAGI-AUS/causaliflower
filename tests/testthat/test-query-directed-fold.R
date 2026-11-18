@@ -19,9 +19,9 @@ test_that("directed folding bypasses chains and forks without latent projection"
 })
 
 fold_query <- function(columns = NULL, show = TRUE, randomised = FALSE, ...) {
-  query_graph("barley", treatments = "N_application", outcomes = c("grain_N", "grain_wt"),
+  recipe_test_query("barley", treatments = "N_application", outcomes = c("grain_N", "grain_wt"),
     columns = columns, time_unroll = "selective", randomised_treatment = randomised,
-    label = NULL, quiet = TRUE, params = query_params(show_hidden_nodes = show, ...))
+    label = NULL, quiet = TRUE, params = dagby_query_params(show_hidden_nodes = show, ...))
 }
 
 test_that("query folds interpretation rows and preserves the full explanation", {
@@ -58,9 +58,9 @@ test_that("explicit interpretations survive hidden filtering but prohibited rows
   expect_true(all(c("cgr_actual", "n_translocation") %in% .strip_slice(names(g))))
   expect_false(any(.strip_slice(attr(g, "latent")) %in% c("cgr_actual", "n_translocation")))
   expect_false("canopy_senescence" %in% .strip_slice(names(g)))
-  endpoint <- query_graph("barley", treatments = "N_application", outcomes = "cgr_actual",
+  endpoint <- recipe_test_query("barley", treatments = "N_application", outcomes = "cgr_actual",
     time_unroll = "selective", label = NULL, quiet = TRUE,
-    params = query_params(show_hidden_nodes = FALSE))
+    params = dagby_query_params(show_hidden_nodes = FALSE))
   expect_true("cgr_actual" %in% dagitty::outcomes(endpoint))
   expect_error(fold_query(columns = "spike"), "Cannot recover requested node.*spike")
   expect_error(fold_query(columns = "unspecified_organ_live_n"), "Cannot recover requested node")
@@ -68,7 +68,7 @@ test_that("explicit interpretations survive hidden filtering but prohibited rows
 
 test_that("coarse grouping cannot delete allowed members with an excluded row", {
   g <- slice_external_query(prohibit_left = TRUE,
-    params = query_params(apsim_nodes_detail = "subnode", force_acyclic = TRUE))
+    params = dagby_query_params(apsim_nodes_detail = "subnode", force_acyclic = TRUE))
   r <- attr(g, "query_record")
   expect_false("toy.soil.quantity.left" %in% r$node_map$member_id)
   expect_true("toy.soil.quantity.right" %in% r$node_map$member_id)

@@ -9,43 +9,44 @@
 ## Changing the size ##
 #' Change the size of a constructed DAG
 #'
-#' `prune_dag()` returns a smaller DAG and `grow_dag()` a larger one. Both rebuild
+#' `dagby_prune()` returns a smaller DAG and `dagby_grow()` a larger one. Both rebuild
 #' from the saved query.
 #'
-#' @param dag A DAG returned by `get_dag()`, `construct_dag()`, `prune_dag()`
-#'   or `grow_dag()`, or a dry-run plan. A dagitty DAG is also accepted: its
+#' @param dag A DAG returned by `dagby_construct()`, `dagby_prune()`
+#'   or `dagby_grow()`, or a dry-run plan. A dagitty DAG is also accepted: its
 #'   latent nodes are treated as unmeasured.
-#' @param size The number of nodes by which to reduce or increase the size.
+#' @param size The number of source variables by which to reduce or increase the size.
 #'   The nearest available size in that direction is returned. A tie gives the
-#'   larger change. `Inf` gives the smallest DAG for `prune_dag()` or the largest
-#'   for `grow_dag()`. Nodes are counted as described in [construct_dag()].
+#'   larger change. `Inf` gives the smallest DAG for `dagby_prune()` or the largest
+#'   for `dagby_grow()`. Variables are counted as described in [dagby_construct()].
 #' @param quiet `NULL` prints progress and how to change the size. `TRUE`
 #'   suppresses them. `FALSE` also prints the construction record.
 #' @param unroll `TRUE` keeps separate time occasions. `FALSE` requests a checked
 #'   static view. `NULL` keeps the current view.
 #'
 #' @details
-#' The sizes are those of `construct_dag()`.
+#' The sizes are those of `dagby_construct()`.
 #'
 #' @return A dagitty DAG. If the size does not change, the DAG is returned
 #'   unchanged unless a different time view is requested.
 #' @examples
 #' \dontrun{
-#' query <- query_graph(crop = "barley", treatments = "cultivar",
-#'                      outcomes = "grain_yield", randomised_treatment = TRUE)
-#' largest <- construct_dag(query)
-#' smallest <- prune_dag(largest)
-#' larger <- grow_dag(smallest, 5)
+#' recipe <- dagby(crop = "barley", treatments = "cultivar",
+#'                 outcomes = "grain_yield", randomised_treatment = TRUE)
+#' query <- recipe |> dagby_query()
+#' largest <- query |> dagby_construct(size = "largest")
+#' smallest <- dagby_prune(largest)
+#' larger <- dagby_grow(smallest, 5)
 #' }
 #' @export
-prune_dag <- function(dag, size = Inf, quiet = NULL, unroll = NULL){
+dagby_prune <- function(dag, size = Inf, quiet = NULL, unroll = NULL){
   return(.cd_resize(dag, size, quiet, "prune", unroll))
 }
 
 
-#' @rdname prune_dag
+#' @rdname dagby_prune
 #' @export
-grow_dag <- function(dag, size = Inf, quiet = NULL, unroll = NULL){
+dagby_grow <- function(dag, size = Inf, quiet = NULL, unroll = NULL){
   return(.cd_resize(dag, size, quiet, "grow", unroll))
 }
 
@@ -54,9 +55,9 @@ grow_dag <- function(dag, size = Inf, quiet = NULL, unroll = NULL){
 #'
 #' Choose another DAG from the same query at the current or requested size.
 #' @param dag A constructed DAG or construction plan.
-#' @param size The requested number of nodes. `NULL` keeps the current size.
-#'   Counting and nearest-size rules follow [construct_dag()].
-#' @param select The alternative number listed by `dag_options()`. `NULL` keeps
+#' @param size The requested number of source variables. `NULL` keeps the current size.
+#'   Counting and nearest-size rules follow [dagby_construct()].
+#' @param select The alternative number listed by `dagby_options()`. `NULL` keeps
 #'   the current candidate if it is available at the returned size.
 #' @param unroll `TRUE` keeps separate time occasions. `FALSE` requests a checked
 #'   static view. `NULL` keeps the current view.
@@ -72,13 +73,13 @@ grow_dag <- function(dag, size = Inf, quiet = NULL, unroll = NULL){
 #' same query and construction settings.
 #' @return A constructed DAG.
 #' @export
-select_dag <- function(dag, size = NULL, select = NULL, unroll = NULL, quiet = NULL){
+dagby_select <- function(dag, size = NULL, select = NULL, unroll = NULL, quiet = NULL){
   input_record <- .cd_input_record(dag)
   if( inherits(dag, "cf_dag_plan") ){
     dag <- dag$graph
   }
   if( !inherits(dag, "cf_dag") ){
-    stop("Call construct_dag() before selecting an alternative.", call. = FALSE)
+    stop("Call dagby_construct() before selecting an alternative.", call. = FALSE)
   }
   state <- .gd_state(dag)
   current <- .cd_variable_count(state$temporal)
@@ -98,7 +99,7 @@ select_dag <- function(dag, size = NULL, select = NULL, unroll = NULL, quiet = N
 
 #' Rebuild a graph at a larger or smaller size
 #'
-#' @inheritParams prune_dag
+#' @inheritParams dagby_prune
 #' @param request `"prune"` or `"grow"`.
 #' @return A constructed DAG in the requested direction, or the unchanged DAG
 #'   when none is available. A changed time view can still trigger rebuilding.
@@ -117,7 +118,7 @@ select_dag <- function(dag, size = NULL, select = NULL, unroll = NULL, quiet = N
   }
   .gd_flag(unroll, "unroll", nullable = TRUE)
   if( is.null(attr(dag, "cf_provenance", exact = TRUE)) ){
-    warning(request, "_dag() is intended for working with DAGs created by querying the process-based structural causal model. It may have unexpected results when used with knowledge-based DAGs.", call. = FALSE)
+    warning("dagby_", request, "() is intended for working with DAGs created by querying the process-based structural causal model. It may have unexpected results when used with knowledge-based DAGs.", call. = FALSE)
     graph <- dag
     latents <- as.character(dagitty::latents(dag))
     if( !length(latents) ){
@@ -139,13 +140,13 @@ select_dag <- function(dag, size = NULL, select = NULL, unroll = NULL, quiet = N
   }
   if( !size ){
     if( inherits(dag, "cf_dag") && !identical(unroll, .cd_output_mode(dag)) ){
-      return(.cd_with_input_record(select_dag(dag, unroll = unroll, quiet = quiet), input_record))
+      return(.cd_with_input_record(dagby_select(dag, unroll = unroll, quiet = quiet), input_record))
     }
     return(.cd_with_input_record(dag, input_record))
   }
   current <- if( inherits(dag, "cf_dag") ) .cd_variable_count(state$temporal) else .cd_variable_count(dag)
-  resized <- .cd_sized(graph, latents, keep_nodes, FALSE, quiet, size, request, current, NULL, dag,
-    unroll = unroll)
+  resized <- .cd_sized(graph, latents, keep_nodes, FALSE, quiet, size,
+    request = request, current = current, unchanged = dag, unroll = unroll)
 
   return(.cd_with_input_record(resized, input_record))
 }
@@ -337,7 +338,6 @@ select_dag <- function(dag, size = NULL, select = NULL, unroll = NULL, quiet = N
 #' @param target Desired absolute variable count.
 #' @param request Size, select, prune or grow operation.
 #' @param current Current count for directional requests.
-#' @param quick Whether the first ranked size supplies the target.
 #' @param retain `TRUE` to return a usable prefix even if it does not yet prove
 #'   which candidate is nearest to the requested size.
 #' @return A list with prefix `definitions`, candidate `rows`, a `closed` flag
@@ -345,7 +345,7 @@ select_dag <- function(dag, size = NULL, select = NULL, unroll = NULL, quiet = N
 #'   `complete` flag. Returns `NULL` if the short search cannot justify reuse
 #'   for this request.
 #' @noRd
-.cd_choice_prefix <- function(query, budget, target, request, current, quick, retain = FALSE){
+.cd_choice_prefix <- function(query, budget, target, request, current, retain = FALSE){
   if( is.null(budget) || budget <= 200L || is.infinite(target) && target > 0 ){
     return(NULL)
   }
@@ -367,9 +367,6 @@ select_dag <- function(dag, size = NULL, select = NULL, unroll = NULL, quiet = N
     return(NULL)
   }
   rows <- proof$rows
-  if( quick ){
-    target <- rows[[1L]]$variables
-  }
   definitions$steps <- budget
   prefix <- list(definitions = definitions, rows = rows, closed = FALSE, complete = FALSE)
   chosen <- .cd_choice_count(rows, target, request, current)
@@ -427,16 +424,12 @@ select_dag <- function(dag, size = NULL, select = NULL, unroll = NULL, quiet = N
 #' @param target Desired absolute variable count.
 #' @param request Size, select, prune or grow operation.
 #' @param current Current count for directional requests.
-#' @param quick Whether the first ranked size supplies the target.
 #' @return The prefix with combined candidate rows, `closed = TRUE`, an omission
 #'   bound `lower` and a `complete` flag. Returns `NULL` if omitted candidates
 #'   could change the selected size.
 #' @noRd
-.cd_choice_extend <- function(query, prefix, rules, target, request, current, quick){
+.cd_choice_extend <- function(query, prefix, rules, target, request, current){
   rows <- .cd_choice_rows(query, rules, prefix$definitions)
-  if( quick ){
-    target <- rows[[1L]]$variables
-  }
   chosen <- .cd_choice_count(rows, target, request, current)
   lower <- min(.cd_prefix_bounds(query, prefix$definitions))
   if( is.null(chosen) || length(chosen$tie) || chosen$count >= lower ){
@@ -553,28 +546,25 @@ select_dag <- function(dag, size = NULL, select = NULL, unroll = NULL, quiet = N
 
 #' Construct and select a source-bound DAG at the nearest size
 #'
-#' @inheritParams construct_dag
+#' @inheritParams dagby_construct
 #' @param request Size, select, prune or grow operation.
 #' @param size Requested distinct variable count for `"size"` or `"select"`, or change
 #'   for `"prune"` or `"grow"`. `0` and `Inf` follow the operation's boundary rules.
 #' @param current Current variable count for directional requests.
-#' @param known Reserved previous-size input, currently unused.
 #' @param unchanged Input DAG to return when no directional change is available.
 #' @param select Alternative number at the selected size, or `NULL` for the default.
 #' @param prefer_current Whether to retain the current candidate when available.
 #' @param expected Saved candidate and binding required for exact replay.
 #' @param budget Ranked search step budget, or `NULL` for the package default.
-#' @param quick Whether the first ranked size supplies the initial target.
-#' @param requested_size Original size request recorded for guidance.
 #' @return A constructed DAG, or a dry-run plan when `dry_run = TRUE`, with
 #'   candidate, size, alternatives and completeness records. Returns `unchanged`
 #'   if no directional change is available. An invalid replay binding or an
 #'   unavailable checked static representation raises an error.
 #' @noRd
 .cd_sized <- function(graph, latents, keep_nodes, dry_run, quiet, size, request = "size",
-                      current = NA_integer_, known = NULL, unchanged = NULL,
+                      current = NA_integer_, unchanged = NULL,
                       select = NULL, unroll = FALSE, prefer_current = FALSE,
-                      expected = NULL, budget = NULL, quick = FALSE, requested_size = size){
+                      expected = NULL, budget = NULL){
   .gd_flag(dry_run, "dry_run")
   .gd_flag(quiet, "quiet", nullable = TRUE)
   .gd_flag(unroll, "unroll")
@@ -589,8 +579,7 @@ select_dag <- function(dag, size = NULL, select = NULL, unroll = NULL, quiet = N
     budget <- tryCatch(.cd_ranked_steps(), error = function(e) NULL)
   }
   target <- switch(request, size = size, select = size, prune = current - size, grow = current + size)
-  prefix <- .cd_choice_prefix(query, budget, target, request, current,
-    quick && is.na(requested_size), retain = TRUE)
+  prefix <- .cd_choice_prefix(query, budget, target, request, current, retain = TRUE)
   refused <- NULL
   rules <- if( is.null(prefix) || !prefix$closed ) tryCatch(.cd_rule_rows(query, quiet), cd_several_members = function(e){
     refused <<- e
@@ -601,7 +590,7 @@ select_dag <- function(dag, size = NULL, select = NULL, unroll = NULL, quiet = N
   }
   if( !is.null(prefix) && !prefix$closed ){
     prefix <- if( !is.null(rules) ) .cd_choice_extend(query, prefix, rules, target,
-      request, current, quick && is.na(requested_size))
+      request, current)
   }
   rows <- if( is.null(prefix) ) .cd_choice_rows(query, rules) else prefix$rows
   rule_counts <- vapply(Filter(function(row) row$kind == "rule", rows),
@@ -618,7 +607,7 @@ select_dag <- function(dag, size = NULL, select = NULL, unroll = NULL, quiet = N
     Inf
   }
   definitions <- if( !is.null(prefix) ) prefix$definitions
-  need_list <- is.null(prefix) && (!length(rows) || target <= ranked_bound || quick)
+  need_list <- is.null(prefix) && (!length(rows) || target <= ranked_bound)
   read_list <- function(){
     if( is.null(budget) ){
       budget <<- .cd_ranked_steps()
@@ -629,9 +618,6 @@ select_dag <- function(dag, size = NULL, select = NULL, unroll = NULL, quiet = N
   if( need_list ){
     read_list()
   }
-  if( quick && is.na(requested_size) ){
-    target <- rows[[1L]]$variables
-  }
   chosen <- .cd_choice_count(rows, target, request, current)
   if( is.null(definitions) && (is.null(chosen) || chosen$count <= ranked_bound ||
     is.finite(target) && abs(chosen$count - target) >= target - ranked_bound) ){
@@ -641,7 +627,7 @@ select_dag <- function(dag, size = NULL, select = NULL, unroll = NULL, quiet = N
   if( is.null(chosen) ){
     if( !is.null(unchanged) && inherits(unchanged, "cf_dag") &&
       !identical(unroll, .cd_output_mode(unchanged)) ){
-      return(select_dag(unchanged, unroll = unroll, quiet = quiet))
+      return(dagby_select(unchanged, unroll = unroll, quiet = quiet))
     }
     if( !isTRUE(quiet) ){
       message(.cd_unchanged(request))
@@ -670,25 +656,25 @@ select_dag <- function(dag, size = NULL, select = NULL, unroll = NULL, quiet = N
   signatures <- list()
   kept <- list()
   available <- logical()
-  quick_row <- NULL
-  quick_choice <- NULL
+  smallest_row <- NULL
+  smallest_choice <- NULL
   for( row in group ){
     captured <- .cd_captured(suppressMessages(build(row, TRUE, TRUE)))
     signature <- .cd_choice_signature(captured$value)
     duplicate <- which(vapply(signatures, identical, logical(1), y = signature))
     if( row$kind == "ranked" && row$index == 1L ){
-      quick_row <- row
-      quick_choice <- if( length(duplicate) ) duplicate[[1L]] else length(kept) + 1L
+      smallest_row <- row
+      smallest_choice <- if( length(duplicate) ) duplicate[[1L]] else length(kept) + 1L
     }
     if( length(duplicate) ){
       next
     }
-    if( .cd_variable_count(temporal_dag(captured$value)) != row$variables ){
+    if( .cd_variable_count(dagby_temporal(captured$value)) != row$variables ){
       stop("The constructed DAG has a different size from the one predicted.", call. = FALSE)
     }
     signatures[[length(signatures) + 1L]] <- signature
     kept[[length(kept) + 1L]] <- row
-    available <- c(available, isTRUE(dag_options(captured$value)$level$static_available))
+    available <- c(available, isTRUE(dagby_options(captured$value)$level$static_available))
   }
   group <- kept
   if( invalid_select ){
@@ -696,10 +682,10 @@ select_dag <- function(dag, size = NULL, select = NULL, unroll = NULL, quiet = N
       paste(seq_along(group), collapse = ", "), ".", call. = FALSE)
   }
   selected <- 1L
-  quick <- quick || !any(full) && !is.null(definitions) &&
+  prefer_smallest <- !any(full) && !is.null(definitions) &&
     chosen$count == min(vapply(rows, function(row) row$variables, integer(1)))
-  if( quick && !is.null(quick_choice) ){
-    selected <- quick_choice
+  if( prefer_smallest && !is.null(smallest_choice) ){
+    selected <- smallest_choice
   }
   reference <- if( !is.null(expected) ) expected$signature else if( prefer_current && !is.null(unchanged) ){
     .cd_choice_signature(unchanged)
@@ -718,12 +704,12 @@ select_dag <- function(dag, size = NULL, select = NULL, unroll = NULL, quiet = N
     }
     selected <- as.integer(select)
   }
-  recipe <- if( quick && identical(selected, quick_choice) ) quick_row else group[[selected]]
+  recipe <- if( prefer_smallest && identical(selected, smallest_choice) ) smallest_row else group[[selected]]
   result <- tryCatch(build(recipe, unroll, quiet, dry_run), cd_static_unavailable = function(condition){
     retry <- switch(request,
-      size = paste0("construct_dag(graph, size = ", chosen$count, ", unroll = TRUE)"),
-      select = paste0("select_dag(dag, size = ", chosen$count, ", select = ", selected, ", unroll = TRUE)"),
-      paste0(request, "_dag(dag, size = ", size, ", unroll = TRUE)"))
+      size = paste0("dagby_construct(graph, size = ", chosen$count, ", unroll = TRUE)"),
+      select = paste0("dagby_select(dag, size = ", chosen$count, ", select = ", selected, ", unroll = TRUE)"),
+      paste0("dagby_", request, "(dag, size = ", size, ", unroll = TRUE)"))
     stop(errorCondition(paste0(conditionMessage(condition), " Use ", retry, "."),
       class = "cd_static_unavailable"))
   })
@@ -768,8 +754,8 @@ select_dag <- function(dag, size = NULL, select = NULL, unroll = NULL, quiet = N
   if( length(chosen$tie) ){
     other <- chosen$tie[[1L]]
     warning("Sizes ", min(other, chosen$count), " and ", max(other, chosen$count),
-      " are equally close to ", target, " nodes. Returned ", chosen$count, ". Use ",
-      if( other < chosen$count ) "prune_dag(dag, " else "grow_dag(dag, ",
+      " are equally close to ", target, " variables. Returned ", chosen$count, ". Use ",
+      if( other < chosen$count ) "dagby_prune(dag, " else "dagby_grow(dag, ",
       abs(other - chosen$count), ") for ", other, ".", call. = FALSE)
   }
   if( !isTRUE(quiet) ){
@@ -781,7 +767,7 @@ select_dag <- function(dag, size = NULL, select = NULL, unroll = NULL, quiet = N
     if( !is.null(prefix$lower) && length(larger) && min(larger) > prefix$lower ){
       larger <- integer()
     }
-    message(.cd_size_message(result, request, requested_size, current,
+    message(.cd_size_message(result, request, size, current,
       if( length(smaller) ) max(smaller) else NA_integer_,
       if( length(larger) ) min(larger) else NA_integer_))
   }
@@ -840,7 +826,7 @@ select_dag <- function(dag, size = NULL, select = NULL, unroll = NULL, quiet = N
                              ){
   level <- .cd_construction(result)$level
   nodes <- level$variables
-  text <- paste0("DAG with ", nodes, " nodes", if( isTRUE(level$smallest) && isTRUE(level$top) ){
+  text <- paste0("DAG with ", nodes, " variables", if( isTRUE(level$smallest) && isTRUE(level$top) ){
     ". This is the only size"
   }else if( isTRUE(level$smallest) ){
     ". This is the smallest size"
@@ -850,27 +836,27 @@ select_dag <- function(dag, size = NULL, select = NULL, unroll = NULL, quiet = N
   changed <- abs(nodes - current)
   if( request %in% c("prune", "grow") && is.finite(size) && changed != size ){
     text <- paste0(text, " ", format(changed, scientific = 15), if( changed == 1 ){
-      " node was "
+      " variable was "
     }else{
-      " nodes were "
+      " variables were "
     }, if( request == "prune" ){
       "removed"
     }else{
       "added"
     }, ", not ", format(size, scientific = 15), ".")
   }
-  if( request %in% c("size", "select") && is.finite(size) && size != nodes ){
-    text <- paste0(text, " Requested ", size, " nodes. Returned ", nodes, ".")
+  if( request %in% c("size", "select") && is.finite(size) && size > 0 && size != nodes ){
+    text <- paste0(text, " Requested ", size, " variables. Returned ", nodes, ".")
   }
   if( !is.na(smaller) ){
-    text <- paste0(text, " Next smaller size: ", smaller, " nodes. Use prune_dag(dag, ", nodes - smaller, ").")
+    text <- paste0(text, " Next smaller size: ", smaller, " variables. Use dagby_prune(dag, ", nodes - smaller, ").")
   }else if( !isTRUE(level$smallest) ){
-    text <- paste0(text, " Smaller, if any: prune_dag(dag, 1).")
+    text <- paste0(text, " Smaller, if any: dagby_prune(dag, 1).")
   }
   if( !is.na(larger) ){
-    text <- paste0(text, " Next larger size: ", larger, " nodes. Use grow_dag(dag, ", larger - nodes, ").")
+    text <- paste0(text, " Next larger size: ", larger, " variables. Use dagby_grow(dag, ", larger - nodes, ").")
   }else if( !isTRUE(level$top) ){
-    text <- paste0(text, " Larger, if any: grow_dag(dag, 1).")
+    text <- paste0(text, " Larger, if any: dagby_grow(dag, 1).")
   }
   alternatives <- .cd_construction(result)$alternatives
   if( !is.null(alternatives) && nrow(alternatives) > 1L ){
@@ -880,7 +866,7 @@ select_dag <- function(dag, size = NULL, select = NULL, unroll = NULL, quiet = N
     }else{
       " Known alternative "
     }, level$select, " of ", nrow(alternatives), ".\nOther alternatives:\n",
-      paste0("select_dag(dag, select = ", other, ")", collapse = "\n"), ".")
+      paste0("dagby_select(dag, select = ", other, ")", collapse = "\n"), ".")
   }
   if( !is.null(.cd_construction(result)$alternatives_limit) ){
     text <- paste0(text, " Some alternatives from the construction rules are unavailable. ",
@@ -1116,12 +1102,12 @@ select_dag <- function(dag, size = NULL, select = NULL, unroll = NULL, quiet = N
 
 #' Build a DAG from one ranked level
 #'
-#' @inheritParams construct_dag
+#' @inheritParams dagby_construct
 #' @param query Observed preparation and reuse key.
 #' @param definitions Ranked levels and effect families.
 #' @param index Selected level position.
 #' @param sizes Known available sizes to save with the result.
-#' @param smallest,top Whether this is the smallest or largest offered level.
+#' @param smallest Whether this is the smallest offered level.
 #' @return A constructed DAG or dry-run plan from `.cd_level_dag()`.
 #' @noRd
 .cd_level <- function(graph,
@@ -1133,8 +1119,7 @@ select_dag <- function(dag, size = NULL, select = NULL, unroll = NULL, quiet = N
                       dry_run,
                       quiet,
                       sizes = NULL,
-                      smallest = FALSE,
-                      top = FALSE
+                      smallest = FALSE
                       ){
   level <- definitions$levels[[index]]
   progress <- .gd_progress(quiet, "Construction")
@@ -1142,34 +1127,18 @@ select_dag <- function(dag, size = NULL, select = NULL, unroll = NULL, quiet = N
   references <- .cd_size_prepared(graph, latents, keep_nodes, query)
   prepared <- references$prepared
   .gd_notify(progress, paste0("Reference ready (", length(names(prepared$selection)), " nodes)"))
-  found <- lapply(definitions$effects, function(effect){
-    set_size <- max(level$cap, effect$smallest, na.rm = TRUE)
-    kept <- effect$sizes <= set_size
-    family <- list(state = effect$state, members = as.character(unique(unlist(effect$members[kept], use.names = FALSE))),
-      undecided = character(), sets = unlist(effect$sets[kept], recursive = FALSE))
-    if( effect$state == "sets" && effect$certified && !top ){
-      family$set_size <- set_size
-    }
-    return(family)
-  })
+  found <- .cd_level_found(definitions, index)
   for( effect in names(definitions$effects) ){
     if( definitions$effects[[effect]]$state == "sets" && !definitions$effects[[effect]]$certified ){
       .cd_ranked_warning(effect, definitions$effects[[effect]])
     }
   }
-  dag <- .cd_level_dag(graph, latents, keep_nodes, dry_run, quiet, progress, prepared, references$observed, found,
-    references$key, list(method = "quantity-ranked-v1", representation = if( top ){
-      "maximal"
-    }else{
-      "level"
-    },
+  dag <- .cd_level_dag(graph, latents, dry_run, quiet, progress, prepared, references$observed, found,
+    references$key, list(method = "quantity-ranked-v1", representation = "level",
     arguments = list(latents = latents, keep_nodes = keep_nodes, search = "auto", steps = definitions$steps,
       size = NA_real_),
-    level = list(cap = if( top ){
-      Inf
-    }else{
-      level$cap
-    }, rule = 0L, certified = level$certified, smallest = smallest, top = top), sizes = sizes))
+    level = list(cap = level$cap, rule = 0L, certified = level$certified,
+      smallest = smallest, top = FALSE), sizes = sizes))
 
   return(dag)
 }
@@ -1935,7 +1904,7 @@ select_dag <- function(dag, size = NULL, select = NULL, unroll = NULL, quiet = N
 
 #' Build a DAG from a variable-membership rule candidate
 #'
-#' @inheritParams construct_dag
+#' @inheritParams dagby_construct
 #' @param sizes Known size information and selected time-view setting.
 #' @param query Observed preparation and reuse key.
 #' @param rules Membership results and rule rows from `.cd_rule_rows()`.
@@ -1965,7 +1934,7 @@ select_dag <- function(dag, size = NULL, select = NULL, unroll = NULL, quiet = N
     return(family$state %in% c("no_sets", "empty_set") || (!length(family$undecided) &&
       any(vapply(family$options, setequal, logical(1), family$members))))
   }, logical(1)))
-  dag <- .cd_level_dag(graph, latents, keep_nodes, dry_run, quiet, progress, prepared, references$observed, found,
+  dag <- .cd_level_dag(graph, latents, dry_run, quiet, progress, prepared, references$observed, found,
     references$key, list(method = "maximal-quantities-v1", representation = "maximal",
     arguments = list(latents = latents, keep_nodes = keep_nodes, search = "exact", steps = .cd_maximal_steps(),
       size = if( row$top ){
@@ -2176,7 +2145,7 @@ select_dag <- function(dag, size = NULL, select = NULL, unroll = NULL, quiet = N
 
 #' Finish a selected construction and attach its records
 #'
-#' @inheritParams construct_dag
+#' @inheritParams dagby_construct
 #' @param progress Optional function reporting construction progress.
 #' @param prepared Preparation carrying declared unmeasured occasions and limitations.
 #' @param observed Fully observed preparation used for construction and search.
@@ -2191,7 +2160,6 @@ select_dag <- function(dag, size = NULL, select = NULL, unroll = NULL, quiet = N
 #' @noRd
 .cd_level_dag <- function(graph,
                           latents,
-                          keep_nodes,
                           dry_run,
                           quiet,
                           progress,
@@ -2313,13 +2281,13 @@ select_dag <- function(dag, size = NULL, select = NULL, unroll = NULL, quiet = N
     if( !check$no_set_kept ){
       warning("The source has no ", effect, " adjustment set, but the temporal graph lists one. The graph is not reliable for this effect.", call. = FALSE)
     }else if( identical(check$status, "changed") ){
-      warning("The temporal graph changed the ", effect, " adjustment sets. Inspect dag_checks() and temporal_dag().", call. = FALSE)
+      warning("The temporal graph changed the ", effect, " adjustment sets. Inspect dagby_checks() and dagby_temporal().", call. = FALSE)
     }
     if( identical(check$availability, "needs an unmeasured variable") ){
       warning("Every ", effect, " adjustment set of the returned DAG uses a declared unmeasured variable (kept for this effect: ",
         paste(check$unmeasured, collapse = ", "), ").",
         if( identical(check$temporal_availability, "available now") ){
-          " temporal_dag() lists a set that uses none."
+          " dagby_temporal() lists a set that uses none."
         }, call. = FALSE)
     }
   }
@@ -2392,7 +2360,7 @@ select_dag <- function(dag, size = NULL, select = NULL, unroll = NULL, quiet = N
     "merges_occasions", "displayed_sets_checked"), names(summary))],
     identification = identification, unmeasured = unmeasured,
     limitations = limitations, scope = if( identical(method, "maximal-quantities-v1") ){
-      "Retains the endpoints, requested nodes, nodes specified by the size's rule and variables used by any minimal adjustment set for the direct or total effect. Minimality uses set inclusion of distinct source members. Variables left undecided by the step budget are retained. Nodes kept for identification are recorded under identification and direct_path_nodes. Checks cover the sets found during search and up to 50 sets from the temporal graph for each effect. dag_checks() reports whether that listing was complete."
+      "Retains the endpoints, requested nodes, nodes specified by the size's rule and variables used by any minimal adjustment set for the direct or total effect. Minimality uses set inclusion of distinct source members. Variables left undecided by the step budget are retained. Nodes kept for identification are recorded under identification and direct_path_nodes. Checks cover the sets found during search and up to 50 sets from the temporal graph for each effect. dagby_checks() reports whether that listing was complete."
     }else{
       "The endpoints, requested nodes and the quantities of every minimal adjustment set up to the set size recorded under level (cap), for each effect at least its smallest sets. Nodes kept for identification are recorded under identification and direct_path_nodes. The checks cover the sets kept and up to 50 sets of the temporal graph for each effect."
     }),
@@ -2410,7 +2378,7 @@ select_dag <- function(dag, size = NULL, select = NULL, unroll = NULL, quiet = N
   cat(if( isTRUE(construction$level$top) ){
     "Largest DAG\n"
   }else{
-    paste0("DAG with ", construction$level$variables, " nodes\n")
+    paste0("DAG with ", construction$level$variables, " variables\n")
   })
   for( effect in names(construction$quantities) ){
     family <- construction$quantities[[effect]]

@@ -1,5 +1,5 @@
-# The ranked search's explicit step budget: construct_dag(steps), get_dag's
-# construct_dag list, the recorded budget and select_dag's explicit replay.
+# The ranked search's explicit step budget: dagby_construct(steps), dagby's
+# dagby_construct list, the recorded budget and dagby_select's explicit replay.
 # ranked_query is copied from test-ranked-search.R, where it is local.
 ranked_query <- function(edges, columns = NULL) {
   graph <- dagitty::dagitty(paste("dag { T [exposure]; Y [outcome];", edges, "}"))
@@ -33,13 +33,13 @@ test_that("the ranked budget in force is used and recorded by the ranked search 
   expect_true(full$complete)
   expect_identical(full$ranked$step_budget, 20000L)
   expect_identical(.cd_ranked_search(.cd_prepare(graph, NULL, NULL), "total")$ranked$step_budget, 1L)
-  small <- suppressWarnings(construct_dag(graph, 0, quiet = TRUE))
-  expect_identical(dag_options(small)$arguments$steps, 1L)
+  small <- suppressWarnings(dagby_construct(graph, 0, quiet = TRUE))
+  expect_identical(dagby_options(small)$arguments$steps, 1L)
 })
 
 
 test_that("an invalid ranked budget option is refused by the size route", {
   graph <- ranked_query("A -> T; A -> Y; T -> Y")
   withr::local_options(causaliflower.ranked_steps = "a")
-  expect_error(construct_dag(graph, 0, quiet = TRUE), "Option causaliflower.ranked_steps must be", fixed = TRUE)
+  expect_error(dagby_construct(graph, 0, quiet = TRUE), "Option causaliflower.ranked_steps must be", fixed = TRUE)
 })

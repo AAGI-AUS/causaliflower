@@ -1,6 +1,6 @@
 # A synthetic subsystem tests temporal query mechanics using the source structure.
 # Package tables are supplied through a private lexical environment.
-# No namespace, global data or scientific helper is replaced.
+# The public recipe route executes that source-query fixture without changing data
 phase_history_query <- function(treatment = "sowing_depth", outcome = "root_depth",
                                 treatment_stage = "0", outcome_stage = "3",
                                 randomised = FALSE, columns = NULL, depth = 2L,
@@ -24,13 +24,14 @@ phase_history_query <- function(treatment = "sowing_depth", outcome = "root_dept
                  management_defaults = list(core = "sowing_depth"),
                  crop_phases = crop_phases[crop_phases$crop == "barley" & crop_phases$phase_index <= 3L, ],
                  phase_of = phase_of[FALSE, ])
-  q <- query_graph
+  q <- .dagby_query_source
   environment(q) <- list2env(list(getExportedValue = function(ns, name) {
     if (identical(ns, "causaliflower") && name %in% names(tables)) tables[[name]] else base::getExportedValue(ns, name)
-  }), parent = environment(query_graph))
-  q("barley", treatments = treatment, outcomes = outcome, columns = columns,
+  }), parent = environment(.dagby_query_source))
+  testthat::local_mocked_bindings(.dagby_query_source = q, .package = "causaliflower")
+  recipe_test_query("barley", treatments = treatment, outcomes = outcome, columns = columns,
     randomised_treatment = randomised, label = label, quiet = TRUE,
-    params = query_params(query_depth = depth, treatment_growth_stage = treatment_stage,
+    params = dagby_query_params(query_depth = depth, treatment_growth_stage = treatment_stage,
                          outcome_growth_stage = outcome_stage, phase_window = window,
                          node_recombination = recombine, show_hidden_nodes = show,
                          observe_apsim_outputs = observe_outputs))

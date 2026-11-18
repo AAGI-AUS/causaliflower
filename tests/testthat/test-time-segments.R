@@ -125,33 +125,33 @@ test_that("every displayed set remains valid on the source and segments map by o
 test_that("construction keeps the segments and their checks", {
   graph <- segment_query(confounding_feedback, columns = c("A", "B"))
   before <- serialize(graph, NULL)
-  result <- construct_dag(graph, quiet = TRUE)
-  record <- dag_options(result)
+  result <- dagby_construct(graph, quiet = TRUE, size = "largest")
+  record <- dagby_options(result)
   expect_true(record$summary$applied)
   expect_setequal(names(result), c("T", "Y", "A_t0", "A_t1to2", "B_t0", "B_t1to2"))
-  expect_setequal(names(temporal_dag(result)), c("T", "Y", paste0(rep(c("A", "B"), each = 3), "_t", 0:2)))
-  checks <- dag_checks(result)
+  expect_setequal(names(dagby_temporal(result)), c("T", "Y", paste0(rep(c("A", "B"), each = 3), "_t", 0:2)))
+  checks <- dagby_checks(result)
   expect_identical(checks$total$status, "preserved")
   expect_identical(checks$direct$status, "preserved")
   reference <- .cd_prepare(graph, NULL, NULL)$selection
   expect_true(.gd_validate_sets(reference, list(c("A_t1", "A_t2")), "total"))
   expect_true(display_sets_valid(result, reference))
-  expect_identical(serialize(original_query(result), NULL), before)
+  expect_identical(serialize(dagby_source(result), NULL), before)
 })
 
 test_that("a segmented display of mediating feedback is accepted only when every listed set is valid on the source", {
   graph <- segment_query(lagged_feedback, columns = c("A", "B"))
   warned <- character()
-  result <- withCallingHandlers(construct_dag(graph, quiet = TRUE),
+  result <- withCallingHandlers(dagby_construct(graph, quiet = TRUE, size = "largest"),
     warning = function(w) {
       warned <<- c(warned, conditionMessage(w))
       invokeRestart("muffleWarning")
     })
-  expect_true(dag_options(result)$summary$applied)
+  expect_true(dagby_options(result)$summary$applied)
   expect_setequal(names(result), c("T", "Y", "A_t0", "A_t1to2", "B_t0", "B_t1to2"))
   expect_true(any(vapply(.gd_adjustment_sets(result, "direct", Inf)$sets, setequal, logical(1), c("A_t1to2", "B_t1to2"))))
   expect_true(display_sets_valid(result, .cd_prepare(graph, NULL, NULL)$selection))
-  expect_identical(vapply(dag_checks(result), `[[`, character(1), "status"), c(direct = "preserved", total = "preserved"))
+  expect_identical(vapply(dagby_checks(result), `[[`, character(1), "status"), c(direct = "preserved", total = "preserved"))
   expect_length(warned, 0L)
   # The fixture of "manual edits and the view ..." read as observed: its segmented display lists the empty set,
   # which the source rejects, so static construction refuses it.
@@ -160,18 +160,18 @@ test_that("a segmented display of mediating feedback is accepted only when every
   dagitty::exposures(base) <- "T_t1"
   dagitty::outcomes(base) <- "Y"
   query <- as_segment_query(base)
-  expect_error(suppressWarnings(construct_dag(query, keep_nodes = "Q2", quiet = TRUE)),
+  expect_error(suppressWarnings(dagby_construct(query, keep_nodes = "Q2", quiet = TRUE, size = "largest")),
     "not a minimal valid set of the time summary|represented occurrences", class = "cd_static_unavailable")
-  refused <- suppressWarnings(construct_dag(query, keep_nodes = "Q2", quiet = TRUE, unroll = TRUE))
-  temporal <- temporal_dag(refused)
+  refused <- suppressWarnings(dagby_construct(query, keep_nodes = "Q2", quiet = TRUE, unroll = TRUE, size = "largest"))
+  temporal <- dagby_temporal(refused)
   open <- .gd_summary(temporal, keep = names(temporal))
   expect_true(open$applied)
   expect_false(is.null(open$segments))
   reference <- .cd_prepare(query, NULL, NULL)$selection
   expect_identical(.gd_adjustment_sets(open$graph, "direct", Inf)$sets, list(character()))
   expect_false(.gd_validate_sets(reference, list(character()), "direct"))
-  expect_false(dag_options(refused)$summary$applied)
-  expect_match(dag_options(refused)$level$static_reason, "not a minimal valid set of the time summary|represented occurrences")
+  expect_false(dagby_options(refused)$summary$applied)
+  expect_match(dagby_options(refused)$level$static_reason, "not a minimal valid set of the time summary|represented occurrences")
   expect_identical(.gd_signature(refused), .gd_signature(temporal))
 })
 
@@ -277,8 +277,8 @@ test_that("a residual tie between feedback groups is decided by name, recorded a
   }
   query <- segment_query(paste0(pair("A", "B"), "; ", pair("C", "D"), "; B_t1 -> C_t1; A_t0 -> C_t1; B_t0 -> C_t2;",
     " B_t1 -> D_t2; A_t0 -> C_t0; T -> A_t0; B_t2 -> Y; D_t2 -> Y; T -> Y"), columns = c("A", "B", "C", "D"))
-  built <- collect(construct_dag(query, quiet = TRUE))
-  summary <- dag_options(built$value)$summary
+  built <- collect(dagby_construct(query, quiet = TRUE, size = "largest"))
+  summary <- dagby_options(built$value)$summary
   expect_identical(built$tie, isTRUE(summary$applied) && isTRUE(summary$segment_alternatives > 1L))
 })
 
@@ -415,9 +415,9 @@ test_that("manual edits and the view without selected sets validate their displa
   checked <- .gd_summary(reference, keep = names(reference), source_check = summary_source_check(reference))
   expect_false(checked$applied)
   expect_match(checked$reason, "represented occurrences")
-  expect_error(suppressWarnings(construct_dag(query, latents = latents, quiet = TRUE)),
+  expect_error(suppressWarnings(dagby_construct(query, latents = latents, quiet = TRUE, size = "largest")),
     "static view is unavailable", class = "cd_static_unavailable")
-  result <- suppressWarnings(construct_dag(query, latents = latents, quiet = TRUE, unroll = TRUE))
+  result <- suppressWarnings(dagby_construct(query, latents = latents, quiet = TRUE, unroll = TRUE, size = "largest"))
   expect_true(display_sets_valid(result, reference))
 })
 
@@ -449,9 +449,9 @@ test_that("graphs without feedback collapse each quantity to one node as before"
   expect_null(summary$segments)
   expect_identical(summary$node_map$display, summary$node_map$quantity)
   expect_false(any(summary$edge_ledger$display_role == "between_segments"))
-  result <- construct_dag(segment_query("T -> A_t1 -> Y; T -> A_t2 -> Y; T -> Y"), quiet = TRUE)
+  result <- dagby_construct(segment_query("T -> A_t1 -> Y; T -> A_t2 -> Y; T -> Y"), quiet = TRUE, size = "largest")
   expect_setequal(names(result), c("T", "A", "Y"))
-  expect_true(dag_options(result)$summary$applied)
+  expect_true(dagby_options(result)$summary$applied)
   map <- attr(result, "cf_node_map")
   expect_identical(map$node, .strip_slice(map$occurrence))
 })
@@ -466,9 +466,9 @@ test_that("a lagged chain with a gap is split at its exact occasions", {
   expect_identical(summary$segments$members, c("A_t0", "A_t2"))
   expect_setequal(with(dag_edges(summary$graph), paste(v, e, w)),
                   c("T -> A_t0", "A_t0 -> B", "B -> A_t2", "A_t2 -> Y", "T -> Y"))
-  result <- construct_dag(segment_query("T -> A_t0 -> B_t1 -> A_t2 -> Y; T -> Y"), keep_nodes = "B", quiet = TRUE)
+  result <- dagby_construct(segment_query("T -> A_t0 -> B_t1 -> A_t2 -> Y; T -> Y"), keep_nodes = "B", quiet = TRUE, size = "largest")
   expect_setequal(names(result), c("T", "Y", "A_t0", "A_t2", "B"))
-  expect_identical(vapply(dag_checks(result), `[[`, character(1), "status")[c("direct", "total")],
+  expect_identical(vapply(dagby_checks(result), `[[`, character(1), "status")[c("direct", "total")],
                    c(direct = "preserved", total = "preserved"))
 })
 
@@ -505,10 +505,10 @@ test_that("an endpoint with one occasion on a feedback cycle stays uncut while i
   # In the fixture previously used to check node counts, the treatment sits on
   # the fold's feedback cycle with A. A is split at its exact occasions and the
   # display is kept.
-  result <- construct_dag(segment_query("A_t0 -> T; T -> A_t1 -> Y; T -> Y"), keep_nodes = "A", quiet = TRUE)
-  expect_true(dag_options(result)$summary$applied)
+  result <- dagby_construct(segment_query("A_t0 -> T; T -> A_t1 -> Y; T -> Y"), keep_nodes = "A", quiet = TRUE, size = "largest")
+  expect_true(dagby_options(result)$summary$applied)
   expect_setequal(names(result), c("T", "Y", "A_t0", "A_t1"))
-  expect_identical(vapply(dag_checks(result), `[[`, character(1), "status")[c("direct", "total")],
+  expect_identical(vapply(dagby_checks(result), `[[`, character(1), "status")[c("direct", "total")],
                    c(direct = "preserved", total = "preserved"))
 })
 

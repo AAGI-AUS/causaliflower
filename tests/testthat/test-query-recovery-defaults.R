@@ -1,5 +1,5 @@
 test_that("query defaults retain configured context and finest node ids", {
-  p <- query_params()
+  p <- dagby_query_params()
   expect_identical(p$query_depth, Inf)
   expect_identical(p$apsim_nodes_detail, "variable")
   expect_true(p$show_hidden_nodes)
@@ -7,16 +7,16 @@ test_that("query defaults retain configured context and finest node ids", {
   ids <- c("sample.organ.measurement.first", "sample.organ.measurement.second")
   expect_identical(unname(.apsim_truncate(ids, p$apsim_nodes_detail)), ids)
   expect_identical(unname(.apsim_truncate(ids, "subnode")), rep("sample.organ.measurement", 2L))
-  expect_error(query_params(query_depth = NA_real_), "query_depth")
+  expect_error(dagby_query_params(query_depth = NA_real_), "query_depth")
 })
 
 test_that("default temporal query equals its explicit broad configuration", {
-  g <- query_graph("barley", treatments = "nitrogen_applied",
+  g <- recipe_test_query("barley", treatments = "nitrogen_applied",
                    outcomes = "grain_protein", quiet = TRUE, label = NULL)
-  explicit <- query_graph("barley", treatments = "nitrogen_applied",
+  explicit <- recipe_test_query("barley", treatments = "nitrogen_applied",
                           outcomes = "grain_protein", quiet = TRUE, label = NULL,
                           time_unroll = "all", randomised_treatment = FALSE,
-                          params = query_params(query_depth = Inf, apsim_nodes_detail = "variable",
+                          params = dagby_query_params(query_depth = Inf, apsim_nodes_detail = "variable",
                                                 show_hidden_nodes = TRUE, node_recombination = FALSE))
   expect_identical(attr(g, "dag_text"), attr(explicit, "dag_text"))
   expect_identical(attr(g, "time_unroll"), "all")
@@ -30,19 +30,19 @@ test_that("default temporal query equals its explicit broad configuration", {
 })
 
 test_that("the reduced query refuses an absent alternative water family", {
-  expect_error(query_graph("barley", treatments = "nitrogen_applied",
+  expect_error(recipe_test_query("barley", treatments = "nitrogen_applied",
                    outcomes = "grain_protein", quiet = TRUE,
-                   params = query_params(water_model = "SWIM")), "bundled slice has no SWIM family rows")
+                   params = dagby_query_params(water_model = "SWIM")), "bundled slice has no SWIM family rows")
 })
 
 test_that("historical compact settings and complete ancestry remain explicit", {
-  compact <- query_graph("barley", treatments = "nitrogen_applied",
+  compact <- recipe_test_query("barley", treatments = "nitrogen_applied",
                          outcomes = "grain_protein", quiet = TRUE, label = NULL,
                          time_unroll = "pre_post",
-                         params = query_params(query_depth = 1L, show_hidden_nodes = FALSE))
-  ancestral <- query_graph("barley", treatments = "nitrogen_applied",
+                         params = dagby_query_params(query_depth = 1L, show_hidden_nodes = FALSE))
+  ancestral <- recipe_test_query("barley", treatments = "nitrogen_applied",
                            outcomes = "grain_protein", quiet = TRUE, label = NULL,
-                           params = query_params(query_depth = 2L))
+                           params = dagby_query_params(query_depth = 2L))
   expect_identical(attr(compact, "time_unroll"), "pre_post")
   expect_false(attr(compact, "show_hidden_nodes"))
   expect_identical(attr(compact, "query_depth"), 1L)

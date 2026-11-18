@@ -1,78 +1,139 @@
 # ==============================================================================
-# get_dag.R
+# dagby.R
 
 
-# Guided query and construction
+# Query recipes and construction
 # ==============================================================================
 
 
-#' Construct a DAG through a guided query
+#' Describe a DAG query
 #'
-#' Builds a DAG for a crop query by calling [query_graph()] and then
-#' [construct_dag()]. Missing query inputs are collected interactively. The
-#' resolved call and answers are saved. Call the underlying functions separately
-#' to use an existing query or restrict its scope.
+#' Create a recipe for a crop question without running the query. Save it as an
+#' object, then use `recipe |> dagby_query() |> dagby_construct()` to build a DAG.
+#' The recipe holds both the query inputs and preferences for construction.
 #'
-#' @param crop,treatments,outcomes Crop and query endpoints.
-#' @param randomised_treatment Required experimental design assumption, `TRUE` or `FALSE`.
+#' @param crop Crop whose process-based model supplies the graph, such as
+#'   `"barley"` or `"wheat"`.
+#' @param treatments,outcomes Variables whose causal relationship you want to
+#'   examine. Supply model identifiers or recognised aliases. Named vectors such
+#'   as `c(N = "nitrogen_applied")` also supply display names for `label = "input"`
+#'   or `"readable"`. Explicit `NULL` omits that endpoint for source exploration.
+#' @param randomised_treatment Whether the treatment was randomised. Supply
+#'   `TRUE` or `FALSE` explicitly. `TRUE` removes incoming arrows to treatment
+#'   occasions according to the temporal representation in [dagby_query()].
+#' @param size Preferred number of source variables in the constructed DAG.
+#'   `"smallest"` (default) requests the smallest available DAG and `"largest"`
+#'   the largest. A number requests the closest available size, choosing the
+#'   larger on a tie. `0` and `Inf` are equivalent to `"smallest"` and `"largest"`.
+#'   See [dagby_construct()] for counting and retention rules.
+#' @param keep_nodes Additional variables or exact time occasions to retain
+#'   during construction, even if they are not needed by its selection rules.
 #' @param latents Variables or exact occasions to mark as unmeasured, as in
-#'   [construct_dag()]. `NULL` treats all variables as observed. The original
-#'   query's tags remain saved.
-#' @param label Naming option passed to `query_graph()`. `NULL` retains quantity keys.
-#' @param query_graph Further query inputs: `columns`, `time_unroll` and `params`.
-#' @param construct_dag Construction inputs supplied as a list: `size` requests
-#'   a number of nodes and `unroll` controls the time representation. The default
-#'   uses the smallest adjustment sets found and a checked static view. See
-#'   [construct_dag()] for counting and construction rules.
-#' @param dry_run Return a proposed construction for inspection.
-#' @param quiet Suppress routine progress when `TRUE`. Saved checks remain available.
+#'   [dagby_construct()]. They are marked after construction and do not affect
+#'   which variables are kept. `NULL` treats all variables as observed.
+#' @param columns Observed variables in your data, used to tag the source query.
+#'   `NULL` uses the automatic observation assumptions in [dagby_query()]. These
+#'   source tags remain saved. Use `latents` to declare unmeasured variables on
+#'   the constructed DAG.
+#' @param time_unroll Temporal representation of the source query. If omitted,
+#'   lagged relationships retain separate time occasions when treatments are
+#'   supplied. Explicit `NULL` or `"none"` combines time occasions in the query
+#'   and can introduce cycles.
+#'   `"all"` retains separate occasions. Specialist modes `"selective"`,
+#'   `"collapse"` and `"pre_post"` are described in [dagby_query()].
+#' @param label Names to display on queried nodes. `"id"` (default) keeps model
+#'   identifiers such as `nitrogen_applied`. `"readable"` uses descriptive model
+#'   names, with your supplied names taking precedence. `"input"` uses the names
+#'   or aliases supplied in `columns`, `treatments` and `outcomes`. `"APSIM"` keeps
+#'   dotted source identifiers where present and otherwise follows `"input"`.
+#'   The source identities remain saved.
+#' @param unroll Whether construction should retain separate time occasions.
+#'   `FALSE` requests the existing checked static view. `TRUE` retains occasions.
+#'   This controls construction's output, independently of the source query's
+#'   `time_unroll` setting.
+#' @param params Specialist query settings created with [dagby_query_params()],
+#'   including query depth, growth-stage endpoints and alias disambiguation.
 #'
-#' @return A constructed `cf_dag`, or a `cf_dag_plan` when `dry_run = TRUE`.
-#'   Both retain the query, collected answers and construction records.
+#' @return A `dagby_recipe` containing query inputs and construction preferences.
+#'   Creating or printing it does not query the model or construct a DAG.
+#'   Source names and graph-dependent assumptions are checked when the relevant
+#'   stage runs.
+#' @examples
+#' recipe <- dagby(
+#'   crop = "barley",
+#'   treatments = "nitrogen_applied",
+#'   outcomes = "grain_protein",
+#'   randomised_treatment = FALSE
+#' )
+#' recipe
+#' \dontrun{
+#' dag <- recipe |> dagby_query() |> dagby_construct()
+#' }
 #' @export
-get_dag <- function(crop,
-                    treatments,
-                    outcomes,
-                    randomised_treatment,
-                    latents = NULL,
-                    label = NULL,
-                    query_graph = list(),
-                    construct_dag = list(),
-                    dry_run = FALSE,
-                    quiet = NULL
-                    ){
-  .gd_named_inputs(construct_dag, c("size", "unroll"), "construct_dag")
-  dag <- .gd_get_dag(crop, treatments, outcomes, randomised_treatment, latents, label,
-    query_graph, construct_dag, dry_run, quiet, original_call = match.call())
+dagby <- function(crop,
+                  treatments,
+                  outcomes,
+                  randomised_treatment,
+                  size = "smallest",
+                  keep_nodes = NULL,
+                  latents = NULL,
+                  columns = NULL,
+                  time_unroll = NULL,
+                  label = "id",
+                  unroll = FALSE,
+                  params = dagby_query_params()
+                  ){
+  required <- c("crop", "treatments", "outcomes", "randomised_treatment")
+  absent <- setdiff(required, names(match.call()))
+  if( length(absent) ){
+    stop("dagby() requires: ", paste(absent, collapse = ", "), ".", call. = FALSE)
+  }
+  if( !is.character(label) || length(label) != 1L || is.na(label) ||
+    !label %in% c("id", "readable", "input", "APSIM") ){
+    stop('label must be "id", "readable", "input" or "APSIM".', call. = FALSE)
+  }
+  query <- list(crop = crop, columns = columns, treatments = treatments,
+    outcomes = outcomes, randomised_treatment = randomised_treatment,
+    label = if( label == "id" ) NULL else label, params = params)
+  if( !missing(time_unroll) ){
+    query["time_unroll"] <- list(time_unroll)
+  }
+  recipe <- structure(list(query = query, construction = list(size = size,
+    latents = latents, keep_nodes = keep_nodes, unroll = unroll)), class = "dagby_recipe")
 
-  return(dag)
+  return(.dagby_validate_recipe(recipe))
 }
 
 
 #' Construct a DAG from a query
 #'
-#' Builds a DAG of the requested size from the supplied graph. It retains nodes
-#' used by selected adjustment sets and construction rules, then collapses the
-#' others.
+#' Builds a DAG of the requested size from the supplied graph. It retains
+#' variables used by selected adjustment sets and construction rules, reducing
+#' the graph while checking the retained adjustment sets against the source.
 #'
-#' @param graph A `query_graph()` result, a dagitty DAG or a constructed DAG.
+#' @param graph A `dagby_query()` result, a dagitty DAG or a constructed DAG.
+#'   A query result supplies its recipe's construction preferences for omitted
+#'   arguments. Explicit arguments override those preferences.
 #'   A constructed DAG is rebuilt from its saved query, with its saved
 #'   `latents` and `keep_nodes` unless they are supplied.
-#' @param size The requested number of nodes, counted as described below. The
-#'   closest available size is returned, with the larger size chosen on a tie.
-#'   `0` requests the smallest DAG and `Inf` the largest.
+#' @param size The requested number of source variables, counted as described
+#'   below. `"smallest"` (default) and `"largest"` request the limits. A number
+#'   requests the closest available size, choosing the larger on a tie.
+#'   `0` and `Inf` also request the smallest and largest. An omitted size inherits
+#'   the recipe's preference when `graph` is a query result.
 #' @param latents Variables or exact occasions to mark as unmeasured. These
 #'   markings do not change which nodes are kept. `NULL` treats all variables as
 #'   observed. When omitted for a plain DAG, its latent tags are used.
 #' @param keep_nodes Additional quantities or exact occasions to retain.
-#' @param dry_run Return the proposed graph, construction plan and checks.
+#' @param dry_run Compute a preview containing the proposed graph, construction
+#'   plan and checks. This runs construction, unlike creating a recipe.
 #' @param quiet `NULL` prints progress and how to change the size. `TRUE`
 #'   suppresses them. `FALSE` also prints the construction record.
 #' @param unroll `FALSE` requests a checked static view. `TRUE` keeps separate
 #'   time occasions. If omitted for a constructed DAG, its current view is kept.
 #'
 #' @details
-#' Size counts each source variable as one node, even when it appears at several
+#' Size counts each source variable once, even when it appears at several
 #' occasions or in several display segments. Variables combined in one displayed
 #' node still count separately. For a plain DAG without recorded identities,
 #' each exact node name counts separately.
@@ -95,8 +156,8 @@ get_dag <- function(crop,
 #'
 #' A static view must pass the source checks. If it fails, construction explains
 #' why. Use `unroll = TRUE` to request the DAG with separate time occasions.
-#' `prune_dag()` and `grow_dag()` change the size. `select_dag()` chooses an
-#' alternative at the current or requested size, listed by `dag_options()`.
+#' `dagby_prune()` and `dagby_grow()` change the size. `dagby_select()` chooses an
+#' alternative at the current or requested size, listed by `dagby_options()`.
 #'
 #' `options(causaliflower.ranked_steps = n)` sets the ranked search budget for
 #' smaller sizes. The default is 20000 steps.
@@ -104,8 +165,8 @@ get_dag <- function(crop,
 #' @return A constructed `cf_dag`, or a `cf_dag_plan` when `dry_run = TRUE`.
 #'   Both retain the query and checks.
 #' @export
-construct_dag <- function(graph,
-                          size = Inf,
+dagby_construct <- function(graph,
+                          size = "smallest",
                           latents = NULL,
                           keep_nodes = NULL,
                           dry_run = FALSE,
@@ -116,8 +177,23 @@ construct_dag <- function(graph,
   if( inherits(graph, "cf_dag_plan") ){
     graph <- graph$graph
   }
+  if( !inherits(graph, "cf_dag") && !is.null(input_record$recipe) ){
+    preferences <- .dagby_validate_recipe(input_record$recipe)$construction
+    if( missing(size) ){
+      size <- preferences$size
+    }
+    if( missing(latents) ){
+      latents <- preferences$latents
+    }
+    if( missing(keep_nodes) ){
+      keep_nodes <- preferences$keep_nodes
+    }
+    if( missing(unroll) ){
+      unroll <- preferences$unroll
+    }
+  }
   if( inherits(graph, "cf_dag") ){
-    saved <- dag_options(graph)
+    saved <- dagby_options(graph)
     if( missing(latents) ){
       latents <- saved$arguments$latents
     }
@@ -127,7 +203,7 @@ construct_dag <- function(graph,
     if( missing(unroll) ){
       unroll <- .cd_output_mode(graph)
     }
-    graph <- original_query(graph)
+    graph <- dagby_source(graph)
   }else if( missing(latents) && inherits(graph, "dagitty") &&
     !inherits(graph, "dag_by_query") && is.null(attr(graph, "query_record", exact = TRUE)) ){
     latents <- as.character(dagitty::latents(graph))
@@ -135,110 +211,81 @@ construct_dag <- function(graph,
       latents <- NULL
     }
   }
+  size <- .dagby_size(size)
   dag <- .cd_sized(graph, latents, keep_nodes, dry_run, quiet, size, unroll = unroll)
 
   return(.cd_with_input_record(dag, input_record))
 }
 
 
-## Guided inputs ##
-# Guided input collection never evaluates console answers as R code.
-#' Resolve the guided query and preserve its inputs
+## Recipe validation ##
+#' Validate a recipe without querying its source model
 #'
-#' @inheritParams get_dag
-#' @param original_call The wrapper's matched call, used to distinguish omitted
-#'   query inputs from supplied values before collecting interactive answers.
-#' @return A constructed DAG or dry-run plan with an input record containing
-#'   the resolved call and every interactive response, including invalid answers.
+#' @param recipe A `dagby_recipe` containing query inputs and construction preferences.
+#' @return The recipe with validated query parameters. Invalid inputs raise an error.
 #' @noRd
-.gd_get_dag <- function(crop,
-                        treatments,
-                        outcomes,
-                        randomised_treatment,
-                        latents = NULL,
-                        label = NULL,
-                        query_graph = list(),
-                        construct_dag = list(),
-                        dry_run = FALSE,
-                        quiet = NULL,
-                        original_call
-                        ){
-  supplied <- intersect(names(formals(get_dag)), names(original_call))
-  required <- c("crop", "treatments", "outcomes", "randomised_treatment")
-  missing_inputs <- setdiff(required, supplied)
-  if( length(missing_inputs) && !.gd_interactive() ){
-    stop("get_dag requires: ", paste(missing_inputs, collapse = ", "),
-      ". Supply these inputs or call interactively.", call. = FALSE)
+.dagby_validate_recipe <- function(recipe){
+  if( !inherits(recipe, "dagby_recipe") || !is.list(recipe) ||
+    !setequal(names(recipe), c("query", "construction")) ){
+    stop("Supply a recipe created by dagby().", call. = FALSE)
   }
-  responses <- new.env(parent = emptyenv())
-  responses$rows <- data.frame(field = character(), prompt = character(), response = character())
-  query_inputs <- list()
-  if( "crop" %in% supplied ){
-    query_inputs$crop <- .gd_query_value("crop", crop)
-  }else{
-    query_inputs$crop <- .gd_prompt_value("crop", responses)
+  .gd_named_inputs(recipe, c("query", "construction"), "recipe")
+  required <- c("crop", "columns", "treatments", "outcomes",
+    "randomised_treatment", "label", "params")
+  query <- .gd_named_inputs(recipe$query, c(required, "time_unroll"), "recipe query")
+  preferences <- .gd_named_inputs(recipe$construction,
+    c("size", "latents", "keep_nodes", "unroll"), "construction preferences")
+  if( !all(required %in% names(query)) ||
+    !all(c("size", "latents", "keep_nodes", "unroll") %in% names(preferences)) ){
+    stop("The recipe is incomplete. Create it with dagby().", call. = FALSE)
   }
-  if( "treatments" %in% supplied ){
-    query_inputs$treatments <- .gd_query_value("treatments", treatments)
-  }else{
-    query_inputs$treatments <- .gd_prompt_value("treatments", responses)
+  for( name in c("crop", "treatments", "outcomes", "randomised_treatment") ){
+    .gd_query_value(name, query[[name]])
   }
-  if( "outcomes" %in% supplied ){
-    query_inputs$outcomes <- .gd_query_value("outcomes", outcomes)
-  }else{
-    query_inputs$outcomes <- .gd_prompt_value("outcomes", responses)
+  for( name in c("columns", "latents", "keep_nodes") ){
+    value <- if( name == "columns" ) query$columns else preferences[[name]]
+    if( !is.null(value) && (!is.character(value) || anyNA(value) ||
+      any(!nzchar(trimws(value)))) ){
+      stop(name, " must contain nonempty node names, or be NULL.", call. = FALSE)
+    }
   }
-  if( "randomised_treatment" %in% supplied ){
-    query_inputs$randomised_treatment <- .gd_query_value("randomised_treatment", randomised_treatment)
-  }else{
-    query_inputs$randomised_treatment <- .gd_prompt_value("randomised_treatment", responses)
+  if( !is.null(query$label) && (!is.character(query$label) ||
+    length(query$label) != 1L || is.na(query$label) ||
+    !query$label %in% c("readable", "input", "APSIM")) ){
+    stop("The recipe has an invalid label setting. Create it with dagby().", call. = FALSE)
   }
-  .gd_flag(dry_run, "dry_run")
-  .gd_flag(quiet, "quiet", nullable = TRUE)
-  progress <- .gd_progress(quiet, "Query")
-  query_engine <- get("query_graph", envir = asNamespace("causaliflower"))
-  query_arguments <- .gd_named_inputs(query_graph,
-    setdiff(names(formals(query_engine)), c(required, "label", "quiet")), "query_graph")
-  construction_arguments <- construct_dag
-  if( "size" %in% names(construction_arguments) ){
-    .cd_size_value(construction_arguments$size)
+  time <- query$time_unroll
+  if( !is.null(time) ){
+    if( is.logical(time) ){
+      .gd_flag(time, "time_unroll")
+    }else if( !is.character(time) || length(time) != 1L || is.na(time) ||
+      !time %in% c("none", "all", "selective", "collapse", "pre_post") ){
+      stop('time_unroll must be "none", "all", "selective", "collapse", "pre_post", TRUE, FALSE or NULL.',
+        call. = FALSE)
+    }
   }
-  if( !"params" %in% names(query_arguments) || is.null(query_arguments$params) ){
-    query_arguments$params <- query_params()
-  }else{
-    query_arguments$params <- do.call(query_params,
-      .gd_named_inputs(query_arguments$params, names(formals(query_params)), "query_graph$params"))
+  params <- .gd_named_inputs(query$params, names(formals(dagby_query_params)), "params")
+  recipe$query$params <- do.call(dagby_query_params, params)
+  .dagby_size(preferences$size)
+  .gd_flag(preferences$unroll, "unroll")
+
+  return(recipe)
+}
+
+
+#' Translate a public size preference for the construction engine
+#'
+#' @param size "smallest", "largest" or a nonnegative numeric size.
+#' @return A numeric size, with zero and infinity representing the limits.
+#' @noRd
+.dagby_size <- function(size){
+  if( is.character(size) ){
+    if( length(size) != 1L || is.na(size) || !size %in% c("smallest", "largest") ){
+      stop('size must be "smallest", "largest" or a number of at least 0.', call. = FALSE)
+    }
+    return(if( size == "smallest" ) 0 else Inf)
   }
-  if( !is.infinite(query_arguments$params$query_depth) || !isTRUE(query_arguments$params$show_hidden_nodes) ){
-    stop("get_dag uses the complete query: query_depth = Inf and show_hidden_nodes = TRUE. ",
-      "For a deliberately restricted graph, call query_graph() then construct_dag().", call. = FALSE)
-  }
-  .gd_notify(progress, "Building the source query")
-  graph <- do.call("query_graph", c(query_inputs, list(label = label, quiet = quiet), query_arguments),
-    envir = asNamespace("causaliflower"))
-  .gd_notify(progress, paste0("Source query ready (", length(names(graph)), " nodes)"))
-  size <- if( "size" %in% names(construction_arguments) ){
-    construction_arguments$size
-  }else{
-    0
-  }
-  unroll_output <- if( "unroll" %in% names(construction_arguments) ) construction_arguments$unroll else FALSE
-  result <- .cd_sized(graph, latents, NULL, dry_run, quiet, size, unroll = unroll_output,
-    quick = !"size" %in% names(construction_arguments) || identical(as.numeric(size), 0),
-    requested_size = if( "size" %in% names(construction_arguments) ) size else NA_real_)
-  query_record <- attr(graph, "query_record", exact = TRUE)
-  if( !is.null(query_record$arguments) ){
-    query_arguments <- query_record$arguments[
-      intersect(c("columns", "time_unroll", "params"), names(query_record$arguments))]
-  }
-  resolved <- c(query_inputs, list(latents = latents, label = label, query_graph = query_arguments,
-    construct_dag = construction_arguments, dry_run = dry_run, quiet = quiet))
-  record <- list(resolved_call = as.call(c(list(as.name("get_dag")), resolved)), responses = responses$rows)
-  result <- .cd_with_input_record(result, record)
-  if( nrow(responses$rows) ){
-    message("Your responses and resolved call were saved to the output object. Use dag_call().")
-  }
-  return(result)
+  return(.cd_size_value(size))
 }
 
 
@@ -288,26 +335,7 @@ construct_dag <- function(graph,
 }
 
 
-#' Check whether guided input is available
-#'
-#' @return `TRUE` in an interactive R session, and `FALSE` otherwise.
-#' @noRd
-.gd_interactive <- function(){
-  return(interactive())
-}
-
-
-#' Read one guided input response
-#'
-#' @param prompt Text displayed before reading the response.
-#' @return The character response from `readline()`.
-#' @noRd
-.gd_readline <- function(prompt){
-  return(readline(prompt))
-}
-
-
-#' Validate a list of wrapper arguments
+#' Validate named settings
 #'
 #' @param x A list, empty or with unique nonempty names.
 #' @param allowed Argument names accepted by the underlying function.
@@ -335,6 +363,9 @@ construct_dag <- function(graph,
 #' @return `value`, unchanged. Missing or invalid values raise an error.
 #' @noRd
 .gd_query_value <- function(name, value){
+  if( name %in% c("treatments", "outcomes") && is.null(value) ){
+    return(NULL)
+  }
   if( name == "randomised_treatment" ){
     if( !is.logical(value) || length(value) != 1L || is.na(value) ){
       stop("randomised_treatment must be TRUE or FALSE.", call. = FALSE)
@@ -348,65 +379,6 @@ construct_dag <- function(graph,
     }, call. = FALSE)
   }
   return(value)
-}
-
-
-#' Parse a guided query answer
-#'
-#' @param name Required query field being collected.
-#' @param answer One nonempty character response. Node lists use commas.
-#'   Randomisation requires an explicit `TRUE` or `FALSE`, ignoring case.
-#' @return Validated character names or a logical design assumption.
-#' @noRd
-.gd_answer <- function(name, answer){
-  if( !is.character(answer) || length(answer) != 1L || is.na(answer) ||
-    !nzchar(trimws(answer)) ){
-    stop("An explicit answer is required.", call. = FALSE)
-  }
-  answer <- trimws(answer)
-  if( name == "randomised_treatment" ){
-    if( !toupper(answer) %in% c("TRUE", "FALSE") ){
-      stop("Enter TRUE or FALSE.", call. = FALSE)
-    }
-    return(toupper(answer) == "TRUE")
-  }
-  values <- if( name == "crop" ){
-    answer
-  }else{
-    trimws(strsplit(answer, ",", fixed = TRUE)[[1L]])
-  }
-  query_value <- .gd_query_value(name, values)
-
-  return(query_value)
-}
-
-
-#' Collect and record a valid query answer
-#'
-#' @param name Required query field being collected.
-#' @param responses Environment whose `rows` data frame receives the field,
-#'   prompt and response for each attempt, including rejected answers.
-#' @return The parsed answer. Invalid answers prompt again. Input ending without
-#'   a character response raises an error.
-#' @noRd
-.gd_prompt_value <- function(name, responses){
-  prompt <- switch(name,
-    crop = "Crop: ", treatments = "Treatment nodes (comma-separated): ",
-    outcomes = "Outcome nodes (comma-separated): ",
-    randomised_treatment = "Was the treatment randomised? Enter TRUE or FALSE: ")
-  return(repeat{
-    answer <- .gd_readline(prompt)
-    if( !is.character(answer) || length(answer) != 1L || is.na(answer) ){
-      stop("Input collection ended without an answer for ", name, ".", call. = FALSE)
-    }
-    responses$rows <- rbind(responses$rows,
-      data.frame(field = name, prompt = prompt, response = answer))
-    parsed_answer <- tryCatch(.gd_answer(name, answer), error = identity)
-    if( !inherits(parsed_answer, "error") ){
-      return(parsed_answer)
-    }
-    message(conditionMessage(parsed_answer))
-  })
 }
 
 
@@ -819,7 +791,7 @@ construct_dag <- function(graph,
     unresolved_names <- unique(c(unresolved$unmatched, names(unresolved$ambiguous)))
     if( length(unresolved_names) ){
       limitations <- c(limitations,
-        paste0("Column requests unresolved by query_graph: ", paste(unresolved_names, collapse = ", "), "."))
+        paste0("Column requests unresolved by dagby_query: ", paste(unresolved_names, collapse = ", "), "."))
     }
   }
   prepared <- list(graph = graph, record = record, map = map, reference = reference,
@@ -1005,7 +977,7 @@ construct_dag <- function(graph,
 
 
 ## Graph transformations and time summaries ##
-# Internal graph transformations used by get_dag(). Analysis remains temporal.
+# Internal graph transformations used by dagby_construct(). Analysis remains temporal.
 # Summaries of repeated processes are display abstractions with separate ledgers.
 
 #' Validate and deduplicate node requests
@@ -2106,7 +2078,7 @@ construct_dag <- function(graph,
 .gd_provenance <- function(dag){
   state <- attr(dag, "cf_provenance", exact = TRUE)
   if( is.null(state) || !is.list(state) || is.null(state$original_query) ){
-    stop("This DAG has no saved construction record. Start from get_dag() or construct_dag().", call. = FALSE)
+    stop("This DAG has no saved construction record. Run dagby_construct() on a query result or DAG first.", call. = FALSE)
   }
   return(state)
 }

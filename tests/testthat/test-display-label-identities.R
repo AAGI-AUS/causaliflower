@@ -132,19 +132,20 @@ test_that("query label fallback preserves canonical receipts and source structur
     node_aliases = stats::setNames(as.list(ids), ids),
     management_defaults = list(core = "G", per_crop = list()),
     crop_phases = crop_phases[crop_phases$crop == "barley", ], phase_of = phase_of[FALSE, ])
-  query <- query_graph
+  query <- .dagby_query_source
   environment(query) <- list2env(list(getExportedValue = function(package, name){
     if( identical(package, "causaliflower") && name %in% names(tables) ){
       return(tables[[name]])
     }
     return(base::getExportedValue(package, name))
-  }), parent = environment(query_graph))
+  }), parent = environment(.dagby_query_source))
+  testthat::local_mocked_bindings(.dagby_query_source = query, .package = "causaliflower")
   original_tables <- serialize(tables, NULL)
-  source <- query("barley", treatments = "G", outcomes = "H", time_unroll = "none", quiet = TRUE)
+  source <- recipe_test_query("barley", treatments = "G", outcomes = "H", time_unroll = "none", quiet = TRUE)
   original_source <- serialize(source, NULL)
   set.seed(251)
   rng <- .Random.seed
-  shown <- query("barley", treatments = "G", outcomes = "H", time_unroll = "none",
+  shown <- recipe_test_query("barley", treatments = "G", outcomes = "H", time_unroll = "none",
                  label = "readable", quiet = TRUE)
   mapping <- stats::setNames(ifelse(ids == "I", "Visible I", ids), ids)
   expect_setequal(names(shown), unname(mapping))

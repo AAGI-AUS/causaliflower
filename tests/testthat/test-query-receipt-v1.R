@@ -1,5 +1,5 @@
 receipt_query <- function(...) {
-  query_graph('barley', treatments = 'N_application',
+  recipe_test_query('barley', treatments = 'N_application',
               outcomes = c('grain_N', 'grain_wt'), quiet = TRUE, ...)
 }
 
@@ -71,7 +71,7 @@ test_that('all label modes retain every canonical node identity', {
 
 test_that('manual scope is recorded without substituting a full query', {
   g <- receipt_query(label = NULL, time_unroll = 'pre_post',
-                     params = query_params(query_depth = 1L, show_hidden_nodes = FALSE))
+                     params = dagby_query_params(query_depth = 1L, show_hidden_nodes = FALSE))
   check_receipt_identity(g)
   r <- attr(g, 'query_record')
   expect_identical(r$arguments$time_unroll, 'pre_post')
@@ -85,13 +85,13 @@ test_that('manual scope is recorded without substituting a full query', {
 
 test_that('recombination and detail contraction retain original memberships', {
   g <- receipt_query(label = 'readable',
-    params = query_params(node_recombination = TRUE))
+    params = dagby_query_params(node_recombination = TRUE))
   check_receipt_identity(g)
   r <- attr(g, 'query_record')
   expect_true(r$scope$node_recombination)
   expect_true(any(lengths(split(r$node_map$member_id, r$node_map$node)) > 1L))
   coarse <- slice_external_query(label = NULL, time_unroll = 'pre_post',
-    params = query_params(apsim_nodes_detail = 'subnode', force_acyclic = TRUE))
+    params = dagby_query_params(apsim_nodes_detail = 'subnode', force_acyclic = TRUE))
   check_receipt_identity(coarse)
   expect_true(any(attr(coarse, 'query_record')$node_map$quantity !=
                     attr(coarse, 'query_record')$node_map$member_id))

@@ -1,41 +1,44 @@
 # ==============================================================================
-# query_graph.R
+# dagby_query.R
 
 
 # Query graphs from the crop structural causal model
 # ==============================================================================
 
 
-#' Build a graph from a crop query
+#' Query the source graph for a recipe
 #'
-#' Constructs a causal graph for one crop from the bundled structural causal model
-#' derived from APSIM. The query selects the crop, management inputs and a finite
-#' temporal window. Defaults retain eligible hidden quantities and separate time
-#' occasions, without recombination or an assumption of randomisation.
+#' Builds the source graph described by a [dagby()] recipe from the bundled crop
+#' structural causal model derived from APSIM. Inspect or reuse this graph before
+#' passing it to [dagby_construct()] to construct a DAG of the requested size.
 #'
-#' @param crop Crop name. The bundled data support barley, wheat and maize.
-#' @param columns Optional data column names. These resolve management inputs and
-#'   identify observed quantities. Unmatched quantities are marked latent,
-#'   subject to the endpoint and recovery rules below.
-#' @param treatments,outcomes Quantity names or aliases. Requested endpoints are
-#'   retained, are not recombined, and receive exposure or outcome tags.
-#' @param randomised_treatment Defaults to `FALSE`. With `TRUE`, incoming directed
-#'   arrows are removed from every treatment occasion. Use this only when the
-#'   treatment was randomised. Otherwise it can remove genuine confounding paths
-#'   and invalidate the adjustment sets. Removed arrows and the assumption are saved.
-#' @param time_unroll Representation of lagged relationships. When omitted, uses
-#'   `"all"` if a treatment and lagged edges are present, otherwise `"none"`.
-#'   Explicit `NULL` means `"none"`.
-#' @param label `NULL` retains readable quantity keys. `"input"` uses a resolved
-#'   input alias as the label. `"readable"` uses the display label, falling
-#'   back to the quantity key when unavailable, with the same input override.
-#'   The legacy `"APSIM"` mode retains dotted keys where
-#'   available and otherwise follows `"input"`. The label to quantity map is saved.
+#' @param recipe A `dagby_recipe` created by [dagby()].
 #' @param quiet Suppress the build summary when `TRUE`.
-#' @param params Further options supplied by `query_params()`.
 #'
 #' @details
-#' Temporal modes:
+#' Set the crop, treatments, outcomes and query controls in [dagby()]. The
+#' recipe's construction settings (`size`, `keep_nodes`, `latents` and `unroll`)
+#' are carried forward for [dagby_construct()] and do not change this source query.
+#'
+#' Requested endpoints are retained, are not recombined, and receive exposure or
+#' outcome tags. With `randomised_treatment = TRUE`, incoming directed arrows are
+#' removed from every treatment occasion in ordinary queries. Queries anchored
+#' to growth stages remove incoming arrows only from their designated treatment
+#' occasions. Use this only when the treatment was randomised. Otherwise it can
+#' remove genuine confounding paths and invalidate the adjustment sets. Removed
+#' arrows and the assumption are saved.
+#'
+#' The recipe's `label = "id"` keeps quantity identifiers, with suffixes for
+#' distinct time occasions. `"input"` uses resolved input names, including
+#' supplied display names. `"readable"` uses display labels with the same input
+#' override, falling back to quantity keys when labels are unavailable or conflict.
+#' The legacy `"APSIM"` mode retains dotted
+#' keys where available and otherwise follows `"input"`. The label to quantity
+#' map is saved.
+#'
+#' The `time_unroll` setting in [dagby()] controls the temporal representation.
+#' When omitted, it uses `"all"` if a treatment and lagged edges are present,
+#' otherwise `"none"`. Explicit `NULL` means `"none"`. Temporal modes:
 #'
 #' - `"none"`: Keep one occurrence of each quantity and represent lagged arrows
 #'   without separate time occasions. This can produce cycles. A warning reports
@@ -63,16 +66,19 @@
 #' each lagged arrow forward one developmental phase. This is a discretisation
 #' choice, not a claim that every process takes a whole phase.
 #'
-#' A hidden quantity is mechanistic detail, not necessarily unobserved.
-#' `show_hidden_nodes = FALSE` removes eligible hidden quantities while retaining
-#' directed paths through them. This operation does not introduce bidirected
-#' arrows. Explicitly requested quantities are retained. Recovery policy
-#' exclusions are removed through the same directed operation regardless of this option.
+#' A hidden quantity is mechanistic detail, not necessarily unobserved. In
+#' [dagby_query_params()], `show_hidden_nodes = FALSE` removes eligible hidden
+#' quantities while retaining directed paths through them. This operation does
+#' not introduce bidirected arrows. Explicitly requested quantities are retained.
+#' Recovery policy exclusions use the same directed operation regardless of this option.
 #'
-#' Without `columns`, the default `observe_apsim_outputs = TRUE` treats ordinary
-#' included quantities as obtainable. This is a working assumption, not verified
-#' availability for every APSIM output. With `FALSE`, included hidden quantities
-#' are marked latent. Supplied columns take precedence over these automatic
+#' The recipe's `columns` resolve management inputs and identify observed
+#' quantities. Included quantities not matched by those columns are marked latent,
+#' subject to the endpoint and recovery rules. Without `columns`, the default
+#' `observe_apsim_outputs = TRUE` treats ordinary included quantities as obtainable.
+#' This is a working assumption, not verified availability for every APSIM
+#' output. With `FALSE`, included hidden quantities are marked latent.
+#' Supplied columns take precedence over these automatic
 #' observation tags. Query endpoints retain their observed status.
 #'
 #' The recovery policy distinguishes `yes`, quantities admitted only on explicit
@@ -91,37 +97,51 @@
 #' SWIM, coarser dotted grouping and supernode overrides raise errors. Supplied
 #' columns and endpoint names must resolve to the bundled keys or aliases.
 #'
-#' @return A dagitty object with its query record, resolved quantities, edges,
-#' roles, effective settings and source ordering metadata. The record describes
-#' the supplied query, including any deliberately restricted scope. Construction
-#' does not silently replace it with a fuller query. Use the returned `edges`
-#' for the current graph. Saved source structures may describe the graph before
-#' excluded quantities were removed.
+#' @return A dagitty object with its recipe, query record, resolved quantities,
+#' edges, roles, effective settings and source ordering metadata. The records
+#' describe the supplied recipe and query, including any deliberately restricted
+#' scope. Construction does not silently replace it with a fuller query. Use the
+#' returned `edges` for the current graph. Saved source structures may describe
+#' the graph before excluded quantities were removed.
 #' @examples
 #' \dontrun{
-#' dag <- query_graph(crop = "wheat")
-#' dag <- query_graph(crop = "barley", columns = c("plant_population", "soil_no3", "grain_yield"))
-#' # broad default: full configured graph in an uncompressed finite time frame
-#' dag <- query_graph(crop = "wheat", treatments = "N_fertiliser_applied",
-#'                    outcomes = "grain_wt")
-#' # complete ancestry relevant to the query
-#' dag <- query_graph(crop = "wheat", treatments = "N_fertiliser_applied",
-#'                    outcomes = "grain_wt", params = query_params(query_depth = 2L))
-#' # previous compact defaults, explicitly requested (validate sets on the full graph)
-#' dag <- query_graph(crop = "wheat", treatments = "N_fertiliser_applied",
-#'                    outcomes = "grain_wt", time_unroll = "pre_post",
-#'                    params = query_params(query_depth = 1L, show_hidden_nodes = FALSE))
-#' # experimental trial: randomised treatment has no parents (do() graph surgery)
-#' dag <- query_graph(crop = "wheat", treatments = "N_fertiliser_applied",
-#'                    outcomes = "grain_wt", randomised_treatment = TRUE)
-#' # developmental phase anchoring via query_params()
-#' dag <- query_graph(crop = "barley", treatments = "N_fertiliser_applied",
-#'                    outcomes = "grain_protein",
-#'                    params = query_params(treatment_growth_stage = "flowering",
-#'                                          outcome_growth_stage   = "harvest_ripe"))
+#' recipe <- dagby(crop = "wheat", treatments = "N_fertiliser_applied",
+#'                 outcomes = "grain_wt", randomised_treatment = FALSE)
+#' graph <- dagby_query(recipe)
+#' dag <- dagby_construct(graph)
+#'
+#' # Anchor treatment and outcome to developmental phases
+#' recipe <- dagby(crop = "barley", treatments = "N_fertiliser_applied",
+#'                 outcomes = "grain_protein", randomised_treatment = FALSE,
+#'                 params = dagby_query_params(treatment_growth_stage = "flowering",
+#'                                             outcome_growth_stage = "harvest_ripe"))
+#' graph <- dagby_query(recipe)
 #' }
 #' @export
-query_graph <- function(crop,
+dagby_query <- function(recipe, quiet = FALSE){
+  recipe <- .dagby_validate_recipe(recipe)
+  .gd_flag(quiet, "quiet")
+  graph <- do.call(".dagby_query_source", c(recipe$query, list(quiet = quiet)),
+                   envir = asNamespace("causaliflower"))
+  query_call <- as.call(list(quote(causaliflower::dagby_query), .dagby_recipe_call(recipe), quiet = quiet))
+  record <- attr(graph, "query_record", exact = TRUE)
+  record$call <- query_call
+  attr(graph, "query_record") <- record
+  attr(graph, "dagby_record") <- list(recipe = recipe, resolved_call = query_call)
+
+  return(graph)
+}
+
+
+#' Build the source graph from supplied query arguments
+#'
+#' @inheritParams dagby
+#' @param label NULL keeps source model identifiers. Other supported modes are
+#'   `"input"`, `"readable"` and `"APSIM"`.
+#' @param quiet Suppress the build summary when `TRUE`.
+#' @return The source graph with its scientific query record and effective settings.
+#' @noRd
+.dagby_query_source <- function(crop,
                         columns              = NULL,
                         treatments           = NULL,
                         outcomes             = NULL,
@@ -129,7 +149,7 @@ query_graph <- function(crop,
                         time_unroll          = NULL,
                         label                = NULL,
                         quiet                = FALSE,
-                        params               = query_params()
+                        params               = dagby_query_params()
                         ){
 
   .datatable.aware <- TRUE
@@ -161,10 +181,6 @@ query_graph <- function(crop,
   treatment_growth_stage <- params$treatment_growth_stage
   outcome_growth_stage <- params$outcome_growth_stage
   phase_window <- params$phase_window
-  # Guard: query_params() passed positionally lands on `columns`. Catch this common mistake early.
-  if( is.list(columns) && "query_depth" %in% names(columns) ){
-    stop("It looks like query_params() was passed as a positional argument and matched to 'columns'. Use the named argument instead: params = query_params(...). Please fix the call and try again.")
-  }
   if( !is.null(source_order) ){
     if( identical(water_model, "SWIM") ){
       stop("water_model = \"SWIM\" was requested, but the bundled slice has no SWIM family rows. Use water_model = \"SoilWater\".", call. = FALSE)
@@ -193,7 +209,7 @@ query_graph <- function(crop,
   alias_index <- .build_alias_index(aliases_active)
   # Normalise explicit time modes now. Leave omitted time_unroll as NULL until
   # the retained lagged graph is known. The mode definitions belong to
-  # query_graph() help.
+  # dagby_query() help.
   if( is.logical(time_unroll) ){
     time_unroll <- if( isTRUE(time_unroll) ){ "all" }else{ "none" }
   }else if( time_unroll_defaulted ){
@@ -212,10 +228,10 @@ query_graph <- function(crop,
   }
 
   # Phase anchored (developmental time) mode: triggered whenever treatment_growth_stage or
-  # outcome_growth_stage is supplied (both now via query_params()). It runs the absolute phase selective
+  # outcome_growth_stage is supplied (both now via dagby_query_params()). It runs the absolute phase selective
   # frame (.selective_phase_slice, with B0 at the sowing origin) instead of the frame anchored
-  # to treatment. When both growth stage params are NULL, query_graph uses time_unroll.
-  # query_params() validates phase_window, which is used only here.
+  # to treatment. When both growth stage params are NULL, dagby_query uses time_unroll.
+  # dagby_query_params() validates phase_window, which is used only here.
   phase_mode <- !is.null(treatment_growth_stage) || !is.null(outcome_growth_stage)
   if( phase_mode ){
     if( length(treatments) == 0L ){
@@ -246,7 +262,7 @@ query_graph <- function(crop,
     if( length(col_res$ambiguous) > 0L ){
       warning(paste0("These columns are ambiguous and were left unresolved: ",
                      paste(names(col_res$ambiguous), collapse = ", "),
-                     ". Rename them to a node_id or pass disambiguate = to resolve them."))
+                     ". Rename them to a node_id or set params = dagby_query_params(disambiguate = ...) in dagby() to resolve them."))
     }
     if( !is.null(source_order) && length(col_res$unmatched) > 0L ){
       stop("These columns match no node in the bundled slice: ",
@@ -462,26 +478,20 @@ query_graph <- function(crop,
                    paste(unanchored_t, collapse = ", ")))
     }
     for( o in setdiff(out_grouped, names(os_map)) ){ os_map[[ o ]] <- n_ph - 1L }
-    stock_ids <- intersect(persistent_ids, g_kept)
-    mgmt_ids <- if( "temporal_class" %in% names(nodes) ){
-      intersect(nodes$node_id[ nodes$temporal_class == "per_event" ], g_kept)
-    }else{
-      character(0L)
-    }
     pa <- if( exists("phase_of") && is.data.frame(phase_of) && nrow(phase_of) > 0L ){
       .resolve_phase_active(phase_of, crop, crop_phases)
     }else{
       NULL
     }
     sliced <- .selective_phase_slice(g_kept, g_contemp, g_lagged, g_initial, g_hidden,
-                                     ts_map, os_map, n_ph, stock_ids, mgmt_ids, persistent_ids, phase_window,
+                                     ts_map, os_map, n_ph, persistent_ids = persistent_ids, window = phase_window,
                                      phase_active = pa, show_hidden_nodes = TRUE)
   }else if( time_unroll %in% c("selective", "all", "collapse", "pre_post") ){
     # Same slicer, same window, same scope. "all" is the UNCOMPRESSED frame: every included base is
     # split at every slice rather than only the straddlers, so no lagged edge lacks an occasion to
     # land on. "selective" compresses bases that do not straddle treatment back to a single bare node. "collapse" runs the
     # SAME uncompressed frame as "all" (so every lagged edge has an occasion to land on) and defers the
-    # static projection to a final step in the query_graph tail. It is uncompressed here for the same
+    # static projection to a final step in the dagby_query tail. It is uncompressed here for the same
     # reason "all" is. "pre_post" is the straddler split of "selective", but each straddler collapses to
     # two occasions (<id>_pre_treatment / <id>_post_treatment by descendant status) instead of one per
     # slice. label_mode = "pre_post" selects that inside the slicer, with the promote loop keeping it
@@ -854,8 +864,8 @@ query_graph <- function(crop,
 
 #' Options for a crop query
 #'
-#' Creates the options list accepted by `query_graph()`. Defaults can be used
-#' without supplying any arguments.
+#' Creates the specialist options supplied to [dagby()] through its `params`
+#' argument. Defaults can be used without supplying any arguments.
 #'
 #' @param query_depth `Inf` retains the configured graph within the chosen crop and
 #'   temporal window. `2L` retains ancestors of treatment and outcome. Each
@@ -896,7 +906,7 @@ query_graph <- function(crop,
 #' @return A validated options list. Without growth stage anchors, temporal
 #' representation follows `time_unroll`.
 #' @export
-query_params <- function( query_depth            = Inf,
+dagby_query_params <- function( query_depth            = Inf,
                           water_model            = c("SoilWater", "SWIM"),
                           apsim_nodes_detail     = c("variable", "subnode", "node", "supernode"),
                           supernode_overrides    = NULL,
@@ -1149,10 +1159,10 @@ scm_to_dag <- function( scm, crop = NULL, water_model = NULL, time_slices = NULL
 #'
 #' Returns a separate graph using `node_name_readable` labels while retaining edges,
 #' roles, query records and endpoint identities. The input is unchanged. Supply
-#' a `query_graph()` result with its saved vertices and edges. A bare dagitty
+#' a `dagby_query()` result with its saved vertices and edges. A bare dagitty
 #' object or graph string is insufficient.
 #'
-#' @param dag A `query_graph()` result with its saved vertices and edges.
+#' @param dag A `dagby_query()` result with its saved vertices and edges.
 #' @param nodes Table with `node_id` and `node_name_readable` columns.
 #'   Defaults to `apsim_dag_nodes`.
 #' @details
@@ -1171,7 +1181,7 @@ readable_dag <- function( dag, nodes = apsim_dag_nodes ){
   exposures <- attr(dag, "treatments")
   outcomes <- attr(dag, "outcomes")
   if( is.null(vertices) || is.null(edges) ){
-    stop("readable_dag() needs a DAG produced by query_graph() (it reads the recovered_vertices and edges attributes). Please pass a query_graph() result and try again.")
+    stop("readable_dag() needs a DAG produced by dagby_query() (it reads the recovered_vertices and edges attributes). Please pass a dagby_query() result and try again.")
   }
   if( !("node_name_readable" %in% names(nodes)) ){
     stop("The node table must carry a 'node_name_readable' column to build display labels. Please pass nodes = apsim_dag_nodes and try again.")
@@ -1707,8 +1717,6 @@ get_management_options <- function( crop     = NULL,
 #' @param contemporaneous,lagged,initial Directed `from`/`to` data.tables. Initial
 #'   edges occur only at phase zero. Every lagged edge advances one phase.
 #' @param n_phases Positive integer number of phases, including the sowing origin.
-#' @param stock_ids,mgmt_ids Quantity IDs retained for caller compatibility.
-#'   These arguments do not restrict which edges are carried between phases.
 #' @param phase_active Optional list of inclusive active intervals by node ID.
 #'   Nodes absent from this list remain active in every phase.
 #' @return A list with `vertices` and `edges`, whose `edge_type` distinguishes
@@ -1716,7 +1724,6 @@ get_management_options <- function( crop     = NULL,
 #'   carries an `active_per_slice` count attribute.
 #' @noRd
 .unroll_phase_slices <- function( kept_ids, contemporaneous, lagged, initial, n_phases,
-                                  stock_ids, mgmt_ids = character(0L),
                                   phase_active = NULL ){
   .datatable.aware <- TRUE
   n_phases <- as.integer(n_phases)
@@ -2213,7 +2220,7 @@ get_management_options <- function( crop     = NULL,
 # `window` chooses the retained span: "origin" keeps slices 0..hi (initial conditions through B0).
 # "compact" keeps (earliest treatment phase - 1)..hi (one phase of confounder history before treatment,
 # no origin/B0). Returns the visible projected graph plus the split/promoted sets, the window, and
-# persistence edges - the same shape .selective_slice returns, so the query_graph tail consumes it as is.
+# persistence edges - the same shape .selective_slice returns, so the dagby_query tail consumes it as is.
 #' Project developmental phases while preserving endpoint occasions
 #'
 #' @param kept_ids Quantity IDs retained in the configured graph.
@@ -2222,7 +2229,6 @@ get_management_options <- function( crop     = NULL,
 #' @param treat_phase_map,out_phase_map Lists of selected phase indices by
 #'   treatment and outcome ID. Only the selected occasions are endpoint tags.
 #' @param n_phases Positive integer size of the crop's phase partition.
-#' @param stock_ids,mgmt_ids Stock and management quantity IDs passed to the unroller.
 #' @param persistent_ids Quantity IDs whose retained occasions need carryover.
 #' @param window `origin` retains sowing. `compact` starts one phase before
 #'   the earliest treatment, bounded below by zero.
@@ -2234,7 +2240,7 @@ get_management_options <- function( crop     = NULL,
 #'   retained occasions.
 #' @noRd
 .selective_phase_slice <- function( kept_ids, contemporaneous, lagged, initial, hidden_ids,
-                                    treat_phase_map, out_phase_map, n_phases, stock_ids, mgmt_ids,
+                                    treat_phase_map, out_phase_map, n_phases,
                                     persistent_ids = character(0L), window = c("origin", "compact"),
                                     phase_active = NULL, show_hidden_nodes = FALSE ){
   .datatable.aware <- TRUE
@@ -2257,7 +2263,7 @@ get_management_options <- function( crop     = NULL,
 
   # full phase unroll (working graph, never emitted). edge_type dropped - the recovered query graph is a
   # plain DAG, and B0 init edges flow through as ordinary from->to edges into the origin slice stock.
-  full <- .unroll_phase_slices(kept_ids, contemporaneous, lagged, initial, n_phases, stock_ids, mgmt_ids,
+  full <- .unroll_phase_slices(kept_ids, contemporaneous, lagged, initial, n_phases,
                                      phase_active = phase_active)
   all_vertex_slices <- as.integer(sub("^.*@t([0-9]+)$", "\\1", full$vertices))
   window_vertices <- full$vertices[ all_vertex_slices >= first_slice & all_vertex_slices <= last_slice ]

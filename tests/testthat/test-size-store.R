@@ -35,15 +35,15 @@ test_that("a second identical construction is answered from the session store", 
   query <- store_query()
   .cf_cache$clear()
   on.exit(.cf_cache$clear(), add = TRUE)
-  first <- heard(construct_dag(query, quiet = FALSE))
+  first <- heard(dagby_construct(query, quiet = FALSE, size = "largest"))
   stored <- .cf_cache$stats()
   expect_gt(stored$entries_by_kind[["builds"]], 0L)
-  second <- heard(construct_dag(query, quiet = FALSE))
+  second <- heard(dagby_construct(query, quiet = FALSE, size = "largest"))
   expect_identical(second, first)
   after <- .cf_cache$stats()
   expect_identical(after$entries_by_kind[["builds"]], stored$entries_by_kind[["builds"]])
   expect_gt(after$counts[["hits"]], stored$counts[["hits"]])
-  grown <- heard(grow_dag(first$value, Inf))
+  grown <- heard(dagby_grow(first$value, Inf))
   expect_identical(grown$value, first$value)
   expect_identical(.cf_cache$stats()$entries_by_kind[["builds"]], stored$entries_by_kind[["builds"]])
 })
@@ -52,11 +52,11 @@ test_that("without acceleration nothing is kept and the results are the same", {
   query <- store_query()
   .cf_cache$clear()
   on.exit(.cf_cache$clear(), add = TRUE)
-  kept <- list(heard(construct_dag(query)), heard(construct_dag(query, 0)), heard(construct_dag(query)))
+  kept <- list(heard(dagby_construct(query, size = "largest")), heard(dagby_construct(query, 0)), heard(dagby_construct(query, size = "largest")))
   old <- options(causaliflower.accelerate = FALSE)
   on.exit(options(old), add = TRUE)
   .cf_cache$clear()
-  plain <- list(heard(construct_dag(query)), heard(construct_dag(query, 0)), heard(construct_dag(query)))
+  plain <- list(heard(dagby_construct(query, size = "largest")), heard(dagby_construct(query, 0)), heard(dagby_construct(query, size = "largest")))
   expect_identical(.cf_cache$stats()$entries, 0L)
   expect_identical(plain, kept)
 })
@@ -65,20 +65,20 @@ test_that("a size counted and then returned with declared latents equals a fresh
   query <- store_query()
   .cf_cache$clear()
   on.exit(.cf_cache$clear(), add = TRUE)
-  largest <- suppressWarnings(suppressMessages(construct_dag(query, quiet = TRUE)))
-  sizes <- dag_options(suppressWarnings(suppressMessages(prune_dag(largest, 1, quiet = TRUE))))$sizes$variables
+  largest <- suppressWarnings(suppressMessages(dagby_construct(query, quiet = TRUE, size = "largest")))
+  sizes <- dagby_options(suppressWarnings(suppressMessages(dagby_prune(largest, 1, quiet = TRUE))))$sizes$variables
   expect_gt(length(sizes), 1L)
   size <- sizes[[length(sizes) - 1L]]
   latents <- "B"
   .cf_cache$clear()
-  counted <- heard(construct_dag(query, size, latents = latents))
+  counted <- heard(dagby_construct(query, size, latents = latents))
   builds <- .cf_cache$stats()$entries_by_kind[["builds"]]
-  expect_identical(heard(construct_dag(query, size))$value, suppressWarnings(suppressMessages(
-    construct_dag(query, size, quiet = TRUE))))
+  expect_identical(heard(dagby_construct(query, size))$value, suppressWarnings(suppressMessages(
+    dagby_construct(query, size, quiet = TRUE))))
   expect_identical(.cf_cache$stats()$entries_by_kind[["builds"]], builds)
   old <- options(causaliflower.accelerate = FALSE)
   on.exit(options(old), add = TRUE)
-  expect_identical(counted, heard(construct_dag(query, size, latents = latents)))
+  expect_identical(counted, heard(dagby_construct(query, size, latents = latents)))
 })
 
 test_that("total-effect validation gives dagitty's answer for every set", {
@@ -141,9 +141,9 @@ test_that("builds that differ only in kept nodes or column requests are kept apa
     return(query)
   }
   builds <- function() {
-    return(list(heard(construct_dag(store_query(), 0, keep_nodes = "C1")),
-      heard(construct_dag(store_query(), 0, keep_nodes = "C2")),
-      heard(construct_dag(columns("C1"), 0)), heard(construct_dag(columns("C2"), 0))))
+    return(list(heard(dagby_construct(store_query(), 0, keep_nodes = "C1")),
+      heard(dagby_construct(store_query(), 0, keep_nodes = "C2")),
+      heard(dagby_construct(columns("C1"), 0)), heard(dagby_construct(columns("C2"), 0))))
   }
   .cf_cache$clear()
   on.exit(.cf_cache$clear(), add = TRUE)
@@ -181,8 +181,8 @@ test_that("a build step that signals a condition other than progress is not stor
     occurrence = names(query))
   record$policy <- data.frame(node_id = names(query), recovered_node = "yes")
   attr(query, "query_record") <- record
-  first <- heard(construct_dag(query))
+  first <- heard(dagby_construct(query, size = "largest"))
   expect_gt(.cf_cache$stats()$entries_by_kind[["builds"]], 1L)
   expect_match(first$warnings, "No eligible direct/total adjustment set was found.", fixed = TRUE, all = FALSE)
-  expect_identical(heard(construct_dag(query)), first)
+  expect_identical(heard(dagby_construct(query, size = "largest")), first)
 })

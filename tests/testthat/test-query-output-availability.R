@@ -8,8 +8,8 @@ test_that("the bundled slice makes no claims about individual output locators", 
   expect_equal(nrow(.query_apsim_outputs("maize")), 0L)
   expect_equal(nrow(.query_apsim_outputs("wheat")), 0L)
   expect_equal(nrow(.query_apsim_outputs("rice")), 0L)
-  expect_error(query_params(observe_apsim_outputs = NA), "TRUE or FALSE")
-  expect_error(query_params(observe_apsim_outputs = "TRUE"), "TRUE or FALSE")
+  expect_error(dagby_query_params(observe_apsim_outputs = NA), "TRUE or FALSE")
+  expect_error(dagby_query_params(observe_apsim_outputs = "TRUE"), "TRUE or FALSE")
 })
 
 test_that("the output register filters crop, expression and verification status", {
@@ -42,10 +42,10 @@ test_that("hidden output assumption never overrides supplied columns", {
 
 test_that("barley query assumes ordinary nodes obtainable and records exceptions", {
   query <- function(observe = TRUE, columns = NULL, label = NULL) {
-    query_graph("barley", columns = columns, treatments = "N_application",
+    recipe_test_query("barley", columns = columns, treatments = "N_application",
       outcomes = c("grain_N", "grain_wt"), time_unroll = "selective",
       randomised_treatment = FALSE, label = label, quiet = TRUE,
-      params = query_params(observe_apsim_outputs = observe))
+      params = dagby_query_params(observe_apsim_outputs = observe))
   }
   g <- query()
   old <- query(FALSE)

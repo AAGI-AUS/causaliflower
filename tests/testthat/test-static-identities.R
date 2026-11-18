@@ -25,13 +25,13 @@ check_static_source_sets <- function(display, source) {
 
 test_that("explicit distinct variable identities keep literal time-like names apart", {
   graph <- static_identity_graph("P_t0 -> T; P_t0 -> Y; P_t1 -> T; P_t1 -> Y; T -> Y")
-  result <- suppressWarnings(construct_dag(graph, quiet = TRUE))
+  result <- suppressWarnings(dagby_construct(graph, quiet = TRUE, size = "largest"))
   expect_setequal(names(result), names(graph))
   actual <- .gd_signature(result)
   expected <- .gd_signature(graph)
   actual$labels <- expected$labels <- NULL
   expect_identical(actual, expected)
-  expect_identical(dag_options(result)$level$variables, 4L)
+  expect_identical(dagby_options(result)$level$variables, 4L)
   expect_setequal(attr(result, "cf_node_map")$member_id, names(graph))
   check_static_source_sets(result, graph)
 })
@@ -40,14 +40,14 @@ test_that("distinct variables stay apart alongside a genuinely repeated variable
   graph <- static_identity_graph(paste("P_t0 -> T; P_t0 -> Y; P_t1 -> T; P_t1 -> Y; T -> Y;",
     "A_t0 -> A_t1; A_t1 -> T; A_t1 -> Y"),
     c(P_t0 = "P_t0", P_t1 = "P_t1", A_t0 = "A", A_t1 = "A", T = "T", Y = "Y"))
-  result <- suppressWarnings(construct_dag(graph, quiet = TRUE))
-  expect_true(dag_options(result)$summary$applied)
+  result <- suppressWarnings(dagby_construct(graph, quiet = TRUE, size = "largest"))
+  expect_true(dagby_options(result)$summary$applied)
   expect_setequal(names(result), c("P_t0", "P_t1", "A", "T", "Y"))
   map <- attr(result, "cf_node_map")
   expect_setequal(map$occurrence[map$node == "A"], c("A_t0", "A_t1"))
   expect_setequal(map$occurrence[map$node == "P_t0"], "P_t0")
   expect_setequal(map$occurrence[map$node == "P_t1"], "P_t1")
-  expect_identical(dag_options(result)$level$variables, 5L)
+  expect_identical(dagby_options(result)$level$variables, 5L)
   check_static_source_sets(result, graph)
 })
 
@@ -67,12 +67,12 @@ test_that("aliases fold by canonical member identity despite different printed q
   expect_identical(.gd_signature(.gd_summary(reordered, keep = c("left_t0", "right_t1"))$graph),
     .gd_signature(summary$graph))
   check_static_source_sets(summary$graph, graph)
-  built <- suppressWarnings(construct_dag(graph, keep_nodes = c("left_t0", "right_t1"), quiet = TRUE))
+  built <- suppressWarnings(dagby_construct(graph, keep_nodes = c("left_t0", "right_t1"), quiet = TRUE, size = "largest"))
   actual <- .gd_signature(built)
   expected <- .gd_signature(summary$graph)
   actual$labels <- expected$labels <- NULL
   expect_identical(actual, expected)
-  expect_identical(dag_options(built)$level$variables, 3L)
+  expect_identical(dagby_options(built)$level$variables, 3L)
   expect_setequal(attr(built, "cf_node_map")$occurrence, names(graph))
 })
 
@@ -138,8 +138,8 @@ test_that("colliding display stems do not merge different recorded identities", 
 
 test_that("saved selections refuse older or altered construction versions", {
   graph <- static_identity_graph("T -> Y")
-  dag <- suppressWarnings(construct_dag(graph, quiet = TRUE))
-  saved <- dag_call(dag)
+  dag <- suppressWarnings(dagby_construct(graph, quiet = TRUE, size = "largest"))
+  saved <- dagby_call(dag)
   expect_identical(saved$candidate$binding$version, .cd_construction_version)
   expect_identical(.gd_signature(suppressWarnings(eval(saved))), .gd_signature(dag))
   for (version in c("variables-v1-root-variable-v1-explicit-helpers-v1", "changed")) {

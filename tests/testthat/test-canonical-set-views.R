@@ -16,13 +16,13 @@ test_that("summaries retain distinct endpoint occasions", {
   nodes <- names(source)
   attr(source, "cf_node_map") <- data.frame(node = nodes, quantity = .strip_slice(nodes),
     member_id = .strip_slice(nodes), occurrence = nodes)
-  expect_error(construct_dag(source, keep_nodes = "X_t1", quiet = TRUE),
+  expect_error(dagby_construct(source, keep_nodes = "X_t1", quiet = TRUE, size = "largest"),
     "distinct occasions of an endpoint", class = "cd_static_unavailable")
-  dag <- suppressWarnings(construct_dag(source, keep_nodes = "X_t1", quiet = TRUE, unroll = TRUE))
+  dag <- suppressWarnings(dagby_construct(source, keep_nodes = "X_t1", quiet = TRUE, unroll = TRUE, size = "largest"))
   expect_true(all(c("X_t1", "X_t2") %in% names(dag)))
-  expect_false(dag_options(dag)$summary$applied)
-  expect_match(dag_options(dag)$level$static_reason, "distinct occasions of an endpoint")
-  expect_identical(.gd_signature(dag), .gd_signature(temporal_dag(dag)))
+  expect_false(dagby_options(dag)$summary$applied)
+  expect_match(dagby_options(dag)$level$static_reason, "distinct occasions of an endpoint")
+  expect_identical(.gd_signature(dag), .gd_signature(dagby_temporal(dag)))
 })
 
 
@@ -32,10 +32,10 @@ test_that("time summaries do not invent an endpoint path by merging disconnected
   expect_false(proposed$applied)
   expect_match(proposed$reason, "proper directed path from treatment to outcome")
   expect_identical(.gd_signature(proposed$graph), .gd_signature(source))
-  expect_error(construct_dag(source, keep_nodes = c("A_t1", "A_t2"), quiet = TRUE),
+  expect_error(dagby_construct(source, keep_nodes = c("A_t1", "A_t2"), quiet = TRUE, size = "largest"),
     "proper directed path", class = "cd_static_unavailable")
-  dag <- construct_dag(source, keep_nodes = c("A_t1", "A_t2"), quiet = TRUE, unroll = TRUE)
-  expect_false(dag_options(dag)$summary$applied)
+  dag <- dagby_construct(source, keep_nodes = c("A_t1", "A_t2"), quiet = TRUE, unroll = TRUE, size = "largest")
+  expect_false(dagby_options(dag)$summary$applied)
   expect_setequal(names(dag), c("T", "A_t1", "A_t2", "Y"))
 })
 

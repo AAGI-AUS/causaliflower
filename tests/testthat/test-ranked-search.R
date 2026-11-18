@@ -83,23 +83,24 @@ test_that("a step budget is reported as a partial ranking, never as no set", {
   expect_identical(search$ranked$certificate, "budget")
   seen <- character()
   withr::local_options(causaliflower.ranked_steps = 1L)
-  dag <- withCallingHandlers(construct_dag(graph, 0, quiet = TRUE), warning = function(w) {
+  dag <- withCallingHandlers(dagby_construct(graph, 0, quiet = TRUE), warning = function(w) {
     seen <<- c(seen, conditionMessage(w))
     invokeRestart("muffleWarning")
   })
   expect_false(any(grepl("No eligible", seen)))
-  expect_false(dag_options(dag)$level$certified)
+  expect_false(dagby_options(dag)$level$certified)
 })
 
 test_that("an option that fails the source check is dropped and uncertifies the ranking", {
-  graph <- ranked_query("A -> T; A -> B; B -> Y; T -> M -> Y; T -> Y")
+  # C makes the full candidate larger, so size 0 exercises ranked construction
+  graph <- ranked_query("A -> T; A -> B; B -> Y; T -> M -> Y; T -> Y; T -> C")
   enumerate <- .cd_ranked_enumerate
   testthat::local_mocked_bindings(.cd_ranked_enumerate = function(region, labels, step_budget) {
     result <- enumerate(region, labels, step_budget)
     result$options <- c(result$options, list(integer()))
     result$realised <- c(result$realised, list(region$graph$nodes[region$y]))
     result
-  }, query_graph = function(...) graph, .package = "causaliflower")
+  }, .dagby_query_source = function(...) graph, .package = "causaliflower")
   reference <- .cd_prepare(graph, NULL, NULL)$selection
   for (effect in c("direct", "total")) {
     expect_warning(search <- .cd_ranked_search(.cd_prepare(graph, NULL, NULL), effect),
@@ -113,12 +114,13 @@ test_that("an option that fails the source check is dropped and uncertifies the 
     expect_true(all(.gd_validate_sets(reference, search$sets, effect)))
   }
   seen <- character()
-  dag <- withCallingHandlers(get_dag("barley", "T", "Y", TRUE, quiet = TRUE), warning = function(w) {
+  dag <- withCallingHandlers(dagby("barley", "T", "Y", TRUE, size = 0) |>
+    dagby_query(quiet = TRUE) |> dagby_construct(quiet = TRUE), warning = function(w) {
     seen <<- c(seen, conditionMessage(w))
     invokeRestart("muffleWarning")
   })
   expect_false(any(grepl("No eligible", seen)))
-  expect_false(dag_options(dag)$level$certified)
+  expect_false(dagby_options(dag)$level$certified)
 })
 
 test_that("a partial certificate is exact: every option within k is listed and nothing listed is spurious", {
@@ -148,11 +150,11 @@ test_that("a partial certificate is exact: every option within k is listed and n
 test_that("merging occasions is refused when the display hides or invents a route from treatment to outcome", {
   graph <- ranked_query("T -> Q_t1; Q_t1 -> Y; Q_t1 -> Z_t1; T -> Z_t1; Z_t1 -> Q_t2; Q_t2 -> Y; Q_t2 -> Z_t2; T -> Y",
                         columns = "Z")
-  expect_error(suppressWarnings(construct_dag(graph, quiet = TRUE)), "unroll = TRUE", fixed = TRUE)
-  dag <- suppressWarnings(construct_dag(graph, quiet = TRUE, unroll = TRUE))
-  record <- dag_options(dag)$summary
+  expect_error(suppressWarnings(dagby_construct(graph, quiet = TRUE, size = "largest")), "unroll = TRUE", fixed = TRUE)
+  dag <- suppressWarnings(dagby_construct(graph, quiet = TRUE, unroll = TRUE, size = "largest"))
+  record <- dagby_options(dag)$summary
   expect_false(record$applied)
-  expect_match(dag_options(dag)$level$static_reason, "route from treatment to outcome|represented occurrences")
+  expect_match(dagby_options(dag)$level$static_reason, "route from treatment to outcome|represented occurrences")
   expect_true(all(c("Z_t1", "Q_t2") %in% names(dag)))
 })
 
@@ -160,11 +162,11 @@ test_that("merging occasions is refused when a merged node's adjustment set is i
   graph <- ranked_query("Q_t1 -> T; Q_t1 -> Z_t1; T -> Z_t1; Z_t1 -> Q_t2; Q_t2 -> Y; Q_t2 -> Z_t2; T -> Y",
                         columns = "Z")
   reference <- .cd_prepare(graph, NULL, NULL)$selection
-  expect_error(suppressWarnings(construct_dag(graph, quiet = TRUE)), "unroll = TRUE", fixed = TRUE)
-  dag <- suppressWarnings(construct_dag(graph, quiet = TRUE, unroll = TRUE))
-  record <- dag_options(dag)$summary
+  expect_error(suppressWarnings(dagby_construct(graph, quiet = TRUE, size = "largest")), "unroll = TRUE", fixed = TRUE)
+  dag <- suppressWarnings(dagby_construct(graph, quiet = TRUE, unroll = TRUE, size = "largest"))
+  record <- dagby_options(dag)$summary
   expect_false(record$applied)
-  expect_match(dag_options(dag)$level$static_reason, "represented occurrences|route from treatment to outcome")
+  expect_match(dagby_options(dag)$level$static_reason, "represented occurrences|route from treatment to outcome")
   expect_true(all(c("Q_t1", "Q_t2") %in% names(dag)))
   for (effect in c("direct", "total")) {
     listed <- .gd_adjustment_sets(dag, effect, Inf)$sets
@@ -175,18 +177,20 @@ test_that("merging occasions is refused when a merged node's adjustment set is i
 })
 
 test_that("a budget stop with no option is recorded as unresolved, not as absence", {
-  graph <- ranked_query("A -> T; A -> Y; T -> Y")
+  # C keeps the compact result distinct from the full membership result
+  graph <- ranked_query("A -> T; A -> Y; T -> Y; T -> C")
   search <- .cd_ranked_search(.cd_prepare(graph, NULL, NULL), "total", steps = 1L)
   expect_length(search$sets, 0L)
   expect_false(search$complete)
   withr::local_options(causaliflower.ranked_steps = 1L)
-  testthat::local_mocked_bindings(query_graph = function(...) graph, .package = "causaliflower")
+  testthat::local_mocked_bindings(.dagby_query_source = function(...) graph, .package = "causaliflower")
   seen <- character()
-  dag <- withCallingHandlers(get_dag("barley", "T", "Y", TRUE, quiet = TRUE), warning = function(w) {
+  dag <- withCallingHandlers(dagby("barley", "T", "Y", TRUE, size = 0) |>
+    dagby_query(quiet = TRUE) |> dagby_construct(quiet = TRUE), warning = function(w) {
     seen <<- c(seen, conditionMessage(w))
     invokeRestart("muffleWarning")
   })
-  expect_identical(dag_options(dag)$quantities$total$state, "not_found")
+  expect_identical(dagby_options(dag)$quantities$total$state, "not_found")
   expect_true(any(grepl("not evidence that no set exists", seen)))
   expect_false(any(grepl("No eligible", seen)))
 })
@@ -195,9 +199,9 @@ test_that("a budget stop with no option is recorded as unresolved, not as absenc
 test_that("the ranked search refuses adjusted or selected nodes and unbounded budgets", {
   graph <- ranked_query("A -> T; A -> Y; T -> Y; S -> T; S -> Y")
   dagitty::adjustedNodes(graph) <- "S"
-  expect_error(construct_dag(graph, 0, quiet = TRUE), "adjusted or selected")
+  expect_error(dagby_construct(graph, 0, quiet = TRUE), "adjusted or selected")
   withr::local_options(causaliflower.ranked_steps = 1e12)
-  expect_error(construct_dag(ranked_query("A -> T; A -> Y; T -> Y"), 0, quiet = TRUE), "no larger than")
+  expect_error(dagby_construct(ranked_query("A -> T; A -> Y; T -> Y"), 0, quiet = TRUE), "no larger than")
 })
 
 test_that("a display that keeps time lists only sets valid on the observed source", {
@@ -215,10 +219,10 @@ test_that("a display that keeps time lists only sets valid on the observed sourc
     node_map = data.frame(node = names(graph), quantity = ids, member_id = ids, occurrence = names(graph)),
     policy = data.frame(node_id = unique(ids), recovered_node = "yes"))
   latents <- c("S1", "Q3_t0", "Q4_t1")
-  expect_error(suppressWarnings(construct_dag(graph, latents = latents, quiet = TRUE)), "unroll = TRUE", fixed = TRUE)
-  ranked <- suppressWarnings(construct_dag(graph, latents = latents, quiet = TRUE, unroll = TRUE))
-  expect_identical(dag_options(ranked)$quantities$direct$state, "sets")
-  expect_false(dag_options(ranked)$summary$applied)
+  expect_error(suppressWarnings(dagby_construct(graph, latents = latents, quiet = TRUE, size = "largest")), "unroll = TRUE", fixed = TRUE)
+  ranked <- suppressWarnings(dagby_construct(graph, latents = latents, quiet = TRUE, unroll = TRUE, size = "largest"))
+  expect_identical(dagby_options(ranked)$quantities$direct$state, "sets")
+  expect_false(dagby_options(ranked)$summary$applied)
   observed <- .cd_prepare(graph, NULL, NULL)$selection
   as_observed <- .gd_plain(ranked)
   dagitty::latents(as_observed) <- character()
@@ -227,7 +231,7 @@ test_that("a display that keeps time lists only sets valid on the observed sourc
     expect_gt(length(listed), 0L)
     expect_true(all(.gd_validate_sets(observed, listed, effect)), info = effect)
   }
-  expect_identical(vapply(dag_checks(ranked), `[[`, character(1), "status"), c(direct = "preserved", total = "preserved"))
+  expect_identical(vapply(dagby_checks(ranked), `[[`, character(1), "status"), c(direct = "preserved", total = "preserved"))
   expect_setequal(dagitty::latents(ranked), c("Q3_t0", "Q4_t1", "S1"))
 })
 
@@ -245,14 +249,14 @@ test_that("checking merged sets alone refuses a display whose merged node set is
   dagitty::exposures(graph) <- "Q4_t0"
   dagitty::outcomes(graph) <- "Q1_t2"
   attr(graph, "query_record") <- record
-  expect_error(construct_dag(graph, 0, quiet = TRUE), "merged nodes are read as all represented occurrences", fixed = TRUE)
-  dag <- suppressWarnings(construct_dag(graph, 0, quiet = TRUE, unroll = TRUE))
-  record <- dag_options(dag)$summary
+  expect_error(dagby_construct(graph, 0, quiet = TRUE), "merged nodes are read as all represented occurrences", fixed = TRUE)
+  dag <- suppressWarnings(dagby_construct(graph, 0, quiet = TRUE, unroll = TRUE))
+  record <- dagby_options(dag)$summary
   expect_false(record$applied)
-  expect_identical(dag_options(dag)$level$static_reason, paste("A temporally merged direct adjustment set is not valid on the source when its",
+  expect_identical(dagby_options(dag)$level$static_reason, paste("A temporally merged direct adjustment set is not valid on the source when its",
     "merged nodes are read as all represented occurrences. The temporal display was retained."))
-  expect_identical(.gd_signature(dag), .gd_signature(temporal_dag(dag)))
-  temporal <- temporal_dag(dag)
+  expect_identical(.gd_signature(dag), .gd_signature(dagby_temporal(dag)))
+  temporal <- dagby_temporal(dag)
   open <- .gd_summary(temporal, keep = names(temporal))
   expect_true(open$applied)
   sets <- .gd_adjustment_sets(open$graph, "direct", Inf)$sets
@@ -265,7 +269,7 @@ test_that("checking merged sets alone refuses a display whose merged node set is
   listed <- .gd_adjustment_sets(dag, "direct", Inf)$sets
   expect_gt(length(listed), 0L)
   expect_true(all(.gd_validate_sets(graph, listed, "direct")))
-  expect_identical(dag_checks(dag)$direct$status, "preserved")
+  expect_identical(dagby_checks(dag)$direct$status, "preserved")
 })
 
 test_that("ranked candidate tables preserve literal names and harmless renaming", {
@@ -279,16 +283,16 @@ test_that("ranked candidate tables preserve literal names and harmless renaming"
       expect_identical(search$table$resolved, list(labels[[2L]]))
       expect_identical(search$table$n_resolved, 1L)
     }
-    dag <- suppressWarnings(construct_dag(graph, 0, quiet = TRUE))
+    dag <- suppressWarnings(dagby_construct(graph, 0, quiet = TRUE))
     expect_setequal(names(dag), c(labels[[2L]], "T", "Y"))
-    expect_identical(dag_options(dag)$level$variables, 3L)
+    expect_identical(dagby_options(dag)$level$variables, 3L)
     for (effect in c("direct", "total")) {
       sets <- .gd_adjustment_sets(dag, effect, Inf)$sets
       expect_identical(sets, list(labels[[2L]]))
       expect_true(all(.gd_validate_sets(graph, sets, effect)))
-      expect_identical(dag_checks(dag)[[effect]]$status, "preserved")
-      expect_true(dag_checks(dag)[[effect]]$sets_minimal)
-      expect_true(dag_checks(dag)[[effect]]$listed_valid_on_source)
+      expect_identical(dagby_checks(dag)[[effect]]$status, "preserved")
+      expect_true(dagby_checks(dag)[[effect]]$sets_minimal)
+      expect_true(dagby_checks(dag)[[effect]]$listed_valid_on_source)
     }
   }
 })

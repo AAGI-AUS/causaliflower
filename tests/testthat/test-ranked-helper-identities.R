@@ -102,12 +102,12 @@ test_that("multiple helpers preserve exact minimal sets and ordinary latent node
 test_that("bidirected edges introduced by construction do not change valid empty sets", {
   graph <- helper_query(dagitty::dagitty("dag { T [exposure]; Y [outcome]; T -> Y;
     .bidirected_1 -> C; .bidirected_1 -> Y; H -> C; H -> T }"))
-  expect_no_warning(dag <- construct_dag(graph, 0, keep_nodes = c(".bidirected_1", "C"), quiet = TRUE))
+  expect_no_warning(dag <- dagby_construct(graph, 0, keep_nodes = c(".bidirected_1", "C"), quiet = TRUE))
   expect_setequal(names(dag), c(".bidirected_1", "C", "T", "Y"))
   expect_true(any(dagitty::edges(dag)$e == "<->"))
   for (effect in c("total", "direct")) {
-    expect_true(dag_checks(dag)[[effect]]$sets_minimal)
-    expect_identical(dag_checks(dag)[[effect]]$status, "preserved")
+    expect_true(dagby_checks(dag)[[effect]]$sets_minimal)
+    expect_identical(dagby_checks(dag)[[effect]]$status, "preserved")
     exact <- dagitty::adjustmentSets(dag, effect = effect)
     expect_length(exact, 1L)
     expect_length(exact[[1L]], 0L)
