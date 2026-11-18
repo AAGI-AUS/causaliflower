@@ -22,12 +22,13 @@ slice_external_query <- function(..., prohibit_left = FALSE) { # Exercise extern
                  management_defaults = list(core = ids[1L], per_crop = list()),
                  crop_phases = crop_phases[crop_phases$crop == "barley", ],
                  phase_of = phase_of[FALSE, ])
-  query <- query_graph
+  query <- .dagby_query_source
   environment(query) <- list2env(list(getExportedValue = function(package, name) { # Read only this fixture's tables
     if (identical(package, "causaliflower") && name %in% names(tables)) {
       return(tables[[name]])
     }
     return(base::getExportedValue(package, name))
-  }), parent = environment(query_graph))
-  return(query("barley", treatments = ids[1L], outcomes = ids[4L], quiet = TRUE, ...))
+  }), parent = environment(.dagby_query_source))
+  testthat::local_mocked_bindings(.dagby_query_source = query, .package = "causaliflower")
+  return(recipe_test_query("barley", treatments = ids[1L], outcomes = ids[4L], quiet = TRUE, ...))
 }

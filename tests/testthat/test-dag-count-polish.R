@@ -13,18 +13,18 @@ count_polish_graph <- function(edges) {
 
 test_that("distinct endpoint occasions need explicit unrolling, and a partly declared quantity is marked", {
   graph <- count_polish_graph("T -> A -> Y; Y_t0 -> A; T -> Y")
-  expect_error(construct_dag(graph, keep_nodes = "Y_t0", quiet = TRUE),
+  expect_error(dagby_construct(graph, keep_nodes = "Y_t0", quiet = TRUE, size = "largest"),
     "distinct occasions of an endpoint", class = "cd_static_unavailable")
-  result <- construct_dag(graph, keep_nodes = "Y_t0", quiet = TRUE, unroll = TRUE)
-  expect_false(dag_options(result)$summary$applied)
-  expect_match(dag_options(result)$level$static_reason, "distinct occasions of an endpoint")
-  expect_identical(.gd_signature(result), .gd_signature(temporal_dag(result)))
-  mixed <- suppressWarnings(construct_dag(count_polish_graph("T -> A_t0 -> Y; A_t1 -> A_t0; T -> Y"),
-                                          latents = "A_t1", keep_nodes = "A_t1", quiet = TRUE))
-  expect_true(dag_options(mixed)$summary$applied)
+  result <- dagby_construct(graph, keep_nodes = "Y_t0", quiet = TRUE, unroll = TRUE, size = "largest")
+  expect_false(dagby_options(result)$summary$applied)
+  expect_match(dagby_options(result)$level$static_reason, "distinct occasions of an endpoint")
+  expect_identical(.gd_signature(result), .gd_signature(dagby_temporal(result)))
+  mixed <- suppressWarnings(dagby_construct(count_polish_graph("T -> A_t0 -> Y; A_t1 -> A_t0; T -> Y"),
+                                          latents = "A_t1", keep_nodes = "A_t1", quiet = TRUE, size = "largest"))
+  expect_true(dagby_options(mixed)$summary$applied)
   expect_identical(dagitty::latents(mixed), "A")
-  expect_identical(dagitty::latents(temporal_dag(mixed)), "A_t1")
-  expect_identical(dag_options(mixed)$unmeasured$partial, list(A = list(unmeasured = "A_t1", observed = "A_t0")))
+  expect_identical(dagitty::latents(dagby_temporal(mixed)), "A_t1")
+  expect_identical(dagby_options(mixed)$unmeasured$partial, list(A = list(unmeasured = "A_t1", observed = "A_t0")))
 })
 
 

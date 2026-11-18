@@ -63,35 +63,35 @@ test_that("advertised diagnostic sizes remain reachable across cache states", {
       if (mode == "cold") .cf_cache$clear()
       suppressWarnings(expr)
     }
-    if (mode == "warm") suppressWarnings(construct_dag(graph, quiet = TRUE, unroll = TRUE))
-    small <- run(construct_dag(graph, 0, quiet = TRUE, unroll = TRUE))
-    expect_identical(dag_options(small)$level$variables, 7L)
-    expect_identical(dag_options(small)$sizes$variables, c(7L, 8L, 9L, 12L, 13L))
-    expect_true(dag_options(small)$sizes_complete)
-    exact <- run(construct_dag(graph, 8, quiet = TRUE, unroll = TRUE))
-    above <- run(construct_dag(graph, 9, quiet = TRUE, unroll = TRUE))
+    if (mode == "warm") suppressWarnings(dagby_construct(graph, quiet = TRUE, unroll = TRUE, size = "largest"))
+    small <- run(dagby_construct(graph, 0, quiet = TRUE, unroll = TRUE))
+    expect_identical(dagby_options(small)$level$variables, 7L)
+    expect_identical(dagby_options(small)$sizes$variables, c(7L, 8L, 9L, 12L, 13L))
+    expect_true(dagby_options(small)$sizes_complete)
+    exact <- run(dagby_construct(graph, 8, quiet = TRUE, unroll = TRUE))
+    above <- run(dagby_construct(graph, 9, quiet = TRUE, unroll = TRUE))
     calls <- list(exact,
-      run(select_dag(small, size = 8, quiet = TRUE)),
-      run(grow_dag(small, 1, quiet = TRUE)),
-      run(prune_dag(above, 1, quiet = TRUE)),
-      run(select_dag(exact, quiet = TRUE)),
-      run(select_dag(exact, select = 1, quiet = TRUE)),
-      run(eval(dag_call(exact))))
+      run(dagby_select(small, size = 8, quiet = TRUE)),
+      run(dagby_grow(small, 1, quiet = TRUE)),
+      run(dagby_prune(above, 1, quiet = TRUE)),
+      run(dagby_select(exact, quiet = TRUE)),
+      run(dagby_select(exact, select = 1, quiet = TRUE)),
+      run(eval(dagby_call(exact))))
     for (dag in calls) {
-      expect_identical(dag_options(dag)$level$variables, 8L)
-      expect_identical(.gd_signature(temporal_dag(dag)), expected)
-      expect_identical(dag_options(dag)$level$cap, 0)
-      expect_false(dag_options(dag)$level$certified)
-      expect_identical(dag_options(dag)$arguments$steps, 10L)
-      expect_identical(dag_options(dag)$candidate, dag_options(exact)$candidate)
+      expect_identical(dagby_options(dag)$level$variables, 8L)
+      expect_identical(.gd_signature(dagby_temporal(dag)), expected)
+      expect_identical(dagby_options(dag)$level$cap, 0)
+      expect_false(dagby_options(dag)$level$certified)
+      expect_identical(dagby_options(dag)$arguments$steps, 10L)
+      expect_identical(dagby_options(dag)$candidate, dagby_options(exact)$candidate)
     }
-    expect_identical(dag_options(run(prune_dag(exact, 1, quiet = TRUE)))$level$variables, 7L)
-    expect_identical(dag_options(run(grow_dag(exact, 1, quiet = TRUE)))$level$variables, 9L)
+    expect_identical(dagby_options(run(dagby_prune(exact, 1, quiet = TRUE)))$level$variables, 7L)
+    expect_identical(dagby_options(run(dagby_grow(exact, 1, quiet = TRUE)))$level$variables, 9L)
   }
   snapped <- function(size) {
     .cf_cache$clear()
     warnings <- character()
-    dag <- withCallingHandlers(suppressMessages(construct_dag(graph, size, unroll = TRUE)),
+    dag <- withCallingHandlers(suppressMessages(dagby_construct(graph, size, unroll = TRUE)),
       warning = function(warning) {
         warnings <<- c(warnings, conditionMessage(warning))
         invokeRestart("muffleWarning")
@@ -100,44 +100,49 @@ test_that("advertised diagnostic sizes remain reachable across cache states", {
   }
   tie <- snapped(10.5)
   expect_true(any(grepl("equally close", tie$warnings)))
-  expect_identical(dag_options(tie$dag)$level$variables, 12L)
-  expect_true(dag_options(tie$dag)$sizes_complete)
+  expect_identical(dagby_options(tie$dag)$level$variables, 12L)
+  expect_true(dagby_options(tie$dag)$sizes_complete)
   near <- snapped(10.6)
   expect_false(any(grepl("equally close", near$warnings)))
   expect_true(any(grepl("No eligible total adjustment set", near$warnings)))
-  expect_identical(dag_options(near$dag)$level$variables, 12L)
-  expect_false(dag_options(near$dag)$sizes_complete)
+  expect_identical(dagby_options(near$dag)$level$variables, 12L)
+  expect_false(dagby_options(near$dag)$sizes_complete)
   middle <- snapped(8.5)
   expect_true(any(grepl("Sizes 8 and 9 are equally close", middle$warnings)))
-  expect_identical(dag_options(middle$dag)$level$variables, 9L)
+  expect_identical(dagby_options(middle$dag)$level$variables, 9L)
   .cf_cache$clear()
-  expect_message(suppressWarnings(construct_dag(graph, 8.7, quiet = NULL, unroll = TRUE)),
-    "Requested 8.7 nodes\\. Returned 9.*Next smaller size: 8 nodes\\. Use prune_dag\\(dag, 1\\)")
-  static <- suppressWarnings(construct_dag(graph, 8, quiet = TRUE))
-  expect_false(dag_options(static)$arguments$unroll)
-  expect_true(dag_options(static)$level$static_available)
-  expect_identical(.gd_signature(temporal_dag(static)), expected)
-  expect_identical(.gd_signature(temporal_dag(suppressWarnings(select_dag(static, unroll = TRUE, quiet = TRUE)))), expected)
+  expect_message(suppressWarnings(dagby_construct(graph, 8.7, quiet = NULL, unroll = TRUE)),
+    "Requested 8.7 variables\\. Returned 9.*Next smaller size: 8 variables\\. Use dagby_prune\\(dag, 1\\)")
+  static <- suppressWarnings(dagby_construct(graph, 8, quiet = TRUE))
+  expect_false(dagby_options(static)$arguments$unroll)
+  expect_true(dagby_options(static)$level$static_available)
+  expect_identical(.gd_signature(dagby_temporal(static)), expected)
+  expect_identical(.gd_signature(dagby_temporal(suppressWarnings(dagby_select(static, unroll = TRUE, quiet = TRUE)))), expected)
 })
 
-test_that("guided defaults preserve the quick diagnostic candidate and explicit sizes snap", {
+test_that("recipe diagnostic choices match the constructor across cache states", {
   withr::local_options(causaliflower.ranked_steps = 10L)
   .cf_cache$clear()
   on.exit(.cf_cache$clear(), add = TRUE)
-  testthat::local_mocked_bindings(query_graph = function(...) diagnostic_choice_query(), .package = "causaliflower")
+  testthat::local_mocked_bindings(.dagby_query_source = function(...) diagnostic_choice_query(), .package = "causaliflower")
+  direct <- suppressWarnings(dagby_construct(diagnostic_choice_query(), unroll = TRUE, quiet = TRUE, size = "largest"))
   for (mode in c("cold", "warm", "disabled")) {
     withr::local_options(causaliflower.accelerate = mode != "disabled")
     if (mode != "warm") .cf_cache$clear()
-    guided <- suppressWarnings(get_dag("fixture", "T", "Y", FALSE,
-      construct_dag = list(unroll = TRUE), quiet = TRUE))
-    expect_identical(dag_options(guided)$level$variables, 8L)
-    expect_false(dag_options(guided)$level$smallest)
-    expect_identical(.gd_signature(temporal_dag(guided)), .gd_signature(diagnostic_choice_temporal()))
-    expect_identical(.gd_signature(temporal_dag(suppressWarnings(eval(dag_call(guided))))),
-      .gd_signature(temporal_dag(guided)))
-    explicit <- suppressWarnings(get_dag("fixture", "T", "Y", FALSE,
-      construct_dag = list(size = 0, unroll = TRUE), quiet = TRUE))
-    expect_identical(dag_options(explicit)$level$variables, 7L)
+    guided <- suppressWarnings(dagby("fixture", "T", "Y", FALSE,
+      size = "largest", unroll = TRUE) |> dagby_query(quiet = TRUE) |>
+      dagby_construct(quiet = TRUE))
+    expect_identical(dagby_options(guided)$level$variables, 13L)
+    expect_false(dagby_options(guided)$level$smallest)
+    expect_identical(.gd_signature(dagby_temporal(guided)), .gd_signature(dagby_temporal(direct)))
+    expect_identical(dagby_options(guided), dagby_options(direct))
+    expect_identical(dagby_checks(guided), dagby_checks(direct))
+    expect_identical(.gd_signature(dagby_temporal(suppressWarnings(eval(dagby_call(guided))))),
+      .gd_signature(dagby_temporal(guided)))
+    explicit <- suppressWarnings(dagby("fixture", "T", "Y", FALSE,
+      size = "smallest", unroll = TRUE) |> dagby_query(quiet = TRUE) |>
+      dagby_construct(quiet = TRUE))
+    expect_identical(dagby_options(explicit)$level$variables, 7L)
   }
 })
 
@@ -147,13 +152,13 @@ test_that("safe discovery skips do not claim an unproved smaller neighbour", {
   on.exit(.cf_cache$clear(), add = TRUE)
   graph <- dagitty::dagitty("dag { T [exposure]; Y [outcome]; I -> T; V -> Y; T -> Y }")
   messages <- character()
-  dag <- withCallingHandlers(suppressWarnings(construct_dag(graph, 3.7)), message = function(message) {
+  dag <- withCallingHandlers(suppressWarnings(dagby_construct(graph, 3.7)), message = function(message) {
     messages <<- c(messages, conditionMessage(message))
     invokeRestart("muffleMessage")
   })
-  expect_identical(dag_options(dag)$level$variables, 4L)
-  expect_false(dag_options(dag)$sizes_complete)
-  expect_null(dag_options(dag)$sizes_steps)
-  expect_true(any(grepl("Smaller, if any: prune_dag(dag, 1).", messages, fixed = TRUE)))
+  expect_identical(dagby_options(dag)$level$variables, 4L)
+  expect_false(dagby_options(dag)$sizes_complete)
+  expect_null(dagby_options(dag)$sizes_steps)
+  expect_true(any(grepl("Smaller, if any: dagby_prune(dag, 1).", messages, fixed = TRUE)))
   expect_false(any(grepl("Next smaller size:", messages, fixed = TRUE)))
 })

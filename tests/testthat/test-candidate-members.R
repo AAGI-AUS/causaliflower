@@ -23,18 +23,20 @@ test_that("a shared quantity label does not add source members to a candidate", 
     expect_identical(search$table$concepts, list("Alias"))
     expect_identical(search$table$n_concepts, 1L)
   }
-  testthat::local_mocked_bindings(query_graph = function(...) graph, .package = "causaliflower")
-  dag <- get_dag("barley", "T", "Y", FALSE, quiet = TRUE)
-  expect_setequal(names(temporal_dag(dag)), c("P", "T", "Y"))
+  testthat::local_mocked_bindings(.dagby_query_source = function(...) graph, .package = "causaliflower")
+  dag <- dagby("barley", "T", "Y", FALSE, size = 0) |>
+    dagby_query(quiet = TRUE) |> dagby_construct(quiet = TRUE)
+  expect_setequal(names(dagby_temporal(dag)), c("P", "T", "Y"))
   for (effect in c("direct", "total")) {
-    expect_identical(dag_options(dag)$quantities[[effect]]$members, "P")
-    expect_identical(dag_checks(dag)[[effect]]$status, "preserved")
+    expect_identical(dagby_options(dag)$quantities[[effect]]$members, "P")
+    expect_identical(dagby_checks(dag)[[effect]]$status, "preserved")
   }
 })
 
 test_that("distinct member alternatives with one label stay separate and correctly ranked", {
-  graph <- candidate_member_query("P -> T; P -> Q; Q -> Y; T -> Y",
-    quantities = c(P = "Alias", Q = "Alias", T = "T", Y = "Y"))
+  # C makes the full candidate larger, so size 0 exercises ranked construction
+  graph <- candidate_member_query("P -> T; P -> Q; Q -> Y; T -> Y; T -> C",
+    quantities = c(P = "Alias", Q = "Alias", T = "T", Y = "Y", C = "C"))
   for (effect in c("direct", "total")) {
     search <- .cd_ranked_search(.cd_prepare(graph, NULL, NULL), effect, 500L)
     expect_identical(search$table$resolved, list("P", "Q"))
@@ -43,12 +45,13 @@ test_that("distinct member alternatives with one label stay separate and correct
     expect_identical(search$table$label, c("Alias", "Alias"))
     expect_identical(search$table$option, 1:2)
   }
-  testthat::local_mocked_bindings(query_graph = function(...) graph, .package = "causaliflower")
-  dag <- get_dag("barley", "T", "Y", FALSE, quiet = TRUE)
+  testthat::local_mocked_bindings(.dagby_query_source = function(...) graph, .package = "causaliflower")
+  dag <- dagby("barley", "T", "Y", FALSE, size = 0) |>
+    dagby_query(quiet = TRUE) |> dagby_construct(quiet = TRUE)
   for (effect in c("direct", "total")) {
-    expect_identical(dag_options(dag)$quantities[[effect]]$set_size, 1)
-    expect_setequal(dag_options(dag)$quantities[[effect]]$members, c("P", "Q"))
-    expect_identical(dag_checks(dag)[[effect]]$status, "preserved")
+    expect_identical(dagby_options(dag)$quantities[[effect]]$set_size, 1)
+    expect_setequal(dagby_options(dag)$quantities[[effect]]$members, c("P", "Q"))
+    expect_identical(dagby_checks(dag)[[effect]]$status, "preserved")
   }
 })
 

@@ -11,8 +11,8 @@ test_that("saved selections bind the original source, occurrences and requests",
   }
   graph <- query("A -> B -> T; A -> T; A -> Y; T -> Y")
   record <- attr(graph, "query_record")
-  dag <- suppressWarnings(construct_dag(graph, quiet = TRUE))
-  saved <- dag_call(dag)
+  dag <- suppressWarnings(dagby_construct(graph, quiet = TRUE, size = "largest"))
+  saved <- dagby_call(dag)
   expect_identical(.gd_signature(suppressWarnings(eval(saved))), .gd_signature(dag))
 
   changed <- query("A -> B -> T; A -> Y; T -> Y")
@@ -39,7 +39,7 @@ test_that("saved selections bind the original source, occurrences and requests",
       state <- .gd_state(dag)
       state$original_query <- changed
       modified <- .gd_attach(dag, state)
-      expect_error(suppressWarnings(select_dag(modified, quiet = TRUE)),
+      expect_error(suppressWarnings(dagby_select(modified, quiet = TRUE)),
         "does not exactly match an available alternative")
     }
   }
@@ -54,8 +54,8 @@ test_that("saved selections bind effective attributes without a query receipt", 
     time_order = ranks))
   attr(graph, "cf_source_order") <- source_order
   attr(graph, "query_depth") <- 2
-  dag <- suppressWarnings(construct_dag(graph, quiet = TRUE))
-  saved <- dag_call(dag)
+  dag <- suppressWarnings(dagby_construct(graph, quiet = TRUE, size = "largest"))
+  saved <- dagby_call(dag)
   expect_identical(.gd_signature(suppressWarnings(eval(saved))), .gd_signature(dag))
 
   changed <- graph

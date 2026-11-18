@@ -53,7 +53,7 @@ test_that("changed ordering helper code changes the search identity even when it
   expect_identical(current_identity$ordering_adapter$sort, deparse(body(.query_sort)))
 })
 
-test_that("the recorded source order sorts quantities and the members construct_dag keeps", {
+test_that("the recorded source order sorts quantities and the members dagby_construct keeps", {
   source_order <- list(version = 1L, ranks = data.frame(node_id = c("B", "T", "A", "Y"), base_order = 1:4,
     at_order = 1:4, post_order = 1:4, pre_order = 1:4, time_order = 1:4))
   expect_identical(.query_sort(c("A", "B", "T", "Y"), source_order), c("B", "T", "A", "Y"))
@@ -66,5 +66,5 @@ test_that("the recorded source order sorts quantities and the members construct_
     requests = list(columns = list(resolved = character())),
     node_map = data.frame(node = nodes, quantity = nodes, member_id = nodes, occurrence = nodes),
     policy = data.frame(node_id = nodes, recovered_node = "yes"), source_order = source_order)
-  expect_identical(dag_options(construct_dag(graph, quiet = TRUE))$quantities$total$members, c("B", "A"))
+  expect_identical(dagby_options(dagby_construct(graph, quiet = TRUE, size = "largest"))$quantities$total$members, c("B", "A"))
 })

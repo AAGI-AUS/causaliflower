@@ -67,24 +67,28 @@ test_that("root retention preserves the policy boundary and included parent edge
   record$policy_applied <- TRUE
   record$policy$recovered_node[record$policy$node_id == "outside"] <- "no:fixture"
   attr(graph, "query_record") <- record
-  dag <- construct_dag(graph, unroll = TRUE, quiet = TRUE)
-  temporal <- temporal_dag(dag)
+  warnings <- testthat::capture_warnings(dag <- dagby_construct(graph, unroll = TRUE, quiet = TRUE, size = "largest"))
+  expect_identical(warnings, paste0(
+    "Recovery policy exclusions were folded through directed paths, not treated as latent variables. ",
+    "Adjustment checks use the folded graph. The supplied query is preserved separately."))
+  temporal <- dagby_temporal(dag)
   expect_true(all(c("P_t0", "P_t1", "Q") %in% names(temporal)))
   expect_false("P_t2" %in% names(temporal))
   edges <- dag_edges(temporal)
   expect_true(any(edges$v == "Q" & edges$w == "P_t1" & edges$e == "->"))
   expect_true(any(edges$v == "P_t0" & edges$w == "P_t1" & edges$e == "->"))
-  expect_identical(as.character(original_query(dag)), as.character(graph))
+  expect_identical(as.character(dagby_source(dag)), as.character(graph))
 })
 
 test_that("identification attribution excludes parents already kept by a size rule", {
   graph <- root_query("X1 -> L -> X2 -> M -> Y; L -> M", character(), c("X1", "X2"))
-  dag <- construct_dag(graph, unroll = TRUE, quiet = TRUE)
-  identification <- dag_options(dag)$identification
+  warnings <- testthat::capture_warnings(dag <- dagby_construct(graph, unroll = TRUE, quiet = TRUE, size = "largest"))
+  expect_identical(warnings, "No eligible total adjustment set was found. Returning a diagnostic graph. This is not a valid empty set.")
+  identification <- dagby_options(dag)$identification
   expect_true(identification$applied)
   expect_true("L" %in% identification$parents)
   expect_false("L" %in% identification$added_nodes)
-  expect_true("L" %in% names(temporal_dag(dag)))
+  expect_true("L" %in% names(dagby_temporal(dag)))
 })
 
 test_that("identification attribution excludes direct-path preservation", {
@@ -115,12 +119,23 @@ test_that("only otherwise unretained treatment parents are identification additi
   expect_true(all(pins$identification$parents %in% pins$nodes))
   for (reverse in c(FALSE, TRUE)) {
     .cf_cache$clear()
-    build <- function(full) if (full) construct_dag(graph, keep_nodes = "V", unroll = TRUE, quiet = TRUE) else
-      .cd_sized(graph, NULL, "V", FALSE, TRUE, 0, unroll = TRUE, quick = TRUE)
+    build <- function(full) {
+      warnings <- testthat::capture_warnings(value <- if (full) {
+        dagby_construct(graph, keep_nodes = "V", unroll = TRUE, quiet = TRUE, size = "largest")
+      } else {
+        # Compare ranked and full provenance even when their graphs coincide
+        query <- .cd_size_query(graph, "V")
+        definitions <- .cd_level_definitions(query, .cd_ranked_steps())
+        .cd_level(graph, NULL, "V", query, definitions, 1L, FALSE, TRUE,
+          sizes = list(unroll = TRUE), smallest = TRUE)
+      })
+      expect_identical(warnings, "No eligible total adjustment set was found. Returning a diagnostic graph. This is not a valid empty set.")
+      return(value)
+    }
     results <- lapply(if (reverse) c(TRUE, FALSE) else c(FALSE, TRUE), build)
     if (reverse) results <- rev(results)
-    expect_identical(.gd_signature(temporal_dag(results[[1L]])), .gd_signature(temporal_dag(results[[2L]])))
-    expect_identical(dag_options(results[[1L]])$identification$added_nodes, "U")
-    expect_false("U" %in% dag_options(results[[2L]])$identification$added_nodes)
+    expect_identical(.gd_signature(dagby_temporal(results[[1L]])), .gd_signature(dagby_temporal(results[[2L]])))
+    expect_identical(dagby_options(results[[1L]])$identification$added_nodes, "U")
+    expect_false("U" %in% dagby_options(results[[2L]])$identification$added_nodes)
   }
 })

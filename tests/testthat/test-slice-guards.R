@@ -16,23 +16,23 @@ test_that("only the complete matching slice identity enables source ordering", {
 })
 
 test_that("readable keys and source metadata are retained by the default query", {
-  expect_null(formals(query_graph)$label)
-  graph <- query_graph("barley", treatments = "N_application", outcomes = "grain_yield", quiet = TRUE)
+  expect_identical(formals(dagby)$label, "id")
+  graph <- recipe_test_query("barley", treatments = "N_application", outcomes = "grain_yield", quiet = TRUE)
   expect_true("nitrogen_applied" %in% names(graph))
   expect_identical(attr(graph, "cf_source_order"), attr(apsim_dag_nodes, "cf_source_order"))
   expect_identical(attr(graph, "query_record")$source_order, attr(graph, "cf_source_order"))
 })
 
 test_that("the slice refuses unavailable grouping and unresolved requested quantities", {
-  expect_error(query_graph("barley", treatments = "nitrogen_applied", outcomes = "grain_yield",
-    params = query_params(apsim_nodes_detail = "subnode"), quiet = TRUE), "readable variable keys")
-  expect_error(query_graph("barley", treatments = "nitrogen_applied", outcomes = "grain_yield",
-    params = query_params(supernode_overrides = c(nitrogen_applied = "node")), quiet = TRUE), "without supernode_overrides")
-  expect_error(query_graph("barley", treatments = c("nitrogen_applied", "unknown_treatment"),
+  expect_error(recipe_test_query("barley", treatments = "nitrogen_applied", outcomes = "grain_yield",
+    params = dagby_query_params(apsim_nodes_detail = "subnode"), quiet = TRUE), "readable variable keys")
+  expect_error(recipe_test_query("barley", treatments = "nitrogen_applied", outcomes = "grain_yield",
+    params = dagby_query_params(supernode_overrides = c(nitrogen_applied = "node")), quiet = TRUE), "without supernode_overrides")
+  expect_error(recipe_test_query("barley", treatments = c("nitrogen_applied", "unknown_treatment"),
     outcomes = "grain_yield", quiet = TRUE), "resolve to no single node.*unknown_treatment")
-  expect_error(query_graph("barley", treatments = "nitrogen_applied",
+  expect_error(recipe_test_query("barley", treatments = "nitrogen_applied",
     outcomes = c("grain_yield", "unknown_outcome"), quiet = TRUE), "resolve to no single node.*unknown_outcome")
-  expect_error(query_graph("barley", treatments = "nitrogen_applied", outcomes = "grain_yield",
+  expect_error(recipe_test_query("barley", treatments = "nitrogen_applied", outcomes = "grain_yield",
     columns = c(measured = "unknown_column"), quiet = TRUE), "match no node.*unknown_column")
 })
 

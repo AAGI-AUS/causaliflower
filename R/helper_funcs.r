@@ -706,50 +706,7 @@ native_pos_edits <- function(index, block){
 
 
 ################################################################################
-# draw_funcs.r
-################################################################################
-#' Collect children in node and edge order
-#'
-#' @param edges An edge table.
-#' @param nodes Parent node names in the required order.
-#' @return Character vector of unique children, ordered by the supplied nodes
-#'   and edges.
-#' @noRd
-children_edge_order <- function(edges, nodes){
-  edges <- normalise_edge_frame(edges)
-  directed <- edges[edges$e == "->", , drop = FALSE]
-  children <- Reduce(function(found, node){
-    children <- union(found, directed$w[directed$v == node])
-
-    return(children)
-  }, nodes, character())
-
-  return(children)
-}
-
-
-#' Collect parents in node and edge order
-#'
-#' @param edges An edge table.
-#' @param nodes Child node names in the required order.
-#' @return Character vector of unique parents, ordered by the supplied nodes and
-#'   edges.
-#' @noRd
-parents_edge_order <- function(edges, nodes){
-  edges <- normalise_edge_frame(edges)
-  directed <- edges[edges$e == "->", , drop = FALSE]
-  parents <- Reduce(function(found, node){
-    parents <- union(found, directed$v[directed$w == node])
-
-    return(parents)
-  }, nodes, character())
-
-  return(parents)
-}
-
-
-################################################################################
-# get_dag.R
+# dagby.R
 ################################################################################
 #' Build sort keys for recorded occurrences
 #'
@@ -838,6 +795,181 @@ parents_edge_order <- function(edges, nodes){
 #' @noRd
 .query_set_key <- function(nodes, source_order = NULL){
   return(paste(.query_order_key(nodes, source_order), collapse = "\r"))
+}
+
+
+################################################################################
+# dagby_query.R
+################################################################################
+#' Normalise aliases for matching
+#'
+#' Lowercases aliases and removes underscores, spaces and hyphens. Dots are
+#' retained so dotted identifiers remain distinct.
+#'
+#' @param x Character vector of aliases or node identifiers.
+#' @return A character vector of normalised aliases, or `character(0)` for
+#'   an empty input.
+#' @noRd
+.normalise_alias <- function( x ){
+  if( length(x) == 0L ){
+    return(character(0L))
+  }
+  return(gsub("[ _-]", "", tolower(x)))
+}
+
+
+#' Index aliases by their matching nodes
+#'
+#' @param node_aliases Character alias vectors in a list named by node identifier.
+#' @return A list named by normalised alias. Each entry contains every unique
+#'   node identifier matching that alias, in input order.
+#' @noRd
+.build_alias_index <- function( node_aliases ){
+  node_ids <- names(node_aliases)
+  flat_alias <- .normalise_alias(unlist(node_aliases, use.names = FALSE))
+  alias_nodes <- rep(node_ids, lengths(node_aliases))
+  index <- split(alias_nodes, flat_alias)
+  index <- lapply(index, function( matching_nodes ){
+    return(unique(matching_nodes))
+  })
+  return(index)
+}
+
+
+#' Resolve one alias against its matching nodes
+#'
+#' When several nodes match an alias, prefer a unique match to a normalised
+#' node identifier. Otherwise prefer a single visible candidate. A single
+#' candidate is accepted even if it is hidden.
+#'
+#' @param col One alias or node identifier to resolve.
+#' @param alias_index List returned by `.build_alias_index()`.
+#' @param hidden_ids Node identifiers marked hidden in the source table.
+#' @return A character vector containing one matching node identifier, all
+#'   candidates if the match is ambiguous, or no elements if nothing matches.
+#' @noRd
+.resolve_one <- function( col, alias_index, hidden_ids = character(0L) ){
+  candidates <- alias_index[[ .normalise_alias(col) ]]
+  if( is.null(candidates) ){
+    return(character(0L))
+  }
+  if( length(candidates) == 1L ){
+    return(candidates)
+  }
+  exact <- candidates[ .normalise_alias(candidates) == .normalise_alias(col) ]
+  if( length(exact) == 1L ){
+    return(exact)
+  }
+  visible <- setdiff(candidates, hidden_ids)
+  if( length(visible) == 1L ){
+    return(visible)
+  }
+  return(candidates)
+}
+
+
+#' Resolve column requests and retain unresolved inputs
+#'
+#' Named requests use their names as display labels and their values as the
+#' tokens to resolve. Unnamed requests use the token for both. Explicit
+#' disambiguation takes precedence over alias matching.
+#'
+#' @param columns Character vector of requested aliases, optionally named by
+#'   display label.
+#' @param alias_index List returned by `.build_alias_index()`.
+#' @param disambiguate Optional character vector of chosen node identifiers,
+#'   named by input token. These choices are used as supplied without alias
+#'   matching.
+#' @param hidden_ids Node identifiers marked hidden in the source table.
+#' @return A list with `resolved` identifiers named by display label,
+#'   `ambiguous` candidate vectors named by input token, and `unmatched` tokens.
+#'   An empty input returns all three empty components.
+#' @noRd
+.resolve_columns <- function( columns, alias_index, disambiguate = NULL, hidden_ids = character(0L) ){
+  resolved <- character(0L)
+  ambiguous <- list()
+  unmatched <- character(0L)
+  if( length(columns) == 0L ){
+    return(list(resolved = resolved, ambiguous = ambiguous, unmatched = unmatched))
+  }
+  display_names <- names(columns)
+  for( column_index in seq_along(columns) ){
+    column <- unname(columns[ column_index ])
+    display <- if ( !is.null(display_names) && nzchar(display_names[ column_index ]) ){
+      display_names[ column_index ]
+    }else{
+      column
+    }
+    if( length(disambiguate) > 0L && column %in% names(disambiguate) ){
+      resolved[ display ] <- unname(disambiguate[ column ])
+      next
+    }
+    candidates <- .resolve_one(column, alias_index, hidden_ids)
+    if( length(candidates) == 0L ){
+      unmatched <- c(unmatched, column)
+    }else if( length(candidates) == 1L ){
+      resolved[ display ] <- candidates
+    }else{
+      ambiguous[[ column ]] <- candidates
+    }
+  }
+  return(list(resolved = resolved, ambiguous = ambiguous, unmatched = unmatched))
+}
+
+
+#' Remove one recognised temporal suffix
+#'
+#' @param x Character vector of vertex names from the query engine.
+#' @return A character vector with one recognised suffix removed from each name.
+#'   Recognised suffixes are `_tN`, `@tN`, `_pre_treatment` and `_post_treatment`,
+#'   where `N` is a nonnegative integer. Other names are unchanged. Matching a
+#'   suffix does not establish source identity.
+#' @noRd
+.strip_slice <- function( x ){
+  return(sub("(_pre_treatment|_post_treatment|_t[0-9]+|@t[0-9]+)$", "", x))
+}
+
+
+################################################################################
+# draw_funcs.r
+################################################################################
+#' Collect children in node and edge order
+#'
+#' @param edges An edge table.
+#' @param nodes Parent node names in the required order.
+#' @return Character vector of unique children, ordered by the supplied nodes
+#'   and edges.
+#' @noRd
+children_edge_order <- function(edges, nodes){
+  edges <- normalise_edge_frame(edges)
+  directed <- edges[edges$e == "->", , drop = FALSE]
+  children <- Reduce(function(found, node){
+    children <- union(found, directed$w[directed$v == node])
+
+    return(children)
+  }, nodes, character())
+
+  return(children)
+}
+
+
+#' Collect parents in node and edge order
+#'
+#' @param edges An edge table.
+#' @param nodes Child node names in the required order.
+#' @return Character vector of unique parents, ordered by the supplied nodes and
+#'   edges.
+#' @noRd
+parents_edge_order <- function(edges, nodes){
+  edges <- normalise_edge_frame(edges)
+  directed <- edges[edges$e == "->", , drop = FALSE]
+  parents <- Reduce(function(found, node){
+    parents <- union(found, directed$v[directed$w == node])
+
+    return(parents)
+  }, nodes, character())
+
+  return(parents)
 }
 
 
@@ -2312,138 +2444,6 @@ strip_dag_quotes <- function(x, caller){
   }
 
   return(x)
-}
-
-
-################################################################################
-# query_graph.R
-################################################################################
-#' Normalise aliases for matching
-#'
-#' Lowercases aliases and removes underscores, spaces and hyphens. Dots are
-#' retained so dotted identifiers remain distinct.
-#'
-#' @param x Character vector of aliases or node identifiers.
-#' @return A character vector of normalised aliases, or `character(0)` for
-#'   an empty input.
-#' @noRd
-.normalise_alias <- function( x ){
-  if( length(x) == 0L ){
-    return(character(0L))
-  }
-  return(gsub("[ _-]", "", tolower(x)))
-}
-
-
-#' Index aliases by their matching nodes
-#'
-#' @param node_aliases Character alias vectors in a list named by node identifier.
-#' @return A list named by normalised alias. Each entry contains every unique
-#'   node identifier matching that alias, in input order.
-#' @noRd
-.build_alias_index <- function( node_aliases ){
-  node_ids <- names(node_aliases)
-  flat_alias <- .normalise_alias(unlist(node_aliases, use.names = FALSE))
-  alias_nodes <- rep(node_ids, lengths(node_aliases))
-  index <- split(alias_nodes, flat_alias)
-  index <- lapply(index, function( matching_nodes ){
-    return(unique(matching_nodes))
-  })
-  return(index)
-}
-
-
-#' Resolve one alias against its matching nodes
-#'
-#' When several nodes match an alias, prefer a unique match to a normalised
-#' node identifier. Otherwise prefer a single visible candidate. A single
-#' candidate is accepted even if it is hidden.
-#'
-#' @param col One alias or node identifier to resolve.
-#' @param alias_index List returned by `.build_alias_index()`.
-#' @param hidden_ids Node identifiers marked hidden in the source table.
-#' @return A character vector containing one matching node identifier, all
-#'   candidates if the match is ambiguous, or no elements if nothing matches.
-#' @noRd
-.resolve_one <- function( col, alias_index, hidden_ids = character(0L) ){
-  candidates <- alias_index[[ .normalise_alias(col) ]]
-  if( is.null(candidates) ){
-    return(character(0L))
-  }
-  if( length(candidates) == 1L ){
-    return(candidates)
-  }
-  exact <- candidates[ .normalise_alias(candidates) == .normalise_alias(col) ]
-  if( length(exact) == 1L ){
-    return(exact)
-  }
-  visible <- setdiff(candidates, hidden_ids)
-  if( length(visible) == 1L ){
-    return(visible)
-  }
-  return(candidates)
-}
-
-
-#' Resolve column requests and retain unresolved inputs
-#'
-#' Named requests use their names as display labels and their values as the
-#' tokens to resolve. Unnamed requests use the token for both. Explicit
-#' disambiguation takes precedence over alias matching.
-#'
-#' @param columns Character vector of requested aliases, optionally named by
-#'   display label.
-#' @param alias_index List returned by `.build_alias_index()`.
-#' @param disambiguate Optional character vector of chosen node identifiers,
-#'   named by input token. These choices are used as supplied without alias
-#'   matching.
-#' @param hidden_ids Node identifiers marked hidden in the source table.
-#' @return A list with `resolved` identifiers named by display label,
-#'   `ambiguous` candidate vectors named by input token, and `unmatched` tokens.
-#'   An empty input returns all three empty components.
-#' @noRd
-.resolve_columns <- function( columns, alias_index, disambiguate = NULL, hidden_ids = character(0L) ){
-  resolved <- character(0L)
-  ambiguous <- list()
-  unmatched <- character(0L)
-  if( length(columns) == 0L ){
-    return(list(resolved = resolved, ambiguous = ambiguous, unmatched = unmatched))
-  }
-  display_names <- names(columns)
-  for( column_index in seq_along(columns) ){
-    column <- unname(columns[ column_index ])
-    display <- if ( !is.null(display_names) && nzchar(display_names[ column_index ]) ){
-      display_names[ column_index ]
-    }else{
-      column
-    }
-    if( length(disambiguate) > 0L && column %in% names(disambiguate) ){
-      resolved[ display ] <- unname(disambiguate[ column ])
-      next
-    }
-    candidates <- .resolve_one(column, alias_index, hidden_ids)
-    if( length(candidates) == 0L ){
-      unmatched <- c(unmatched, column)
-    }else if( length(candidates) == 1L ){
-      resolved[ display ] <- candidates
-    }else{
-      ambiguous[[ column ]] <- candidates
-    }
-  }
-  return(list(resolved = resolved, ambiguous = ambiguous, unmatched = unmatched))
-}
-
-
-#' Remove one recognised temporal suffix
-#'
-#' @param x Character vector of vertex names from the query engine.
-#' @return A character vector with one recognised suffix removed from each name.
-#'   Recognised suffixes are `_tN`, `@tN`, `_pre_treatment` and `_post_treatment`,
-#'   where `N` is a nonnegative integer. Other names are unchanged. Matching a
-#'   suffix does not establish source identity.
-#' @noRd
-.strip_slice <- function( x ){
-  return(sub("(_pre_treatment|_post_treatment|_t[0-9]+|@t[0-9]+)$", "", x))
 }
 
 

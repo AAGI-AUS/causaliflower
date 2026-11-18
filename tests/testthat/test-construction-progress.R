@@ -119,14 +119,14 @@ test_that("construction progress is concise and quiet construction keeps the sam
   for (size in list(Inf, 0)) {
     messages <- character()
     printed <- capture.output(shown <- withCallingHandlers(
-      suppressWarnings(construct_dag(graph, size)), message = function(m) {
+      suppressWarnings(dagby_construct(graph, size)), message = function(m) {
         messages <<- c(messages, conditionMessage(m))
         invokeRestart("muffleMessage")
       }))
     expect_true(any(grepl("Preparing the reference graph", messages, fixed = TRUE)), info = size)
     expect_false(any(grepl("remaining|ETA|%", messages)), info = size)
     messages <- character()
-    suppressWarnings(quiet <- withCallingHandlers(construct_dag(graph, size, quiet = TRUE),
+    suppressWarnings(quiet <- withCallingHandlers(dagby_construct(graph, size, quiet = TRUE),
       message = function(m) {
         messages <<- c(messages, conditionMessage(m))
         invokeRestart("muffleMessage")

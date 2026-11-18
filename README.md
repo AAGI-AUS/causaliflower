@@ -25,26 +25,48 @@ See the introductory vignette `vignette("causaliflower-introduction")` or exampl
 
 ### Example code
 
-`get_dag()` constructs a DAG for a grain production system by querying the
-bundled structural causal model derived from APSIM. It combines querying and
-construction for barley, wheat and maize.
+Build a DAG for a crop treatment and outcome using the bundled structural
+causal model derived from APSIM. Barley, wheat and maize are supported.
 
-Specify the crop, treatment, outcome and whether the treatment was randomised:
+Start with a recipe that names the crop, treatment, outcome and whether the
+treatment was randomised. `dagby()` records these choices without running the
+query. The default `size = "smallest"` requests a compact DAG:
 
 ```R
 library(causaliflower)
 
-crop_dag <- get_dag(
+recipe <- dagby(
   crop = "barley",
   treatments = "nitrogen_applied",
   outcomes = "grain_protein",
   randomised_treatment = FALSE,
-  latents = NULL,
-  quiet = TRUE
+  size = "smallest"
 )
+
+recipe
+
+crop_dag <- recipe |>
+  dagby_query() |>
+  dagby_construct()
 
 plot_dagitty(crop_dag)
 ```
+
+`dagby_query()` builds the source graph. `dagby_construct()` then uses the
+recipe's settings to select and check a DAG. To change its size, set
+`size = "largest"` or a numeric variable count directly in `dagby()`, or override
+it in `dagby_construct()`. Size counts source variables, which can appear at
+several time occasions or as more than one drawn node.
+
+Use `keep_nodes` in the recipe to retain particular variables and `latents` to
+declare unmeasured variables. Construction otherwise treats all variables as
+observed. Specialist query controls remain available through
+`params = dagby_query_params(...)`.
+
+Read the adjustment checks with `dagby_checks(crop_dag)`. Use
+`dagby_options(crop_dag)` to inspect the size and known alternatives.
+`dagby_source(crop_dag)` retrieves the source query, and
+`dagby_temporal(crop_dag)` retrieves the graph with separate time occasions.
 
 Build a basic graph (dagitty object):
 
