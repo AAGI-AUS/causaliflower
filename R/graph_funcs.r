@@ -128,8 +128,8 @@ build_graph <- function(variables = NA,
     existing_graph_type <- dag_graph_type(existing_dag)
 
     if( existing_graph_type != "dag" ){
-      warning("build_graph() constructs a new DAG from inferred node roles; ",
-              "the input's mixed graph type and edge semantics are not retained. ",
+      warning("build_graph() constructs a new DAG from inferred node roles. ",
+              "The input's mixed graph type and edge semantics are not retained. ",
               "Use keep_edges(), add_nodes(), connect_nodes(), or join_graphs() ",
               "to edit a pdag or mag while retaining its type.", call. = FALSE)
     }
@@ -550,7 +550,7 @@ add_nodes <- function(dag,
     new_edges_list <- print_edges_helper(new_edges)
     cat( paste("c(", paste( unlist(new_edges_list), collapse=",\n\n" ), ")", sep = "\n", collapse = "") )
 
-    message("\nPrinted new edges - copy and paste to use as a vector object.\n")
+    message("\nPrinted new edges. Copy and paste to use as a vector object.\n")
   }
 
   new_coordinates <- NULL
@@ -562,8 +562,8 @@ add_nodes <- function(dag,
     new_coordinates$x[positioned] <- coordinates$x[positioned]
     new_coordinates$y[positioned] <- coordinates$y[positioned]
     if( copy_coincident_copies(new_coordinates, new_node_names) ){
-      warning("add_nodes(): the new nodes could not be placed apart from existing nodes; ",
-              "coordinates were regenerated for every node.", call. = FALSE)
+      warning("add_nodes(): the new nodes could not be placed apart from existing nodes. ",
+              "Coordinates were regenerated for every node.", call. = FALSE)
       new_coordinates <- NULL
     }
   }
@@ -708,7 +708,7 @@ connect_nodes <- function(dag,
 
     cat( paste("c(", paste( unlist(new_edges_list), collapse=",\n\n" ), ")", sep = "\n", collapse = "") )
 
-    message("\nPrinted new edges to assess - copy and paste in a .R file to use as a vector object.\n")
+    message("\nPrinted new edges to assess. Copy and paste in a .R file to use as a vector object.\n")
   }
 
   return(dag)
@@ -857,8 +857,8 @@ join_graphs <- function(dag,
     new_coordinates$x[positioned] <- coordinates$x[positioned]
     new_coordinates$y[positioned] <- coordinates$y[positioned]
     if( copy_coincident_copies(new_coordinates, new_node_names) ){
-      warning("join_graphs(): the new nodes could not be placed apart from existing nodes; ",
-              "coordinates were regenerated for every node.", call. = FALSE)
+      warning("join_graphs(): the new nodes could not be placed apart from existing nodes. ",
+              "Coordinates were regenerated for every node.", call. = FALSE)
       relayout <- TRUE
     }
   }
@@ -1118,7 +1118,7 @@ assess_edges <- function(dag,
 
     edges <- edge_strings(edges)
 
-    message("\nOutputted and printed edges to assess - copy and paste in a .R file to use as a vector object.")
+    message("\nOutputted and printed edges to assess. Copy and paste in a .R file to use as a vector object.")
 
     return(edges)
   }
@@ -1126,7 +1126,7 @@ assess_edges <- function(dag,
                       edges_to_keep = edge_strings(kept_edges) )
   if( nrow(edges) > 0L ){
     message("\nOutputting list containing 'edges_to_assess' and 'edges_to_keep'.
-            \n\nPrinted edges to assess - copy and paste in a .R file to use as a vector object.")
+            \n\nPrinted edges to assess. Copy and paste in a .R file to use as a vector object.")
   }
 
   return(edges_list)
@@ -1749,10 +1749,10 @@ causal_criteria_sequence <- function(edges,
                 num_arrow_to_remove <- num_arrow_to_remove + 1
                 removed_arrows[ num_arrow_to_remove ] <- arrow_count
 
-                criteria_answers[ arrow_count, criterion_num ] <- "n" # "no - remove edge"
+                criteria_answers[ arrow_count, criterion_num ] <- "n" # "no (remove edge)"
                 criterion_num <- num_criteria + 1
 
-                message( "Causal relationship '", arrow, "' assessed; edge removed.", sep="" )
+                message( "Causal relationship '", arrow, "' assessed. Edge removed.", sep="" )
 
                 check_ans <- TRUE
               }else{
@@ -1895,7 +1895,7 @@ add_nodes_helper <- function(dag,
   if( !is.null(position) && length(node_role) == 1 &&
       !node_role %in% c("confounder", "treatment", "mediator") ){
     stop("The position argument is not supported for role \"", node_role,
-         "\"; it would be ignored. Remove position, or use a supported role.",
+         "\". It would be ignored. Remove position, or use a supported role.",
          call. = FALSE)
   }
 
@@ -1905,7 +1905,7 @@ add_nodes_helper <- function(dag,
 
   }
   if( !identical(node_role, "instrument") ){
-    stop("add_nodes_helper() only connects instrument nodes; add_nodes() plans ",
+    stop("add_nodes_helper() only connects instrument nodes. add_nodes() plans ",
          "other roles with role_operation_edges().", call. = FALSE)
   }
 

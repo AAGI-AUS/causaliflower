@@ -145,7 +145,7 @@ test_that("automatic label placement uses the side with more room", {
     x = c(0, 0, 0, 1),
     y = c(0, 1, 3, 0)
   )
-  # The bottom node has unlimited room below it; the middle node has more
+  # The bottom node has unlimited room below it. The middle node has more
   # room above (2) than below (1).
   expect_identical(plot_label_sides(nodes, "auto"),
                    c("below", "above", "above", "above"))
@@ -320,7 +320,7 @@ test_that("plot_dagitty() validates arguments without shifting old ones", {
     )
   }
 
-  # Arguments up to curve keep their 0.0.1 positions; new ones follow.
+  # Arguments up to curve keep their 0.0.1 positions. New ones follow.
   expect_identical(
     names(formals(plot_dagitty))[1:10],
     c("dag", "seed", "x_step", "y_step", "layout_shape", "labels",

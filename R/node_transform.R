@@ -91,7 +91,7 @@ collapse_nodes <- function(dag, nodes, print_edges = FALSE){
     printed <- print_edges_helper(new_edges)
     cat(paste("c(", paste(unlist(printed), collapse = ",\n\n"), ")",
               sep = "\n", collapse = ""))
-    message("\nPrinted new edges - copy and paste to use as a vector object.\n")
+    message("\nPrinted new edges. Copy and paste to use as a vector object.\n")
   }
 
   return(dag)
@@ -124,7 +124,7 @@ collapse_validate_graph <- function(dag){
   }
   if( length(dagitty::adjustedNodes(graph)) > 0L ||
       length(selected_nodes(graph)) > 0L ){
-    stop("collapse_nodes(): adjusted and selected statuses are not supported; this function does not perform conditional projection.",
+    stop("collapse_nodes(): adjusted and selected statuses are not supported. This function does not perform conditional projection.",
          call. = FALSE)
   }
 

@@ -1010,8 +1010,8 @@ test_that("add_nodes() rejects position for the instrument role", {
   expect_error(
     add_nodes(dag, nodes = "IV", role = "instrument", position = first(),
               print_edges = FALSE),
-    paste0("The position argument is not supported for role \"instrument\"; ",
-           "it would be ignored. Remove position, or use a supported role."),
+    paste0("The position argument is not supported for role \"instrument\". ",
+           "It would be ignored. Remove position, or use a supported role."),
     fixed = TRUE
   )
 })

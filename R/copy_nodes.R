@@ -203,8 +203,8 @@ copy_nodes <- function(dag,
          call. = FALSE)
   }
   if( !isTRUE(dag_is_acyclic(candidate)) ){
-    stop(caller, ": the proposed copies would create a directed cycle; ",
-         "the graph was not changed.", call. = FALSE)
+    stop(caller, ": the proposed copies would create a directed cycle. ",
+         "The graph was not changed.", call. = FALSE)
   }
 
   new_coordinates <- NULL
@@ -226,8 +226,8 @@ copy_nodes <- function(dag,
     new_coordinates$y[positioned] <- existing_coordinates$y[positioned]
     if( copy_coincident_copies(new_coordinates, all_copies) ){
       warning(caller,
-              ": the copies could not be placed apart from existing nodes; ",
-              "coordinates were regenerated for every node.", call. = FALSE)
+              ": the copies could not be placed apart from existing nodes. ",
+              "Coordinates were regenerated for every node.", call. = FALSE)
       new_coordinates <- NULL
     }
   }
@@ -243,7 +243,7 @@ copy_nodes <- function(dag,
     printed <- print_edges_helper(new_edges)
     cat(paste("c(", paste(unlist(printed), collapse = ",\n\n"), ")",
               sep = "\n", collapse = ""))
-    message("\nPrinted new edges - copy and paste to use as a vector object.\n")
+    message("\nPrinted new edges. Copy and paste to use as a vector object.\n")
   }
 
   return(candidate)

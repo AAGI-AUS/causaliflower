@@ -262,19 +262,19 @@ role_leaf <- function(x, top_name = NULL, caller = "role input"){
 
   numbered_both <- grepl("^both[0-9]+$", value_names)
   if( any(numbered_both) ){
-    stop(caller, ": 'both' is a scalar annotation; mark one node at a time.",
+    stop(caller, ": 'both' is a scalar annotation. Mark one node at a time.",
          call. = FALSE)
   }
   both <- value_names == "both"
   if( identical(top_name, "both") ){
     if( length(values) != 1L ){
-      stop(caller, ": 'both' is a scalar annotation; mark one node at a time.",
+      stop(caller, ": 'both' is a scalar annotation. Mark one node at a time.",
            call. = FALSE)
     }
     both[] <- TRUE
   }
   if( sum(both) > 1L ){
-    stop(caller, ": 'both' is a scalar annotation; mark one node at a time.",
+    stop(caller, ": 'both' is a scalar annotation. Mark one node at a time.",
          call. = FALSE)
   }
 
@@ -1483,8 +1483,8 @@ resolve_position <- function(position, new_nodes, spine) {
     return(matches)
   }, logical(1))
   if (sum(is_empty) > 1L) {
-    stop("position: at most one empty (catch-all) clause is allowed; ",
-         "only one position helper may omit its nodes argument.",
+    stop("position: at most one empty (catch-all) clause is allowed. ",
+         "Only one position helper may omit its nodes argument.",
          call. = FALSE)
   }
 
@@ -1495,7 +1495,7 @@ resolve_position <- function(position, new_nodes, spine) {
   }), use.names = FALSE)
   dups <- unique(claimed[duplicated(claimed)])
   if (length(dups)) {
-    stop("position: each new node may appear in at most one clause; '",
+    stop("position: each new node may appear in at most one clause. '",
          paste(dups, collapse = "', '"), "' named more than once.", call. = FALSE)
   }
   not_new <- setdiff(claimed, new_nodes)

@@ -87,7 +87,7 @@ test_that("private strategy and role tables retain their schema", {
   expect_equal(nrow(confounder), 1L)
   expect_identical(
     confounder$conditioning_guidance,
-    "member of at least one minimal adjustment set for the total effect; use a complete set"
+    "member of at least one minimal adjustment set for the total effect. Use a complete set"
   )
   mediator <- roles[variable == "M" & role == "mediator"]
   expect_equal(nrow(mediator), 1L)

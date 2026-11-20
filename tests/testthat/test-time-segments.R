@@ -1,4 +1,4 @@
-# Author's rule for the static view: fold all occasions. The
+# Rule for the static view: fold all occasions. The
 # quantities on a common cycle of the fold are split symmetrically into the
 # fewest contiguous segments that restore acyclicity (fewest display edges,
 # then earliest cut). Analysis stays on the graph unrolled over time.
@@ -237,9 +237,8 @@ test_that("several feedback groups are cut together, not one after another by na
 })
 
 test_that("a residual tie between feedback groups is decided by name, recorded and warned about", {
-  # Reviewer fixture (stage-d/review-d-r2-ties.R): both combinations have 18
-  # display edges and the cut positions (0, 1). The group that comes first by name takes
-  # its earliest cut.
+  # Both combinations have 18 display edges and the cut positions (0, 1). The group
+  # that comes first by name takes its earliest cut.
   pair <- function(a, b) paste0(a, "_t0 -> ", b, "_t1; ", a, "_t1 -> ", b, "_t2; ", b, "_t0 -> ", a, "_t2; ",
     a, "_t0 -> ", a, "_t1; ", a, "_t1 -> ", a, "_t2; ", b, "_t0 -> ", b, "_t1; ", b, "_t1 -> ", b, "_t2")
   tied <- function(a, b, c, d) segment_graph(paste0(pair(a, b), "; ", pair(c, d), "; ",
@@ -283,10 +282,10 @@ test_that("a residual tie between feedback groups is decided by name, recorded a
 })
 
 test_that("merged sets are checked on segmented displays and the shown edges across repeated stages keep their sets valid", {
-  # Reviewer probe seed 51 (stage-d/review-d-setcheck.R): under Stage D the
+  # Before edges across repeated stages were shown, the
   # segmented fold passed every structural guard and only the merged set
   # check refused it (an omitted edge across repeated stages made a displayed set
-  # invalid). Under Stage D.1 that edge is shown between its segments, every
+  # invalid). Now that edge is shown between its segments, every
   # displayed set is valid when read as its occurrences, and the check
   # accepts the display. A refusing check still returns the temporal graph.
   edges <- paste(
@@ -346,9 +345,8 @@ test_that("a segment name that coincides with another quantity keeps the tempora
 })
 
 test_that("a tie decided by name between two eligible edges across repeated stages is counted and reported", {
-  # Reviewer fixture (stage-d1/review-d1-conflict.R): A_t0 -> B_t1 and
-  # C_t0 -> D_t1 each keep the display acyclic alone but together close a
-  # cycle through the unsegmented connectors U and V. Both have lag 1 and
+  # A_t0 -> B_t1 and C_t0 -> D_t1 each keep the display acyclic alone but
+  # together close a cycle through the unsegmented connectors U and V. Both have lag 1 and
   # source occasion 0, so the edge key decides. The graph is symmetric under
   # (A,B,M,N,U) <-> (C,D,P,R,V).
   tied <- function(a, b, c, d, m, n, p, r, u, v) segment_graph(paste0(
@@ -377,7 +375,7 @@ test_that("a tie decided by name between two eligible edges across repeated stag
   # Edges of different tiers never count as a tie: with the C/D pattern shifted
   # one occasion later, C_t1 -> D_t2 (lag 1, occasion 1) is blocked by the
   # earlier tier's A_t0 -> B_t1 (lag 1, occasion 0). The outcome does not depend
-  # on names and is not a tie (reviewer fixture, stage-d1/review-d1-r2-ties.R).
+  # on names and is not a tie.
   cross <- function(a, b, c, d, m, n, p, r, u, v) segment_graph(paste0(
     a, "_t0 -> ", m, "_t1; ", m, "_t0 -> ", a, "_t1; ", b, "_t0 -> ", n, "_t1; ", n, "_t0 -> ", b, "_t1; ",
     c, "_t1 -> ", p, "_t2; ", p, "_t1 -> ", c, "_t2; ", d, "_t1 -> ", r, "_t2; ", r, "_t1 -> ", d, "_t2; ",
@@ -397,9 +395,9 @@ test_that("a tie decided by name between two eligible edges across repeated stag
 })
 
 test_that("manual edits and the view without selected sets validate their displayed sets on the source", {
-  # Reviewer fixture (stage-d1/review-d1-restore.R): a timed treatment on a
-  # feedback cycle with a latent quantity. The segmented display would report
-  # the empty set although the source has an open latent backdoor path.
+  # A timed treatment on a feedback cycle with a latent quantity. The segmented
+  # display would report the empty set although the source has an open latent
+  # backdoor path.
   base <- dagitty::dagitty(paste("dag { Q1_t2 -> Q3_t2; Q1_t3 -> Q3_t3; Q2_t0 -> Q1_t2; Q3_t2 -> Q1_t3;",
                                  "Q3_t0 -> Q3_t1; Q3_t1 -> Q3_t2; Q3_t0 -> T_t1; T_t1 -> Q2_t3; Q1_t3 -> Y }"))
   dagitty::exposures(base) <- "T_t1"
@@ -513,9 +511,8 @@ test_that("an endpoint with one occasion on a feedback cycle stays uncut while i
 })
 
 test_that("edges across repeated stages are shown between segments when the display stays acyclic", {
-  # Reviewer fixture (stage-d/review-d-betweenrep-min.log, seed 70): Q1_t1 -> Q2_t2
-  # is an edge across repeated stages (Q2 -> Q1 within both occasions) whose display edge
-  # Q1_t0to1 -> Q2_t2to3 keeps the display acyclic.
+  # Q1_t1 -> Q2_t2 is an edge across repeated stages (Q2 -> Q1 within both occasions) whose
+  # display edge Q1_t0to1 -> Q2_t2to3 keeps the display acyclic.
   graph <- segment_graph(paste("Q2_t1 -> Q1_t1; Q2_t2 -> Q1_t2; Q2_t2 -> Q4_t2; Q2_t3 -> Q4_t3; Q1_t1 -> Q2_t2;",
                                "Q1_t0 -> Q5_t2; Q3_t1 -> Q2_t3; Q4_t2 -> Q3_t3; Q5_t2 -> Q3_t3"))
   summary <- .gd_summary(graph, keep = names(graph))

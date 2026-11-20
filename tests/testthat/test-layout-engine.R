@@ -84,7 +84,7 @@ test_that("add_nodes() and join_graphs() regenerate every coordinate when a new 
     added <- add_nodes(crowded, nodes = "W", role = "confounder",
                        print_edges = FALSE),
     paste0("add_nodes(): the new nodes could not be placed apart from existing ",
-           "nodes; coordinates were regenerated for every node."),
+           "nodes. Coordinates were regenerated for every node."),
     fixed = TRUE
   )
   expect_equal(dagitty::coordinates(added), dagitty::coordinates(add_coords(added)))
@@ -101,7 +101,7 @@ test_that("add_nodes() and join_graphs() regenerate every coordinate when a new 
   expect_warning(
     joined <- join_graphs(host, donor),
     paste0("join_graphs(): the new nodes could not be placed apart from existing ",
-           "nodes; coordinates were regenerated for every node."),
+           "nodes. Coordinates were regenerated for every node."),
     fixed = TRUE
   )
   expect_equal(dagitty::coordinates(joined), dagitty::coordinates(add_coords(joined)))

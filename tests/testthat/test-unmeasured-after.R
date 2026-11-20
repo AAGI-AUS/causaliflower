@@ -1,7 +1,6 @@
 # Declared unmeasured variables never change the ranked construction: it runs as
-# for a fully observed graph and the declarations are marked on the finished DAG
-# (author decision, 23 October 2026). ranked_query is copied from
-# test-ranked-search.R, where it is local.
+# for a fully observed graph and the declarations are marked on the finished DAG.
+# ranked_query is copied from test-ranked-search.R, where it is local.
 unmeasured_query <- function(edges, columns = NULL, node_map = NULL) {
   graph <- dagitty::dagitty(paste("dag { T [exposure]; Y [outcome];", edges, "}"))
   nodes <- names(graph)

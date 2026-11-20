@@ -75,7 +75,7 @@ wide_edges <- "E -> A; A -> T; A -> B; B -> Y; C -> T; C -> D; D -> Y; T -> M ->
 ladder_edges <- "A -> T; A -> C; B -> T; B -> C; C -> Y; T -> Y; P -> T; P -> Q; Q -> R; P -> R; R -> Y; W -> T"
 # Sets {C, G}, {A, B, G}, {C, D, E, F}, {A, B, D, E, F}: sizes of 4, 6 and 9 nodes.
 tied_edges <- "A -> T; A -> C; B -> T; B -> C; C -> Y; D -> T; E -> T; F -> T; D -> G; E -> G; F -> G; G -> Y; T -> Y"
-# Total sets {C, D}, {A, B, C}; direct sets {C, D, M}, {A, B, C, M}: sizes of 5 and 7 nodes.
+# Total sets {C, D} and {A, B, C}, direct sets {C, D, M} and {A, B, C, M}: sizes of 5 and 7 nodes.
 mixed_edges <- "T -> M; M -> Y; T -> Y; C -> T; C -> Y; A -> T; A -> D; B -> T; B -> D; D -> Y"
 # The ladder with a repeated quantity: the time summary merges C_t1 and C_t2.
 repeated_edges <- "A -> T; A -> C_t1; B -> T; B -> C_t1; C_t1 -> C_t2; C_t2 -> Y; C_t1 -> Y; T -> Y; P -> T; P -> Q; Q -> R; P -> R; R -> Y"
@@ -83,7 +83,7 @@ repeated_edges <- "A -> T; A -> C_t1; B -> T; B -> C_t1; C_t1 -> C_t2; C_t2 -> Y
 fork_edges <- "A -> T; A -> C; B -> T; B -> C; C -> Y; T -> Y"
 # One minimal set {A}: one size of 3 nodes.
 single_edges <- "A -> T; A -> Y; T -> Y"
-# Total sets {C}, {A, B}; direct sets of 5 and 6 members (C or A and B, with D and three mediators): sizes of 6 and 9 nodes.
+# Total sets {C} and {A, B}, direct sets of 5 and 6 members (C or A and B, with D and three mediators): sizes of 6 and 9 nodes.
 # At 10 steps no direct set is found.
 mediator_edges <- "A -> T; A -> C; B -> T; B -> C; C -> Y; T -> M1; M1 -> Y; T -> M2; M2 -> Y; T -> M3; M3 -> Y; T -> Y; D -> M1; D -> Y"
 # Two exposures. The exact treatment parents Q4 and S1 are kept at every size, and no total set exists:
@@ -1445,7 +1445,7 @@ test_that("the rules keep the route, dead ends, outside causes and relevant pare
   expected <- list(c("L", "M", "N"), c("K", "L", "M", "N"), c("D", "K", "L", "M", "N"), c("D", "E", "F", "K", "L", "M", "N"),
     c("D", "E", "F", "K", "L", "M", "N", "P", "Q"), c("D", "E", "F", "K", "L", "M", "N", "P", "Q", "R"))
   expect_identical(lapply(several, sort), expected)
-  # No route, only a direct edge; a <-> edge carries no ancestry.
+  # No route, only a direct edge. Any <-> edge carries no ancestry.
   direct <- rules("T [exposure]; Y [outcome]; T -> Y; T -> D; A -> T; A <-> Y; B <-> T; C -> Y")
   expect_identical(lapply(direct, sort), list(character(), character(), "D", "D", c("A", "C", "D"), c("A", "C", "D")))
   # B's only link upstream is a <-> edge, so it has no parent.
@@ -1559,9 +1559,9 @@ test_that("a ranked candidate identical to the full rule has one stable public i
   expect_identical(dagby_options(full)$level[c("cap", "rule", "top")], list(cap = Inf, rule = 0L, top = TRUE))
 })
 test_that("the size returned does not depend on the searches kept in the session", {
-  # A size at or below the smallest level returns that level; above it the rule sizes take part whenever the last level could be returned.
+  # A size at or below the smallest level returns that level. Above it the rule sizes take part whenever the last level could be returned.
   fixtures <- list(
-    # One level of 3 nodes, as many as rule 0; rule 3 adds the dead end D.
+    # One level of 3 nodes, as many as rule 0. Rule 3 adds the dead end D.
     single = list(graph = ranked_query("A -> T; A -> Y; T -> Y; T -> D"), sizes = c(3, 3),
       rows = list(c(1, 0), c(1, 0), c(1, 0), c(1, 0), c(Inf, 3))),
     tied = list(graph = ranked_query(tied_edges), sizes = c(4, 9),
@@ -1675,7 +1675,7 @@ test_that("missing saved sizes are recomputed and never change resize choices", 
   expect_identical(dagby_grow(full, 1, quiet = TRUE), full)
 })
 test_that("a larger size whose time summary gives no more nodes returns the DAG unchanged", {
-  # Without a direct set M_t1 is kept; the top adds M_t2, which the time summary merges with it.
+  # Without a direct set M_t1 is kept. The top adds M_t2, which the time summary merges with it.
   graph <- ranked_query("T -> M_t1; M_t1 -> M_t2; M_t2 -> Y; M_t1 <-> Y")
   .cf_cache$clear()
   zero <- suppressWarnings(rule_dag(graph))
