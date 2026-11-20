@@ -857,7 +857,7 @@ id_identification_query <- function(dag, treatment = NULL, outcome = NULL,
     }
     if( !direct_arrow ){
       general_note <- paste(
-        "no direct arrow in the latent-projected graph;", general_note
+        "no direct arrow in the latent-projected graph.", general_note
       )
     }
     rows[[length(rows) + 1L]] <- id_result_row(
@@ -879,7 +879,7 @@ id_identification_query <- function(dag, treatment = NULL, outcome = NULL,
         "assumption-dependent",
         paste0(
           "mediators: ", id_render_set(entry$mediators),
-          "; adjustment: ", id_render_sets(entry$adjustment_sets)
+          ", adjustment: ", id_render_sets(entry$adjustment_sets)
         ),
         paste(entry$note, entry$assumptions, sep = ". ")
       )
@@ -898,7 +898,7 @@ id_identification_query <- function(dag, treatment = NULL, outcome = NULL,
       solved$id,
       "nonparametric",
       "not applicable",
-      paste(general_note, detail, sep = "; ")
+      paste(general_note, detail, sep = ". ")
     )
 
     observational <- isTRUE(solved$id)
@@ -955,7 +955,7 @@ id_identification_query <- function(dag, treatment = NULL, outcome = NULL,
         "assumption-dependent",
         id_render_instruments(instruments$entries),
         if( instruments$feasible ){
-          "graphical instrument for a linear effect; assess linearity and instrument strength before estimation"
+          "graphical instrument for a linear effect. Assess linearity and instrument strength before estimation"
         }else{
           "no graphical instrument"
         }
@@ -1128,13 +1128,13 @@ id_mediation <- function(dag, G, treatment, outcome, mediator = NULL){
       note = if( feasible ){
         paste(
           "the standard mediation formula identifies natural direct and indirect",
-          "effects relative to the selected mediator set under the additional assumptions;",
-          "the reported covariates satisfy both adjustment checks"
+          "effects relative to the selected mediator set under the additional assumptions.",
+          "The reported covariates satisfy both adjustment checks"
         )
       }else{
         paste(
           "no covariate set of observed treatment nondescendants satisfies both",
-          "adjustment checks; natural direct and indirect effects are not established by",
+          "adjustment checks. Natural direct and indirect effects are not established by",
           "this mediation-formula search, but other identification methods may apply"
         )
       },
@@ -3302,7 +3302,7 @@ id_idc_detail <- function(intervened, remaining){
   if( length(intervened) > 0L && length(remaining) > 0L ){
     text <- paste0(
       "IDC moves ", id_render_set(intervened),
-      " into the intervention set; ", id_render_set(remaining),
+      " into the intervention set. ", id_render_set(remaining),
       " remain in the conditioning set"
     )
     return(text)
@@ -3310,12 +3310,12 @@ id_idc_detail <- function(intervened, remaining){
   if( length(intervened) > 0L ){
     text <- paste0(
       "IDC moves ", id_render_set(intervened),
-      " into the intervention set; no variables remain in the conditioning set"
+      " into the intervention set. No variables remain in the conditioning set"
     )
     return(text)
   }
   text <- paste0(
-    "IDC moves no conditioning variables; ",
+    "IDC moves no conditioning variables. ",
     id_render_set(remaining),
     " remain in the conditioning set"
   )
@@ -3365,7 +3365,7 @@ id_roles <- function(G, treatment, outcome, effect, adjustment,
   add_role(
     adjustment_nodes,
     "adjustment variable",
-    "member of at least one minimal adjustment set for the total effect; use a complete set"
+    "member of at least one minimal adjustment set for the total effect. Use a complete set"
   )
 
   if( length(conditioning) > 0L ){
@@ -3398,7 +3398,7 @@ id_roles <- function(G, treatment, outcome, effect, adjustment,
     add_role(
       unique(unlist(frontdoor$sets, use.names = FALSE)),
       "front-door mediator",
-      "used by the front-door strategy; this is not ordinary covariate adjustment"
+      "used by the front-door strategy. This is not ordinary covariate adjustment"
     )
     add_role(
       vapply(
@@ -3411,7 +3411,7 @@ id_roles <- function(G, treatment, outcome, effect, adjustment,
         character(1L)
       ),
       "instrument",
-      "used by the instrumental variable strategy; covariate adjustment is assessed separately"
+      "used by the instrumental variable strategy. Covariate adjustment is assessed separately"
     )
   }else if( !identical(effect, "total") ){
     outcome_parents <- intersect(
@@ -3428,7 +3428,7 @@ id_roles <- function(G, treatment, outcome, effect, adjustment,
   add_role(
     setdiff(variables, role_variable),
     "other",
-    "no variable-level conclusion; assess as part of a set"
+    "no variable-level conclusion. Assess as part of a set"
   )
 
   roles <- data.table::data.table(

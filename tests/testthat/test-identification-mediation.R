@@ -363,7 +363,7 @@ test_that("a failed common-adjustment search stays polynomial", {
   entry <- mediation_entry(result, "M")
   expect_false(entry$feasible)
   expect_identical(entry$adjustment_sets, list())
-  # Two candidates with two checks each; enumeration needed thousands.
+  # Two candidates with two checks each. Enumeration needed thousands.
   expect_lte(checks, 4L)
 
   # With no eligible covariates the empty set is the only candidate.

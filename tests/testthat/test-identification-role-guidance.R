@@ -23,7 +23,7 @@ test_that("separate strategies retain truthful overlapping roles", {
   expect_identical(instrument$variable_set, "{B} conditional on {A}")
   expect_identical(
     roles[variable == "B" & role == "instrument", conditioning_guidance],
-    "used by the instrumental variable strategy; covariate adjustment is assessed separately"
+    "used by the instrumental variable strategy. Covariate adjustment is assessed separately"
   )
   expect_identical(
     roles[variable == "B" & role == "adjustment variable", conditioning_guidance],

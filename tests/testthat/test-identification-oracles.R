@@ -289,7 +289,7 @@ test_that("direct effect identification uses the outcome parent intervention", {
   expect_identical(
     absent_result$note[1L],
     paste(
-      "no direct arrow in the latent-projected graph;",
+      "no direct arrow in the latent-projected graph.",
       "ID identifies the outcome distribution under intervention on",
       "the treatment and fixing set in the latent-projected graph"
     )
@@ -430,7 +430,7 @@ test_that("direct fixing sets contain projected outcome parents", {
 })
 
 test_that("front-door pruning stops when no candidate set can qualify", {
-  # Each Mi is confounded with Y, so no front-door set exists; the old search
+  # Each Mi is confounded with Y, so no front-door set exists. The old search
   # tried all 2^14 - 1 mediator subsets.
   index <- seq_len(14L)
   dag <- dagitty::dagitty(paste(

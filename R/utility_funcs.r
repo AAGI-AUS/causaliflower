@@ -454,7 +454,7 @@ mediator_outcome_confounders <- function(dag){
 
 #' Competing cause node names in a dagitty object
 #'
-#' `competing_causes()` returns direct causes of the outcome that are not otherwise classified -- i.e. causes of the outcome lying off the treatment->outcome path and unconnected to the treatment. Sometimes called a competing exposure (Tennant et al., 2021).
+#' `competing_causes()` returns direct causes of the outcome that are not otherwise classified: causes of the outcome lying off the treatment->outcome path and unconnected to the treatment. Sometimes called a competing exposure (Tennant et al., 2021).
 #'
 #' @importFrom dagitty edges coordinates dagitty
 #' @param dag A dagitty object.
@@ -538,7 +538,7 @@ proxies <- function(dag){
 
   treatment_parents <- parents_edge_order(edges, treatments)
 
-  # mediators - first parse (includes mediator-outcome confounders)
+  # mediators: first parse (includes mediator-outcome confounders)
   outcome_parents <- parents_edge_order(edges, outcomes)
   treatment_children <- children_edge_order(edges, treatments)
 

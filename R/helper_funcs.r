@@ -38,13 +38,13 @@ topological_rank <- function(parents){
   n <- length( nodes )
 
   if( anyDuplicated( nodes ) > 0L ){
-    stop( "The names of 'parents' must be unique; each node may appear only once." )
+    stop( "The names of 'parents' must be unique. Each node may appear only once." )
   }
 
   all_parents <- unique( unlist( parents, use.names = FALSE ) )
   unknown <- all_parents[ !all_parents %in% nodes ]
   if( length( unknown ) > 0L ){
-    stop( "Every parent must also be a node in 'parents'; the following parent names are not present: ",
+    stop( "Every parent must also be a node in 'parents'. The following parent names are not present: ",
           paste( unknown, collapse = ", " ), "." )
   }
 

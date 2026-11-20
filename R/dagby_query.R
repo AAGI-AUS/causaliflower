@@ -422,7 +422,7 @@ dagby_query <- function(recipe, quiet = FALSE){
   # grouped names of the treatment / outcome nodes (after refinement), used to pin and tag
   # them below. Mapping the stable set of ids through the final group_map means a named
   # supernode that force_acyclic had to split is recovered as ALL of its split pieces, each of
-  # which is then pinned and tagged - the multiple treatment / multiple outcome representation
+  # which is then pinned and tagged: the multiple treatment / multiple outcome representation
   # required once an aggregate cannot be a single acyclic node.
   treat_grouped <- unique(unname(group_map[ intersect(treat_id_set, names(group_map)) ]))
   out_grouped <- unique(unname(group_map[ intersect(out_id_set,   names(group_map)) ]))
@@ -440,7 +440,7 @@ dagby_query <- function(recipe, quiet = FALSE){
                                  unname(group_map[nodes$node_id]), all)))
 
   # resolve the defaulted sentinel now that g_lagged is available: if there are lagged edges in the
-  # kept subgraph and treatments are specified, the default is "all" -- an uncompressed, acyclic,
+  # kept subgraph and treatments are specified, the default is "all": an uncompressed, acyclic
   # frame anchored to treatment within the adaptive finite window. Otherwise "none".
   # (An explicit NULL was already resolved to "none" above. Only the unset default reaches here as NULL.)
   if( !phase_mode && is.null(time_unroll) ){
@@ -509,7 +509,7 @@ dagby_query <- function(recipe, quiet = FALSE){
     if( isTRUE(sliced$n_collapsed > 0L) ){
       warning(sprintf(paste0("time_unroll = \"none\" does not unroll time, so %d lagged edge%s been ",
                              "COLLAPSED onto the single slice. Self-loops are omitted and duplicate ",
-                             "arrows are combined. The result %s -- collapsing a feedback loop (e.g. the ",
+                             "arrows are combined. The result %s. Collapsing a feedback loop (e.g. the ",
                              "fertiliser decision rule reads the soil N it changes) onto one slice makes ",
                              "it a cycle. Use time_unroll = \"selective\" (or \"all\") to retain time ",
                              "occasions, then check adjustment validity on the resulting graph."),
@@ -653,7 +653,7 @@ dagby_query <- function(recipe, quiet = FALSE){
     pinned <- intersect(unique(.strip_slice(pinned)),     recovered_vertices)
   }
 
-  # Final step: drop orphaned nodes (no incoming or outgoing edge) from the output - a
+  # Final step: drop orphaned nodes (no incoming or outgoing edge) from the output. This is a
   # documented internal decision, no parameter. Management levers are admitted and pinned into
   # scope so their causal edges are recovered. Explicit endpoints and columns
   # are exempt, so their requested representation is not silently discarded.
@@ -856,7 +856,7 @@ dagby_query <- function(recipe, quiet = FALSE){
     detail <- if( length(recombined) > 0L ){ paste0(apsim_nodes_detail, ", ", length(recombined), " recombined") }else{ apsim_nodes_detail }
     message(paste0("Recovered DAG for crop '", crop, "' [", basis, ", apsim detail: ", detail, "]: ",
                    length(recovered_vertices), " nodes, ", nrow(recovered_edges), " edges, ", length(latent_set), " latent. ",
-                   length(present), " management levers present, ", optional, " more available - see get_management_options()."))
+                   length(present), " management levers present, ", optional, " more available. See get_management_options()."))
   }
   return(dag)
 }
@@ -2002,7 +2002,7 @@ get_management_options <- function( crop     = NULL,
   # occasion is not a descendant of the treatment (before treatment, off the effect) and some occasion
   # is a descendant (the effect has reached it). A base that is entirely before treatment (a static / exogenous
   # confounder, one value throughout) or never straddles collapses to a single bare node. Treatment
-  # and outcome never split - each is anchored to a single slice below.
+  # and outcome never split. Each is anchored to a single slice below.
   base_ids <- unique(.strip_slice(unrolled$vertices))
   straddles <- function( b ){ # Check whether a base node straddles the treatment
     occasions <- intersect(paste0(b, "@t", seq_len(K) - 1L), unrolled$vertices)
@@ -2077,7 +2077,7 @@ get_management_options <- function( crop     = NULL,
       # base's interior occasions (keep the earliest -> _pre_treatment and the latest -> _post_treatment).
       # Marginalising the interiors turns the cross slice feedback that had folded to a within group
       # cycle back into a forward _pre_treatment -> _post_treatment edge, which is acyclic. A base with
-      # < 3 kept occasions has no interior to drop, so it cannot be folded -- fall back to per slice for
+      # < 3 kept occasions has no interior to drop, so it cannot be folded. Fall back to per slice for
       # it and restore its interiors. The loop checks the next projection and
       # stops if it cannot make further progress, even if a cycle remains.
       progress <- FALSE
@@ -2220,7 +2220,7 @@ get_management_options <- function( crop     = NULL,
 # `window` chooses the retained span: "origin" keeps slices 0..hi (initial conditions through B0).
 # "compact" keeps (earliest treatment phase - 1)..hi (one phase of confounder history before treatment,
 # no origin/B0). Returns the visible projected graph plus the split/promoted sets, the window, and
-# persistence edges - the same shape .selective_slice returns, so the dagby_query tail consumes it as is.
+# persistence edges. This is the same shape .selective_slice returns, so the dagby_query tail consumes it as is.
 #' Project developmental phases while preserving endpoint occasions
 #'
 #' @param kept_ids Quantity IDs retained in the configured graph.
@@ -2261,7 +2261,7 @@ get_management_options <- function( crop     = NULL,
   last_slice <- max(all_anchor)
   first_slice <- if( identical(window, "origin") ){ 0L }else{ max(0L, min(unlist(treat_phase_map, use.names = FALSE)) - 1L) }
 
-  # full phase unroll (working graph, never emitted). edge_type dropped - the recovered query graph is a
+  # full phase unroll (working graph, never emitted). edge_type dropped: the recovered query graph is a
   # plain DAG, and B0 init edges flow through as ordinary from->to edges into the origin slice stock.
   full <- .unroll_phase_slices(kept_ids, contemporaneous, lagged, initial, n_phases,
                                      phase_active = phase_active)
@@ -2772,9 +2772,9 @@ get_management_options <- function( crop     = NULL,
 
 # ESC-DAGs recombination (Ferguson et al. 2019, Integration 2): merge vertices that
 # share an identical set of parents AND an identical set of children into one node.
-# This preserves acyclicity - two such vertices can never lie on a directed path
+# This preserves acyclicity. Two such vertices can never lie on a directed path
 # through other vertices (that would need a child of the set to reach a parent of the
-# set, impossible in a DAG) - so the contracted graph stays a DAG. Fully isolated
+# set, impossible in a DAG), so the contracted graph stays a DAG. Fully isolated
 # vertices and any pinned vertices (named treatments/outcomes) are never merged. Each
 # merged node is labelled by the longest common dotted prefix of its members (slice
 # suffix reattached, made unique with a #k suffix). Latent carries over only when
@@ -2819,8 +2819,8 @@ get_management_options <- function( crop     = NULL,
     base <- name
     k <- 1L
     # .dotted_lcp falls back to its first member when a group shares no dotted prefix, so
-    # two disjoint groups can propose the same name - this #k disambiguation is needed
-    # for label uniqueness and must not be removed
+    # two disjoint groups can propose the same name. This #k disambiguation is needed
+    # for label uniqueness and must not be removed.
     while( name %in% taken ){
       k <- k + 1L
       name <- paste0(base, "#", k)

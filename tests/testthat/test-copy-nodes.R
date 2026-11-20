@@ -587,7 +587,7 @@ test_that("copy_nodes() regenerates coordinates by default and keeps them with r
   print(plot_dagitty(renewed))
 
   fallback <- paste0("copy_nodes(): the copies could not be placed apart ",
-                     "from existing nodes; coordinates were regenerated ",
+                     "from existing nodes. Coordinates were regenerated ",
                      "for every node.")
   expect_warning(
     kept <- copy_nodes(crowded, "C", suffix = "v", anchor = "A",

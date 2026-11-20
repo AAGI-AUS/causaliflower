@@ -216,12 +216,12 @@ plot_sets <- function(dag, treatment = NULL, outcome = NULL, effect = "total",
     as.character(unlist(sets[[1L]], use.names = FALSE))
   }else{
     warning("plot_sets(): no adjustment set is available for the ", effect,
-            " effect; no adjustment nodes are highlighted.", call. = FALSE)
+            " effect. No adjustment nodes are highlighted.", call. = FALSE)
     character(0)
   }
   if( length(sets) > 1L ){
     warning("plot_sets(): ", length(sets), " adjustment sets are available for the ",
-            effect, " effect; displaying the first in minimal_sets() order: {",
+            effect, " effect. Displaying the first in minimal_sets() order: {",
             paste(selected, collapse = ", "), "}.", call. = FALSE)
   }
 
@@ -274,8 +274,8 @@ plot_dag_engine <- function(dag,
     stop("plot_dagitty(): curve must be TRUE or FALSE.", call. = FALSE)
   }
   if( !is.null(seed) ){
-    warning("plot_dagitty(): 'seed' is deprecated as of 0.0.2 and is ignored; ",
-            "label placement no longer breaks ties at random.", call. = FALSE)
+    warning("plot_dagitty(): 'seed' is deprecated as of 0.0.2 and is ignored. ",
+            "Label placement no longer breaks ties at random.", call. = FALSE)
   }
   if( !is.character(label_placement) || length(label_placement) != 1L ||
       is.na(label_placement) ||
